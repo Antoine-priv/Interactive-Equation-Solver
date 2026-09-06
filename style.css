@@ -1,0 +1,1132 @@
+* { box-sizing: border-box; }
+
+:root {
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --border: #e9eaf0;
+  --text: #16181d;
+  --text-muted: #6b7280;
+  --text-faint: #9aa0ac;
+
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: #eef0fe;
+  --accent-soft-border: #d9dcfb;
+
+  --success: #0f9d58;
+  --success-soft: #dcf6e6;
+  /* Nettement plus saturée que le pastel d'origine (#b7ecc9), presque invisible sur le
+     fond clair de la page : en mode clair (contrairement au mode sombre, déjà assez
+     contrasté avec son fond sombre), le vert "résolu" doit rester net à l'oeil. */
+  --success-border: #34b170;
+
+  --danger: #dc2626;
+
+  --arrow-color: #c7cad3;
+
+  /* Fixe (pas redéfinie en sombre) : l'infobulle reste une pastille sombre à texte
+     blanc quel que soit le thème de la page, plutôt que de reposer sur --text (qui
+     deviendrait clair en mode sombre et rendrait le texte illisible sur son propre fond). */
+  --tooltip-bg: #1f2130;
+  --tooltip-text: #fff;
+
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 1px rgba(16, 24, 40, 0.03);
+  --shadow-md: 0 8px 24px rgba(16, 24, 40, 0.08), 0 2px 6px rgba(16, 24, 40, 0.05);
+  --shadow-lg: 0 24px 60px rgba(16, 24, 40, 0.18);
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+}
+
+/* Mode sombre : suit la préférence système par défaut (aucun choix explicite encore
+   fait), ou le choix explicite de l'utilisateur via le bouton en haut à droite (voir
+   theme.js), qui l'emporte dans les deux sens sur la préférence système. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15161f;
+    --surface: #1e2029;
+    --border: #2d2f3b;
+    --text: #eceef3;
+    --text-muted: #9aa0b0;
+    --text-faint: #6b7280;
+
+    --accent-soft: #262a45;
+    --accent-soft-border: #3a3f66;
+
+    --success-soft: #143024;
+    --success-border: #1f5c3d;
+
+    --arrow-color: #4a4e5e;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15161f;
+  --surface: #1e2029;
+  --border: #2d2f3b;
+  --text: #eceef3;
+  --text-muted: #9aa0b0;
+  --text-faint: #6b7280;
+
+  --accent-soft: #262a45;
+  --accent-soft-border: #3a3f66;
+
+  --success-soft: #143024;
+  --success-border: #1f5c3d;
+
+  --arrow-color: #4a4e5e;
+}
+
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: "Inter", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* ---- Bouton flottant nouvelle équation ---- */
+#newEquationBtn {
+  position: fixed;
+  top: 22px;
+  left: 22px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow-md), 0 2px 8px rgba(79, 70, 229, 0.35);
+  transition: background 0.15s ease, transform 0.1s ease;
+  z-index: 30;
+}
+#newEquationBtn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+#newEquationBtn:active { transform: translateY(0); }
+
+/* ---- Bouton flottant "annuler la dernière opération" (voir main.js/history.js) ----
+   Juste à droite de #newEquationBtn, même gabarit mais langage visuel neutre (surface)
+   plutôt qu'accent : action secondaire, pas l'action principale de la page. */
+#undoBtn {
+  position: fixed;
+  top: 22px;
+  left: 78px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+  z-index: 30;
+}
+#undoBtn:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
+#undoBtn:active:not(:disabled) { transform: translateY(0); }
+#undoBtn:disabled { opacity: 0.4; cursor: default; }
+
+/* ---- Bouton flottant clair/sombre, en haut à droite ---- */
+#themeToggleBtn {
+  position: fixed;
+  top: 22px;
+  right: 22px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
+  z-index: 30;
+}
+#themeToggleBtn:hover { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
+#themeToggleBtn:active { transform: translateY(0); }
+
+/* ---- Historique des équations ---- */
+#historyScroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  /* Explicite (pas seulement le "auto" implicite qu'entraînerait overflow-y:auto sans
+     overflow-x défini) : nécessaire pour que le "produit nul" (deux colonnes qui ne se
+     compriment plus, voir .produit-nul-branch) puisse faire défiler TOUTE la page
+     horizontalement plutôt que chaque équation individuellement quand elles sont trop
+     larges côte à côte. Sans effet sur le cas normal (une équation centrée ne dépasse
+     jamais la largeur de #historyScroll, voir .eq-row { overflow-x: auto }). */
+  overflow-x: auto;
+}
+
+#history {
+  position: relative;
+  /* Le padding bas généreux laisse assez de place pour faire défiler la dernière
+     équation jusqu'au milieu de l'écran plutôt que la coller en bas. */
+  padding: 90px 240px 48vh;
+}
+
+/* Produit nul/racine carrée actifs (voir renderAll dans render.js) : moins de marge
+   latérale sur #history lui-même (voir .produit-nul-split ci-dessous pour la VRAIE marge
+   de défilement généreuse, portée par la rangée de colonnes elle-même plutôt que par
+   #history) — juste assez pour que la chaîne principale, elle, ne colle pas aux bords. */
+#history.produit-nul-active {
+  padding-left: 40px;
+  padding-right: 40px;
+}
+
+.eq-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 46px;
+  position: relative;
+  /* Sous le calque des flèches : filet de sécurité pour que la pointe d'une flèche
+     ne soit jamais masquée par le fond d'un cadre, même en cas de chevauchement. */
+  z-index: 1;
+  max-width: 100%;
+  overflow-x: auto;
+  /* "hidden" et non "visible" : la spec CSS force overflow-y à devenir "auto" dès que
+     overflow-y vaut "visible" alors qu'overflow-x ne l'est pas — impossible d'obtenir
+     un défilement horizontal seul avec overflow-y:visible, ça fait quand même
+     apparaître une barre verticale indésirable propre à chaque ligne. "hidden" est une
+     valeur distincte de "visible", donc pas concernée par cette règle : le contenu ne
+     déborde de toute façon jamais verticalement en usage normal (les lignes sont
+     dimensionnées pile à leur contenu). */
+  overflow-y: hidden;
+}
+
+.eq-line {
+  display: flex;
+  align-items: baseline;
+  font-size: 2.9rem;
+  padding: 12px 26px;
+  border-radius: var(--radius-md);
+  transition: background 0.2s ease, box-shadow 0.2s ease, color 0.2s ease;
+  /* KaTeX ne rend PAS son contenu HTML dans un unique bloc "white-space:nowrap" : seuls
+     ses groupes internes ".base" le sont chacun individuellement, rien n'empêche le
+     NAVIGATEUR de retourner à la ligne entre deux ".base" voisins (un membre un peu long
+     en génère plusieurs). Tant que tout tient sur une ligne une fois la police réduite
+     par autoFitRowFont (voir render.js), ça ne se voit jamais — mais un membre plus
+     lourd à rendre (notamment le mode "drill", qui ajoute des poignées de sortie/termes
+     cliquables individuels, voir pending.drilled) peut retourner à la ligne à la taille
+     de police PAR DÉFAUT (avant réduction) : scrollWidth mesure alors la largeur déjà
+     repliée sur 2 lignes (qui "tient"), donc autoFitRowFont ne réduit jamais la police -
+     la ligne reste plus grande ET sur deux lignes au lieu d'être réduite puis, si besoin
+     seulement, de défiler horizontalement (voir .eq-row). nowrap ici force le retour au
+     seul mécanisme voulu : police réduite jusqu'à MIN_EQ_FONT_PX, sinon défilement. */
+  white-space: nowrap;
+}
+
+/* Ligne "pending" : pas encore figée, donc grisée pour la distinguer des équations
+   déjà validées. */
+.eq-row.pending .eq-line {
+  color: var(--text-muted);
+}
+
+/* Encadré : l'équation qui vient d'être obtenue (le dernier résultat), pas la ligne
+   du dessous qui reste, elle, à construire. */
+.eq-row.current .eq-line {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--accent-soft-border);
+}
+
+.eq-row.solved .eq-line {
+  background: var(--success-soft);
+  box-shadow: inset 0 0 0 1.5px var(--success-border);
+}
+
+/* Résumé final d'un "produit nul" (les deux racines trouvées), sous la dernière ligne. */
+.solution-set {
+  display: flex;
+  justify-content: center;
+  margin: -16px auto 46px;
+  padding: 10px 26px;
+  width: fit-content;
+  font-size: 2.2rem;
+  border-radius: var(--radius-md);
+  background: var(--success-soft);
+  box-shadow: inset 0 0 0 1.5px var(--success-border);
+  position: relative;
+  z-index: 1;
+}
+
+/* "Produit nul" : les deux facteurs A=0/B=0 côte à côte, chacun travaillable
+   indépendamment (voir renderAll dans render.js) — un clic dans l'un des deux le rend
+   actif pour le pavé/clavier partagé, matérialisé par le liseré ci-dessous.
+
+   Largeur INTRINSÈQUE (jamais nulle, jamais "écrasée" par son parent) + padding de
+   chaque côté proportionnel à la fenêtre (50vw), TOUJOURS, pas seulement quand les
+   colonnes débordent : #historyScroll doit pouvoir défiler assez loin pour amener
+   N'IMPORTE QUELLE colonne (même la plus à gauche ou à droite) jusqu'au milieu de
+   l'écran, pas seulement jusqu'à son bord — y compris quand les colonnes tiennent déjà
+   toutes dans la largeur disponible. Une rangée flex NORMALE ("width:auto") dont les
+   enfants dépassent (ou dont le padding, ici, dépasse TOUJOURS puisque 50vw+50vw=100vw
+   à lui seul) déborderait sinon symétriquement de PART ET D'AUTRE d'une boîte trop
+   étroite, y compris vers des coordonnées NÉGATIVES par rapport à #history — un
+   débordement côté "négatif" (gauche, en LTR) qui n'est PAS atteignable au défilement
+   dans Chromium (seul le débordement vers la droite l'est) : #historyScroll resterait
+   bloqué pile au bord gauche des colonnes, jamais plus loin. Une largeur intrinsèque
+   évite ça : tout débordement (au-delà de ce padding) se produit entièrement vers la
+   droite, donc toujours défilable.
+
+   PAS de "margin:auto" ici : avec ce padding, cet élément dépasse TOUJOURS la largeur
+   disponible, un "auto" s'annulerait donc systématiquement à 0 des deux côtés plutôt
+   que de centrer quoi que ce soit. C'est renderAll (render.js) qui calcule et pose
+   explicitement `margin-left` :
+   - si les colonnes tiennent dans #history (cas courant) : une valeur NÉGATIVE qui
+     compense exactement le padding-gauche et le propre padding de #history, ramenant
+     le centre des colonnes pile sur celui de la chaîne principale au-dessus (aucun
+     écart, sans qu'aucun défilement n'ait besoin d'être imposé) ;
+   - sinon (colonnes trop larges pour tenir) : 0 (flush), et c'est alors le défilement
+     HORIZONTAL (scrollLeft), lui aussi posé explicitement par renderAll, qui amène le
+     groupe de colonnes à un endroit raisonnable de l'écran (voir isWideSplit). */
+.produit-nul-split {
+  display: flex;
+  width: max-content;
+  /* Réduit de 40px (130px -> 90px) exactement compensé par les +20px de padding
+     horizontal ajoutés de chaque côté de .produit-nul-branch ci-dessous (40px de plus
+     par colonne au total) : les colonnes s'élargissent visuellement SANS que leur
+     position (et donc leur contenu) ne se déplace à l'écran — seul l'espace entre leurs
+     bords se réduit d'autant. Reste assez large pour laisser la flèche fourchue (voir
+     drawFork dans arrows.js) s'incurver vers chaque colonne sans jamais croiser le
+     contour de l'autre (88px s'était avéré trop juste). */
+  gap: 90px;
+  justify-content: center;
+  align-items: flex-start;
+  padding-left: 50vw;
+  padding-right: 50vw;
+  margin: 150px 0 46px;
+}
+
+.produit-nul-branch {
+  /* Ne se comprime plus pour tenir dans l'espace disponible (contrairement à
+     "flex:1 1 0" utilisé initialement) : garde sa largeur naturelle, quitte à dépasser
+     la largeur de l'écran — c'est alors #historyScroll qui défile horizontalement (voir
+     plus haut) plutôt que de réduire chaque équation à l'illisible. */
+  flex: 0 0 auto;
+  /* Encore plus large qu'avant (260-640px -> 320-760px). */
+  min-width: 320px;
+  max-width: 760px;
+  /* Padding horizontal +20px de chaque côté (26px -> 46px) : élargit la boîte de la
+     colonne (fond, liseré de focus) SANS agrandir son contenu (voir le gap réduit
+     d'autant ci-dessus, pour ne pas déplacer les colonnes). Plus généreux qu'avant
+     (14px 10px à l'origine) : plus grande zone de sélection/clic, et plus de recul entre
+     le "=" visé par la flèche et le contour de la colonne. */
+  padding: 24px 46px;
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 0 0 1.5px transparent;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+
+/* Pas de fond (juste un liseré) : un fond ferait perdre le contraste du terme
+   sélectionné (surbrillance jaune, voir .term.selected) dans la colonne active. */
+.produit-nul-branch.branch-focused {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+/* Aperçu de "Produit nul" au survol de son bouton (voir renderAll dans render.js) :
+   mise en page simple et indépendante de .produit-nul-split (pas de padding de 50vw —
+   voir le commentaire dans render.js), juste centrée là où elle apparaît. Légèrement
+   estompée et non cliquable : signale visuellement que rien n'est encore confirmé. */
+.produit-nul-preview {
+  display: flex;
+  justify-content: center;
+  gap: 90px;
+  /* Même margin-top que .produit-nul-split (150px) : sinon l'aperçu apparaît nettement
+     plus proche de la ligne courante que le résultat réel une fois confirmé, donnant
+     l'impression que tout "saute" vers le bas au moment de valider. */
+  margin: 150px 0 46px;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.produit-nul-chain {
+  position: relative; /* ancre les flèches internes de cette branche (voir arrows.js) */
+}
+
+/* Police réduite (2.9rem normalement) : deux équations côte à côte ont moitié moins de
+   place chacune. autoFitRowFont (render.js) réduit encore au cas par cas si besoin. */
+.produit-nul-chain .eq-line {
+  font-size: 1.7rem;
+}
+
+/* Pas de défilement horizontal propre à chaque ligne ici (contrairement au cas normal,
+   voir .eq-row) : si une équation reste trop large malgré la police réduite, on laisse
+   #historyScroll défiler pour TOUTE la page plutôt que d'avoir une mini-barre de
+   défilement par ligne, peu lisible sur deux colonnes déjà étroites. */
+.produit-nul-chain .eq-row {
+  overflow-x: visible;
+}
+
+/* Neutralise le margin-bottom (46px, voir .eq-row) de la dernière ligne d'une branche :
+   sans ça il s'ajoute au padding bas de .produit-nul-branch, l'espace en bas de la
+   colonne devient nettement plus grand qu'en haut. Classe posée en JS (voir renderAll
+   dans render.js) plutôt qu'un sélecteur structurel (:last-child/:last-of-type) : drawAll
+   (arrows.js) ajoute ensuite le calque SVG ET des .arrow-label (des <div>, comme .eq-row)
+   comme frères APRÈS les lignes dans ce même conteneur, ce qui rendrait tout sélecteur
+   structurel incapable de cibler la bonne ligne une fois les flèches dessinées. */
+.eq-row.eq-row-flush-bottom {
+  margin-bottom: 0;
+}
+
+.side {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.eq-sign {
+  margin: 0 22px;
+  color: var(--text-faint);
+}
+
+/* Astuce : padding + margin négatif égal => zone de clic confortable
+   sans jamais perturber l'espacement natif de KaTeX entre les termes. */
+.term {
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+.term.selectable {
+  cursor: pointer;
+  /* Marges de clic gauche/droite quasi nulles : sinon la zone cliquable de deux termes
+     voisins se chevauche (le "+"/"−" entre eux appartient visuellement aux deux). Le
+     premier/dernier terme d'un membre n'a rien à sa gauche/droite, ils gardent une
+     marge confortable de ce côté-là (voir plus bas). */
+  padding: 6px 0;
+  margin: -6px 0;
+}
+.term.selectable.term-first-in-side {
+  padding-left: 6px;
+  margin-left: -6px;
+}
+.term.selectable.term-last-in-side {
+  padding-right: 6px;
+  margin-right: -6px;
+}
+.term.selectable:hover { background: var(--accent-soft-border); }
+/* Couleur de texte fixe (pas var(--text)) : le jaune reste clair dans les deux thèmes,
+   un texte blanc (mode sombre) y serait illisible sans hover pour l'assombrir. */
+.term.selected { background: #fde68a; color: #2b2100; }
+.term.selected:hover { background: #f6c33d; }
+
+/* Un produit à ≥2 facteurs (au moins un .factor-slot, voir plus bas) : le survol ne
+   teinte plus le produit ENTIER — seul le survol d'UNE parenthèse précise (.factor-slot:
+   hover ci-dessous) teinte CETTE parenthèse. Sans ça, survoler une parenthèse superposait
+   deux fonds gris (celui du produit entier ET celui du facteur visé), peu lisible. Plus
+   spécifique que la règle .term.selectable:hover ci-dessus (:has ajouté), pas besoin de
+   la réordonner. */
+.term.selectable:has(.factor-slot):hover {
+  background: none;
+}
+
+/* Chaque parenthèse d'un produit à ≥2 facteurs, individuellement sélectionnable pour un
+   développement partiel (voir toggleFactorSelection dans history.js et
+   productGroupBranchesLatex dans render.js) : même trio hover/selected/selected-hover que
+   .term ci-dessus, appliqué à CE facteur précis plutôt qu'au produit entier. */
+.factor-slot {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 4px 2px;
+  margin: -4px -2px;
+}
+.factor-slot:hover { background: var(--accent-soft-border); }
+.factor-slot.selected { background: #fde68a; color: #2b2100; }
+.factor-slot.selected:hover { background: #f6c33d; }
+
+/* Parenthèse d'un groupe dans lequel on est "entré" (voir pending.drilled et
+   drilledGroupLatex) : cliquer dedans (ou clic droit n'importe où sur la page, voir
+   main.js) sans viser un terme précis en ressort d'un niveau. Pas de fond : cette zone
+   n'est elle-même pas "sélectionnable" comme un terme — seuls les termes intérieurs le
+   sont — un fond permanent (ou un changement au survol) donnerait à tort l'impression
+   du contraire. */
+.drilled-exit {
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+/* Les fractions (\frac, utilisées pour "÷") empilent numérateur/dénominateur via des
+   divs internes de positionnement (.vlist-*) dont la boîte englobante recouvre toute
+   la hauteur de la fraction : sans ceci, un clic sur le dénominateur (zone cliquable
+   pour "développer") est intercepté par ces divs invisibles plutôt que par le terme tagué. */
+.katex .vlist, .katex .vlist-r, .katex .vlist-t, .katex .vlist-s {
+  pointer-events: none;
+}
+.term.selectable, .term.selectable *,
+.draggable-term, .draggable-term * {
+  pointer-events: auto;
+}
+
+/* Glisser-déposer pour réorganiser les termes (ligne courante, hors sélection). Le
+   terme saisi s'estompe sur place pendant qu'un fantôme suit le curseur (voir
+   .drag-ghost) ; les autres termes se décalent avec une animation (appliquée en JS via
+   une transition sur transform, cf. reflowDragSide dans render.js). */
+.draggable-term {
+  cursor: grab;
+}
+.draggable-term:hover { background: var(--accent-soft-border); }
+.draggable-term.drag-source-active { opacity: 0.3; }
+
+.drag-ghost, .drag-ghost * {
+  pointer-events: none;
+}
+.drag-ghost {
+  position: fixed;
+  z-index: 9999;
+  /* PAS display:flex : KaTeX empile numérateur/dénominateur (\frac) via des astuces de
+     vertical-align sur ses struts internes, qui n'ont aucun effet sur un enfant flex —
+     la fraction se retrouverait "à plat" (dénominateur à côté du numérateur) plutôt
+     qu'empilée. Un simple bloc laisse le rendu KaTeX cloné intact. */
+  display: block;
+  color: var(--text);
+  /* Pas de fond ni de box-shadow : sur une boîte KaTeX (qui inclut de l'espace vide
+     au-dessus/en dessous du glyphe), un fond opaque dessinerait un rectangle visible
+     autour du terme plutôt que de suivre sa forme. filter/drop-shadow épouse le texte. */
+  filter: drop-shadow(0 6px 10px rgba(30, 27, 75, 0.35));
+  will-change: transform;
+}
+
+/* ---- Flèches (routées dans les marges, jamais entre les lignes) ---- */
+.arrows-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.arrow-path {
+  fill: none;
+  stroke: var(--arrow-color);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.arrowhead-fill { fill: var(--arrow-color); }
+
+.arrow-label {
+  position: absolute;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 4px 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 4;
+}
+.arrow-label-left { transform: translate(-100%, -50%); }
+.arrow-label-right { transform: translate(0, -50%); }
+/* "produit nul" (voir drawFork dans arrows.js) : centrée horizontalement sous le "="
+   d'origine, pas à côté d'une flèche précise (il y en a deux, une par facteur). */
+.arrow-label-fork { transform: translate(-50%, 0); }
+
+/* ---- Boutons d'opération flottants, en bas à gauche ---- */
+#opButtons {
+  position: fixed;
+  left: 22px;
+  bottom: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 41;
+}
+
+.op-row {
+  position: relative; /* ancre la coche, positionnée en absolu (voir ci-dessous) */
+}
+
+/* Coche de validation : apparaît à côté du bouton de mode actif (voir renderToolbar
+   dans toolbar.js), remplace l'ancien bouton "Valider" texte du panneau flottant.
+   Positionnée en absolu (hors flux) plutôt qu'en sibling flex normal : sinon sa largeur
+   s'ajouterait à celle de la ligne active, et #opButtons (colonne flex qui s'étire à la
+   largeur de son enfant le plus large) grandirait dès qu'un mode est sélectionné. */
+/* #opButtons .op-confirm-btn (pas juste .op-confirm-btn) : il faut au moins autant de
+   spécificité que la règle générique "#opButtons button" (background/color) ci-dessus,
+   sinon celle-ci l'emporte malgré l'ordre d'écriture (un sélecteur #id bat une classe). */
+#opButtons .op-confirm-btn {
+  position: absolute;
+  left: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+/* Sur :hover, la règle générique "#opButtons button:hover" (color: var(--accent)) est
+   plus spécifique que le simple ".op-confirm-btn" de base pour la couleur (un pseudo-
+   classe de plus au même niveau) : sans ce rappel explicite, la coche redevient bleue
+   sur un fond bleu et disparaît. Pas de mouvement vertical non plus (translateY(-50%)
+   inchangé, sert uniquement au centrage) : juste un assombrissement du fond. */
+#opButtons .op-confirm-btn:hover { background: var(--accent-hover); color: #fff; }
+#opButtons .op-confirm-btn:active { background: var(--accent-hover); color: #fff; }
+
+#opButtons button {
+  position: relative; /* ancre l'infobulle (voir [data-tooltip]::after ci-dessous) */
+  /* Largeur identique pour tous les boutons, quelle que soit la longueur de leur texte
+     ("Opération" vs "Développer" etc.) : ~2px au-dessus de la plus longue étiquette
+     ("Développer", ~127px avec son padding). */
+  width: 130px;
+  font-size: 1.02rem;
+  font-weight: 500;
+  padding: 12px 22px;
+  border-radius: 999px;
+  border: none;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+#opButtons button:hover { background: var(--accent-soft); color: var(--accent); }
+#opButtons button.active {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+/* Grisé plutôt que masqué (garde les 4 boutons à une position stable) quand la
+   sélection en cours ne permet pas cette action (voir computeSelectionInfo). */
+#opButtons button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+#opButtons button:disabled:hover { background: var(--surface); color: var(--text); }
+
+/* Infobulle d'explication : au survol prolongé d'un bouton de mode, plutôt que dans le
+   pavé flottant lui-même. Délai avant apparition (transition-delay ci-dessous, sur la
+   règle :hover uniquement) pour ne pas clignoter au simple passage de la souris. */
+#opButtons button[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  width: max-content;
+  max-width: 260px;
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.4;
+  text-align: left;
+  padding: 9px 13px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 50;
+}
+#opButtons button[data-tooltip]:hover::after {
+  opacity: 1;
+  transition: opacity 0.12s ease 0.4s;
+}
+/* Pas d'infobulle sur un bouton actif : la coche de validation occupe déjà cet espace. */
+#opButtons button.active[data-tooltip]::after {
+  display: none;
+}
+
+/* ---- Panneau "Factoriser" flottant, en haut à droite (sous #themeToggleBtn) ----
+   Depuis le passage au clavier mathématique unifié (voir mathKeypad.js), ce panneau
+   peut être visible EN MÊME TEMPS que le pavé ancré en bas à droite (le champ vit ici,
+   ses touches restent dans le pavé ancré, voir bindFactorKeypad dans toolbar.js) — d'où
+   ce coin différent, pour ne jamais les superposer. */
+#controlPanel {
+  position: fixed;
+  top: 78px;
+  right: 22px;
+  width: 320px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+  z-index: 40;
+}
+#controlPanel[hidden] { display: none; }
+
+.panel-error {
+  color: var(--danger);
+  text-align: center;
+  margin: 10px 0 0;
+  font-size: 0.87rem;
+  font-weight: 500;
+}
+
+
+.keypad {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Bouton "Valider", intégré à la grille du pavé (voir buildPanelConfirmCell dans
+   toolbar.js), à droite de la dernière touche plutôt qu'en rangée pleine largeur en
+   dessous — en plus de la coche ronde à côté du bouton de mode actif, pas à sa place :
+   plus visible/découvrable, au plus près de la saisie qu'il valide. Repasse en "✓" côté
+   JS si "Valider" ne tient pas dans sa cellule (voir renderToolbar) : le texte ne doit
+   alors jamais déborder silencieusement, d'où l'overflow ci-dessous tant que la mesure
+   n'a pas eu lieu.
+   ".key-btn.panel-confirm-cell" (double classe) l'emporte sur les règles ".key-btn" de
+   base pour la couleur : accent plein plutôt que le fond neutre des autres touches,
+   pour rester le bouton le plus visible du pavé (c'est l'action principale). */
+.key-btn.panel-confirm-cell {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  overflow: hidden;
+}
+.key-btn.panel-confirm-cell:hover { background: var(--accent-hover); }
+
+.keys {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.key-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
+  font-weight: 500;
+  padding: 13px 0;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease;
+}
+.key-btn:hover:not(:disabled) { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-soft-border); }
+.key-btn:active:not(:disabled) { transform: scale(0.94); }
+.key-btn:disabled { opacity: 0.28; cursor: not-allowed; }
+
+/* Écho visuel d'une frappe au clavier PHYSIQUE (voir flashPhysicalKey dans
+   mathKeypad.js) — même traitement que :hover+:active (survol + léger rétrécissement),
+   simplement déclenché par JS plutôt que par la souris. */
+.key-btn.key-physical-active:not(:disabled) {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-soft-border);
+  transform: scale(0.94);
+}
+
+/* Touche "±" engagée (multiplicateur/diviseur négatif en cours de saisie) : même
+   traitement visuel que le bouton actif d'un mode, pour un retour clair. */
+.key-btn.key-pressed {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+}
+.key-btn.key-pressed:hover:not(:disabled) { background: var(--accent-hover); }
+
+/* Étape 1 du sélecteur "Factoriser" (facteur commun / identité 1/2/3, voir
+   buildFactorChoiceStep dans toolbar.js). */
+.factor-choice-intro {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  width: 100%;
+}
+
+.factor-choice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.factor-choice-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.12s ease, transform 0.08s ease, box-shadow 0.12s ease;
+}
+.factor-choice-btn:hover:not(:disabled) { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-soft-border); }
+.factor-choice-btn:active:not(:disabled) { transform: scale(0.98); }
+.factor-choice-btn:disabled { opacity: 0.28; cursor: not-allowed; }
+
+/* Identité essayée dont la forme ne correspond pas à la sélection (voir
+   chooseFactorMode dans history.js) : grisée pour le signaler, mais JAMAIS désactivée —
+   l'élève reste libre de réessayer (relire l'erreur, changer de sélection, etc.). */
+.factor-choice-btn.factor-choice-failed { opacity: 0.4; }
+.factor-choice-btn.factor-choice-failed:hover { opacity: 0.6; }
+
+/* Flèche "retour" (étape 2 -> étape 1, voir goBackToFactorChoice dans history.js),
+   toujours en haut à gauche du pavé. */
+.factor-back-row {
+  display: flex;
+  width: 100%;
+}
+.factor-back-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+  cursor: pointer;
+  color: var(--text);
+  font-size: 1rem;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+.factor-back-btn:hover { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-soft-border); }
+
+.factor-choice-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.factor-choice-math {
+  font-size: 0.95rem;
+}
+
+/* Étape 2, cas identité remarquable : deux boîtes "a"/"b" — celle qui a le focus (voir
+   setIdentityFocus dans history.js) accueille le <math-field> partagé (voir
+   .identity-ab-live/mathKeypad.js), l'autre reste un simple bouton cliquable affichant sa
+   valeur figée (même traitement visuel que la touche "±" engagée du pavé "Opération" :
+   fond accentué une fois focalisée). */
+.identity-ab-display {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.identity-ab-field {
+  flex: 1;
+  min-height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+  color: var(--text);
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 0 0 12px;
+  overflow: hidden;
+}
+
+.identity-ab-field.identity-ab-focused {
+  background: var(--accent);
+  color: #fff;
+  box-shadow: none;
+}
+
+/* "a ="/"b =" — TOUJOURS visible, même une fois le champ live vide dedans (sinon on ne
+   sait plus lequel des deux on est en train de taper), voir buildIdentityKeypad. Rendu
+   KaTeX (police mathématique, pas du texte brut) et collé à la valeur/au champ juste
+   après (gap réduit ci-dessus) pour se lire comme UNE seule expression continue
+   ("a=x"), pas deux zones séparées. */
+.identity-ab-label {
+  font-size: 1.05rem;
+  flex-shrink: 0;
+}
+
+.identity-ab-static {
+  flex: 1;
+  height: 100%;
+  padding: 8px 12px 8px 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+/* Le survol doit teinter TOUTE la boîte (le label "a="/"b=" inclus, pas seulement le
+   bouton de la valeur juste à côté) pour rester un seul repère visuel cohérent — d'où la
+   règle sur .identity-ab-field elle-même plutôt que sur .identity-ab-static seul, qui
+   aurait laissé le label sans effet de survol (moitié gauche non teintée). */
+.identity-ab-field:not(.identity-ab-live):hover {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-soft-border);
+}
+
+/* Le <math-field> partagé, une fois déplacé dans la boîte focalisée (voir
+   bindFactorKeypad dans toolbar.js) à la suite de .identity-ab-label, reprend l'habillage
+   de la boîte elle-même plutôt que le sien propre (évite un double cadre/fond) — y compris
+   focalisé : sans le variant ":focus-within" explicite ci-dessous, la règle générique
+   `.math-keypad-field:focus-within` (même spécificité, définie plus loin dans ce fichier)
+   réapplique son propre anneau bleu par-dessus le fond déjà accentué de la boîte, d'où la
+   superposition blanc/bleu observée au bord du champ focalisé. Le curseur et la sélection
+   de texte du champ (--caret-color/--selection-background-color, réglés sur des teintes
+   bleues dans la règle générique pour un fond clair) sont eux aussi réaccordés au blanc :
+   sinon invisibles une fois le champ lui-même sur fond bleu plein (voir
+   .identity-ab-focused). */
+.identity-ab-field.identity-ab-live .math-keypad-field,
+.identity-ab-field.identity-ab-live .math-keypad-field:focus-within {
+  flex: 1;
+  padding: 6px 12px 6px 0;
+  box-shadow: none;
+  background: transparent;
+  color: inherit;
+  --caret-color: #fff;
+  --selection-background-color: rgba(255, 255, 255, 0.35);
+}
+
+/* Étape 2, cas facteur commun : le <math-field> partagé occupe toute la largeur du
+   panneau (voir bindFactorKeypad dans toolbar.js). */
+.factor-field-slot {
+  width: 100%;
+}
+
+/* ---- Modale nouvelle équation ---- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 19, 26, 0.5);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+.modal-overlay[hidden] {
+  display: none;
+}
+
+.modal-box {
+  position: relative; /* ancre la croix de fermeture (voir .modal-close) */
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 30px;
+  width: 420px;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-box h2 {
+  margin: 0 0 4px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.modal-section {
+  margin: 18px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.modal-section input {
+  padding: 11px 14px;
+  font-size: 1rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 0 0 1.5px var(--border);
+  background: var(--bg);
+  /* Explicite : un <input> ne reprend pas var(--text) tout seul (couleur de texte par
+     défaut du navigateur, ~noir), illisible sur le fond sombre du mode sombre. */
+  color: var(--text);
+  transition: box-shadow 0.15s ease;
+}
+.modal-section input:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.modal-section button {
+  padding: 11px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+.modal-section button:hover { background: var(--accent-hover); }
+
+/* Même langage visuel que les autres boutons-icônes carrés de l'appli (#newEquationBtn,
+   #themeToggleBtn) : coins arrondis (pas un cercle), fond distinct du panneau. */
+.modal-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  line-height: 1;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--bg) !important;
+  color: var(--text-muted) !important;
+  font-weight: 500 !important;
+  box-shadow: inset 0 0 0 1px var(--border) !important;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.modal-close:hover { background: var(--accent-soft) !important; color: var(--accent) !important; }
+
+/* ---- Clavier mathématique unifié (js/mathKeypad.js) ---- */
+.math-keypad-panel {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  width: 360px;
+  max-height: calc(100vh - 60px);
+  overflow-y: auto;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 16px 20px 20px;
+  z-index: 60; /* au-dessus de .modal-overlay (50) : le clavier reste ancré à l'écran,
+                  pas dans la boîte de la modale, même quand une modale est ouverte */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.math-keypad-panel[hidden] { display: none; }
+
+.math-keypad-header {
+  display: flex;
+  justify-content: flex-end;
+}
+.math-keypad-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.math-keypad-collapse:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* <math-field> (MathLive) : reprend l'habillage des <input> de l'appli plutôt que le
+   style par défaut de la librairie, pour rester cohérent visuellement. */
+.math-keypad-field {
+  display: block;
+  width: 100%;
+  padding: 11px 14px;
+  font-size: 1.15rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  /* Le champ dessine déjà son propre "cadre" via box-shadow ci-dessous : sans ce
+     "outline: none", le contour de focus par défaut du navigateur (noir, épais) se
+     superpose par-dessus, invisible sur un fond clair mais très visible dès que le champ
+     vit sur un fond accentué (voir .identity-ab-focused dans buildIdentityKeypad). */
+  outline: none;
+  box-shadow: inset 0 0 0 1.5px var(--border);
+  background: var(--bg);
+  color: var(--text);
+  --caret-color: var(--accent);
+  --selection-background-color: var(--accent-soft);
+}
+.math-keypad-field:focus-within { box-shadow: inset 0 0 0 1.5px var(--accent); }
+
+/* MathLive affiche par défaut ses propres icônes "clavier virtuel" et "menu" à droite du
+   champ (parts de shadow DOM `virtual-keyboard-toggle`/`menu-toggle`) — redondantes ici
+   puisque l'app a déjà son propre pavé ancré (voir mathKeypad.js) et son propre menu
+   contextuel inexistant/inutile ; masquées partout où le champ partagé vit. */
+.math-keypad-field::part(virtual-keyboard-toggle),
+.math-keypad-field::part(menu-toggle) {
+  display: none;
+}
+
+/* Emplacement interne par défaut du <math-field> (voir fieldSlot dans mathKeypad.js) : masqué
+   quand le champ vit ailleurs (ex. dans la modale "Nouvelle équation"). */
+.math-keypad-field-slot[hidden] { display: none; }
+
+.math-keypad-error {
+  font-size: 0.85rem;
+  color: var(--danger);
+}
+.math-keypad-error[hidden] { display: none; }
+
+.math-keypad-keys {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  width: 100%;
+}
+.math-keypad-keys .key-btn { font-size: 1rem; padding: 11px 0; }
+
+.math-keypad-peek {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  z-index: 60;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.math-keypad-peek:hover { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
+.math-keypad-peek[hidden] { display: none; }

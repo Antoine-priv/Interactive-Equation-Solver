@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<title>Résolution d'équations</title>
+<script>
+// Applique un thème explicitement choisi AVANT le premier rendu (évite un flash clair
+// avant que theme.js ne s'exécute) ; sans choix explicite, la préférence système
+// (@media prefers-color-scheme) suffit seule, en CSS pur, pas besoin de JS ici.
+(function () {
+  try {
+    var stored = localStorage.getItem('equations-theme');
+    if (stored === 'dark' || stored === 'light') {
+      document.documentElement.setAttribute('data-theme', stored);
+    }
+  } catch (e) {}
+})();
+</script>
+<link rel="stylesheet" href="vendor/katex/katex.min.css" />
+<link rel="stylesheet" href="vendor/mathlive/mathlive-static.css" />
+<link rel="stylesheet" href="vendor/mathlive/mathlive-fonts.css" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<button id="newEquationBtn" type="button" title="Nouvelle équation">+</button>
+<button id="undoBtn" type="button" title="Annuler la dernière opération"></button>
+<button id="themeToggleBtn" type="button"></button>
+
+<main id="historyScroll">
+  <div id="history" aria-live="polite"></div>
+</main>
+
+<div id="opButtons">
+  <div class="op-row"><button type="button" data-op="expr">Opération</button></div>
+  <div class="op-row"><button type="button" data-op="simplify">Simplifier</button></div>
+  <div class="op-row"><button type="button" data-op="factor">Factoriser</button></div>
+  <div class="op-row"><button type="button" data-op="expand">Développer</button></div>
+  <div class="op-row"><button type="button" data-op="produitnul">Produit nul</button></div>
+</div>
+
+<div id="controlPanel" hidden></div>
+
+<div id="modalOverlay" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <button id="modalClose" type="button" class="modal-close" title="Fermer">✕</button>
+    <h2>Nouvelle équation</h2>
+    <div class="modal-section">
+      <div id="manualInputSlot"></div>
+      <div id="manualError" class="panel-error"></div>
+    </div>
+    <div class="modal-section">
+      <button id="randomGenerate" type="button">Générer aléatoirement</button>
+      <button id="manualSubmit" type="button">Valider</button>
+    </div>
+  </div>
+</div>
+
+<script src="vendor/katex/katex.min.js"></script>
+<script src="vendor/mathlive/mathlive.min.js"></script>
+<script src="js/expression.js"></script>
+<script src="js/equation.js"></script>
+<script src="js/parser.js"></script>
+<script src="js/generator.js"></script>
+<script src="js/history.js"></script>
+<script src="js/render.js"></script>
+<script src="js/arrows.js"></script>
+<script src="js/toolbar.js"></script>
+<script src="js/mathKeypad.js"></script>
+<script src="js/keyboard.js"></script>
+<script src="js/newEquationModal.js"></script>
+<script src="js/theme.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

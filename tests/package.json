@@ -1,0 +1,11 @@
+{
+  "name": "equations-regression-tests",
+  "private": true,
+  "description": "Playwright regression scripts for the Equations app (js/). Entirely separate from the app itself, which has no build step or dependencies of its own.",
+  "scripts": {
+    "test": "./run.sh"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}
