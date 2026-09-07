@@ -53,6 +53,16 @@ function ok(label, cond) {
   console.log('etiquettes apres ×x:', JSON.stringify(labels));
   ok('×x (bare, depends on x) still gets the caveat', labels.length === 2 && labels.every((l) => l.warn));
 
+  // --- Test 3b (regression) : ×x+2, une chaine avec une op a risque PUIS une op sans
+  // risque -> la reserve doit venir a la toute fin de la chaine ("×(x)+2 valide si..."),
+  // jamais collee juste apres l'operation a risque (ce qui donnerait a tort l'impression
+  // que le "+2" fait partie de la condition, ex. "...≠0+2").
+  await applyChain('x=5', '\\times x+2');
+  labels = await lastLabels();
+  console.log('etiquettes apres ×x+2:', JSON.stringify(labels));
+  ok('×x+2 keeps the caveat at the end of the whole chain, after "+2"', labels.length === 2 &&
+    labels.every((l) => l.text.indexOf('+2') !== -1 && l.text.indexOf('valide') > l.text.indexOf('+2')));
+
   // --- Test 4 : +5 (pas une multiplication) -> pas d'avertissement ---
   await applyChain('x=5', '+5');
   labels = await lastLabels();

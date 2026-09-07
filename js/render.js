@@ -134,20 +134,21 @@
     }
     if (desc.type === 'expr') {
       if (!desc.ops || desc.ops.length === 0) return null;
+      // Les éventuelles réserves ("valide si ...") sont accumulées à part et rajoutées
+      // toutes à la fin, APRÈS la chaîne complète (jamais entre deux opérations : sinon un
+      // "+2" venant après un "×(x)" à risque se lirait, à tort, comme collé à la réserve
+      // elle-même plutôt qu'à la chaîne — ex. "×(x) valide si (x)≠0+2").
+      var riskyOperands = [];
       // Chaque opération garde son propre signe explicite, y compris la première (+5-2x×3).
-      return desc.ops.map(function (op) {
+      var chainLatex = desc.ops.map(function (op) {
         if (op.terms) {
           // Multiplication par une expression (ex. "×(x+5)"), voir wrapSideInProduct.
           var exprOperandLatex = op.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
-          var mulLatex = OP_SYMBOL_LATEX[op.symbol] + '\\left(' + exprOperandLatex + '\\right)';
           // Contrairement à un facteur numérique, celui-ci peut s'annuler pour une valeur
           // de x : l'étape n'est alors équivalente à l'originale que sous cette réserve
-          // (voir isZeroRiskMulOp/.arrow-label-warning) — on le rappelle explicitement
-          // plutôt que de laisser croire que l'étape est inconditionnellement valide.
-          if (isZeroRiskMulOp(op)) {
-            mulLatex += '\\ \\text{valide si }\\left(' + exprOperandLatex + '\\right)\\neq0';
-          }
-          return mulLatex;
+          // (voir isZeroRiskMulOp/.arrow-label-warning).
+          if (isZeroRiskMulOp(op)) riskyOperands.push(exprOperandLatex);
+          return OP_SYMBOL_LATEX[op.symbol] + '\\left(' + exprOperandLatex + '\\right)';
         }
         if (op.symbol === '×' || op.symbol === '÷') {
           // formatNumberLatex renvoie une valeur absolue : le signe du multiplicateur/
@@ -156,6 +157,11 @@
         }
         return Expr.nodeLatex(op.term, false);
       }).join('');
+      if (riskyOperands.length > 0) {
+        var conditions = riskyOperands.map(function (r) { return '\\left(' + r + '\\right)\\neq0'; }).join('\\text{ et }');
+        chainLatex += '\\ \\text{valide si }' + conditions;
+      }
+      return chainLatex;
     }
     return null;
   }
