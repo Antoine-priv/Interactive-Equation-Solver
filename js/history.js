@@ -1558,6 +1558,29 @@
       notify();
     }
 
+    // Même principe que setSideOrder, mais pour les FACTEURS d'un ProductGroup de PREMIER
+    // NIVEAU (pas "drillé" — voir productGroupFactorsLatexForOrder/escalateFactorDragToTopLevel
+    // dans render.js) : glisser-déposer réordonnant par exemple "(x+7)²(x+5)" en
+    // "(x+5)(x+7)²". Purement visuel (un produit reste commutatif), donc pas une nouvelle
+    // étape — modifie juste `factors` en place, comme setSideOrder pour `equation[side]`.
+    function setFactorOrder(side, groupIndex, orderOfOrigIndices) {
+      var lastStep = steps[steps.length - 1];
+      var node = lastStep.equation[side][groupIndex];
+      if (!node || !Expr.isProductGroup(node)) return;
+      var oldFactors = node.factors;
+      var isIdentity = orderOfOrigIndices.length === oldFactors.length &&
+        orderOfOrigIndices.every(function (v, i) { return v === i; });
+      if (!isIdentity) {
+        var newFactors = orderOfOrigIndices.map(function (i) { return oldFactors[i]; });
+        var newNode = { sign: node.sign, factors: newFactors };
+        var newSide = lastStep.equation[side].map(function (n, i) { return i === groupIndex ? newNode : n; });
+        var newEquation = { left: lastStep.equation.left, right: lastStep.equation.right };
+        newEquation[side] = newSide;
+        lastStep.equation = newEquation;
+      }
+      notify();
+    }
+
     return {
       subscribe: function (fn) { listeners.push(fn); },
       init: init,
@@ -1589,6 +1612,7 @@
       computePreview: computePreview,
       setSideOrder: setSideOrder,
       setInnerOrder: setInnerOrder,
+      setFactorOrder: setFactorOrder,
       undo: undo
     };
   }
@@ -1884,6 +1908,7 @@
     confirm: function () { return active().confirm(); },
     computePreview: function () { return active().computePreview(); },
     setSideOrder: function (side, order) { active().setSideOrder(side, order); },
-    setInnerOrder: function (order) { active().setInnerOrder(order); }
+    setInnerOrder: function (order) { active().setInnerOrder(order); },
+    setFactorOrder: function (side, groupIndex, order) { active().setFactorOrder(side, groupIndex, order); }
   };
 })(window.App = window.App || {});

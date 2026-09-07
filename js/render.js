@@ -263,6 +263,38 @@
     return ' ' + signP + ' ' + bodyP;
   }
 
+  // Variante de productGroupBranchesLatex utilisée PENDANT un glisser en cours réordonnant
+  // les FACTEURS eux-mêmes d'un ProductGroup de PREMIER NIVEAU, PAS drillé (voir
+  // setFactorOrder dans history.js et escalateFactorDragToTopLevel plus bas) : chaque
+  // facteur vient de `orderedFactors` (l'ordre en cours de glisser, pas node.factors) et
+  // porte un id temporaire "dragpv-i" (même principe que drilledGroupLatexForOrder). Le
+  // produit entier, lui, garde son id stable habituel ("idPrefix-topIdx") — pas juste par
+  // souci de cohérence avec le rendu normal : updateTermDrag s'en sert pour mesurer les
+  // bornes du produit à chaque mousemove et détecter que le curseur en est sorti (voir
+  // escalateFactorDragToTopLevel, qui bascule alors le glisser sur le produit ENTIER, comme
+  // un terme de premier niveau classique).
+  function productGroupFactorsLatexForOrder(node, idPrefix, topIdx, orderedFactors, isFirst) {
+    var bodyP = orderedFactors.map(function (f, i) {
+      var slot = '\\htmlId{dragpv-' + i + '}{' + Expr.groupSlotLatex(f.terms) + '}';
+      return f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
+    }).join('');
+    var signP = node.sign < 0 ? '-' : '+';
+    var body = (isFirst ? (signP === '-' ? '-' : '') : ' ' + signP + ' ') + bodyP;
+    return '\\htmlId{' + idPrefix + '-' + topIdx + '}{' + body + '}';
+  }
+
+  // Reconstruit TOUT le membre (même raison que buildInnerDragLatex plus haut : un seul
+  // appel KaTeX, jamais un rendu imbriqué qui ferait grossir toute la ligne) pendant un
+  // glisser réordonnant les facteurs du produit de PREMIER NIVEAU à `topIdx` — les AUTRES
+  // noeuds de premier niveau restent inchangés (aucun id : inutile pendant ce glisser précis,
+  // jeté au prochain reflow ou remplacé par le rendu normal une fois terminé).
+  function buildFactorDragLatex(side, idPrefix, topIdx, orderedFactors) {
+    return side.map(function (node, idx) {
+      if (idx !== topIdx) return Expr.nodeLatex(node, idx === 0);
+      return productGroupFactorsLatexForOrder(node, idPrefix, topIdx, orderedFactors, idx === 0);
+    }).join('');
+  }
+
   // Rend tout un membre en UN SEUL appel KaTeX (espacement natif LaTeX correct), chaque
   // noeud de premier niveau (Term ou groupe factorisé) tagué et cliquable pour la
   // sélection libre (simplifier/factoriser/développer) et/ou le glisser-déposer.
@@ -371,12 +403,39 @@
 
     if (!options || (!options.selectable && !options.draggable)) return;
 
+    // Contexte de glisser pour un terme de PREMIER NIVEAU (un membre entier, voir
+    // App.History.setSideOrder) : construit UNE SEULE FOIS par rendu de cette side, aussi
+    // bien pour le glisser normal d'un terme de premier niveau (second forEach plus bas) que
+    // comme cible d'ÉCHAPPEMENT du glisser PAR FACTEUR ci-dessous (voir
+    // escalateFactorDragToTopLevel) — les deux partagent exactement le même comportement,
+    // peu importe quel geste (un clic sur un terme, ou un facteur qui sort de son produit)
+    // l'a déclenché.
+    var topLevelDragCtx = options.draggable ? {
+      getSelected: function () {
+        var p = App.History.getPending();
+        return new Set(sideName === 'left' ? p.selectedLeft : p.selectedRight);
+      },
+      commit: function (order) { App.History.setSideOrder(sideName, order); },
+      buildLatex: function (orderedArr) {
+        return orderedArr.map(function (node, i) {
+          return '\\htmlId{dragpv-' + i + '}{' + Expr.nodeLatex(node, i === 0) + '}';
+        }).join('');
+      }
+    } : null;
+
     // Sélection PAR FACTEUR (voir productGroupBranchesLatex plus haut et
     // toggleFactorSelection/pending.selectedFactors dans history.js) : chaque facteur d'un
     // produit à ≥2 facteurs de CETTE side reçoit une classe d'affordance de survol/clic
     // individuel ; celui ciblé par options.selectedFactors (au plus un produit à la fois)
     // reçoit en plus "selected". Un produit à un seul facteur (carré, exponent>1) n'a rien
     // à combiner avec lui-même : reste un bloc opaque normal, jamais de "factor-slot" ici.
+    // En sélection libre (options.draggable, voir topLevelDragCtx ci-dessus — les deux sont
+    // toujours vrais/faux ensemble ici, voir toggleTermSelection dans history.js), chaque
+    // facteur devient EN PLUS individuellement glissable pour réordonner les facteurs entre
+    // eux (voir Expr.setFactorOrder... en fait App.History.setFactorOrder ci-dessous) — un
+    // geste "contextuel" : tant que le curseur reste dans les bornes du produit, seuls SES
+    // facteurs se réordonnent ; en sortir bascule sur le produit ENTIER comme un terme de
+    // premier niveau classique (voir escalateFactorDragToTopLevel plus bas).
     side.forEach(function (node, idx) {
       if (drilled && drilled.path[0] === idx) return; // rendu/câblé ci-dessus, pas de facteurs ici
       if (!Expr.isProductGroup(node) || node.factors.length < 2) return;
@@ -387,6 +446,20 @@
         if (!factorEl) return;
         factorEl.classList.add('factor-slot');
         if (selBranches && selBranches.has(i)) factorEl.classList.add('selected');
+        if (options.draggable) {
+          factorEl.classList.add('draggable-term');
+          factorEl.setAttribute('data-drag-id', String(i));
+          attachPointerDrag(factorEl, container, node.factors, {
+            getSelected: function () {
+              return options.selectedFactors && options.selectedFactors.index === idx
+                ? options.selectedFactors.branches : new Set();
+            },
+            commit: function (order) { App.History.setFactorOrder(sideName, idx, order); },
+            buildLatex: function (orderedFactors) { return buildFactorDragLatex(side, idPrefix, idx, orderedFactors); },
+            tagClass: 'factor-slot',
+            escalate: { side: side, topIdx: idx, idPrefix: idPrefix, dragCtx: topLevelDragCtx }
+          }, i, options.onTermClick ? function (targetEl) { options.onTermClick(sideName, idx, targetEl); } : null);
+        }
       });
     });
 
@@ -409,18 +482,8 @@
         // jamais déclencher les deux à la fois sur le même geste (voir attachPointerDrag).
         el.classList.add('draggable-term', 'selectable');
         el.setAttribute('data-drag-id', String(idx));
-        attachPointerDrag(el, container, side, {
-          getSelected: function () {
-            var p = App.History.getPending();
-            return new Set(sideName === 'left' ? p.selectedLeft : p.selectedRight);
-          },
-          commit: function (order) { App.History.setSideOrder(sideName, order); },
-          buildLatex: function (orderedArr) {
-            return orderedArr.map(function (node, i) {
-              return '\\htmlId{dragpv-' + i + '}{' + Expr.nodeLatex(node, i === 0) + '}';
-            }).join('');
-          }
-        }, idx, options.onTermClick ? function (targetEl) { options.onTermClick(sideName, idx, targetEl); } : null);
+        attachPointerDrag(el, container, side, topLevelDragCtx, idx,
+          options.onTermClick ? function (targetEl) { options.onTermClick(sideName, idx, targetEl); } : null);
       } else if (options.selectable) {
         el.classList.add('selectable');
         el.addEventListener('click', function (e) {
@@ -448,13 +511,22 @@
   // libre des termes, qui partage le même geste souris que le glisser-déposer.
   // `arr` : le tableau de noeuds réordonné (un membre entier, ou les innerTerms d'un
   // groupe dans lequel on est "entré" — voir renderSide/drilled). `dragCtx` :
-  // { getSelected():Set, commit(order) } — abstrait la provenance de la surbrillance
-  // "sélectionné" et la façon dont le nouvel ordre est appliqué (App.History.setSideOrder
-  // pour un membre, engine.setInnerOrder pour l'intérieur d'une parenthèse).
+  // { getSelected():Set, commit(order), buildLatex(orderedArr), escalate? } — abstrait la
+  // provenance de la surbrillance "sélectionné" et la façon dont le nouvel ordre est
+  // appliqué (App.History.setSideOrder pour un membre, engine.setInnerOrder pour l'intérieur
+  // d'une parenthèse, App.History.setFactorOrder pour les facteurs d'un ProductGroup de
+  // premier niveau). `dragCtx.escalate` (optionnel) : { side, topIdx, idPrefix, dragCtx } —
+  // seul le glisser PAR FACTEUR (voir renderSide) le fournit, pour basculer sur le produit
+  // ENTIER si le curseur sort de ses bornes (voir updateTermDrag/escalateFactorDragToTopLevel).
   function attachPointerDrag(el, container, arr, dragCtx, idx, onClick) {
     el.addEventListener('mousedown', function (e) {
       if (e.button !== 0) return; // clic gauche uniquement
       e.preventDefault();
+      // Empêche l'évènement de remonter à un ancêtre lui-même câblé par attachPointerDrag
+      // (ex. un facteur DANS le produit entier, tous deux glissables, voir renderSide) :
+      // sans ça, saisir un facteur déclencherait à tort DEUX glissers superposés (celui du
+      // facteur ET celui, hérité par bouillonnement, du produit entier qui le contient).
+      e.stopPropagation();
       var startX = e.clientX, startY = e.clientY;
       // Élément DOM précis sous le curseur AU MOMENT du clic (avant que KaTeX/le DOM ne
       // bouge) — transmis à `onClick` pour, ex., distinguer laquelle des deux parenthèses
@@ -504,7 +576,7 @@
     inner.removeAttribute('id');
     // Retire les classes interactives (sinon, comme le fantôme suit le curseur, le
     // clone se retrouverait "survolé" en continu et afficherait le fond de :hover).
-    inner.classList.remove('draggable-term', 'term');
+    inner.classList.remove('draggable-term', 'term', 'factor-slot');
     ghost.appendChild(inner);
     document.body.appendChild(ghost);
 
@@ -516,17 +588,35 @@
       draggedOrigIdx: idx,
       startClientX: startClientX,
       startClientY: startClientY,
-      ghostEl: ghost
+      ghostEl: ghost,
+      // Classe distinguant la portée de "data-drag-id" à interroger (voir
+      // computeTargetOrder/reflowDragSide) : 'term' pour un terme de premier niveau (ou un
+      // terme intérieur "drillé", même classe partagée sans ambiguïté là), 'factor-slot'
+      // pour un glisser PAR FACTEUR (voir renderSide) — les deux portées peuvent coexister
+      // dans le MÊME container (un produit ET ses propres facteurs), d'où le besoin d'un
+      // filtre explicite plutôt qu'un "[data-drag-id]" global.
+      tagClass: dragCtx.tagClass || 'term',
+      // Présent UNIQUEMENT pour un glisser par facteur (voir renderSide) : { side, topIdx,
+      // idPrefix, dragCtx } décrit vers quoi basculer si le curseur sort des bornes du
+      // produit (voir updateTermDrag/escalateFactorDragToTopLevel plus bas). null pour tout
+      // autre glisser (déjà au premier niveau, ou intérieur d'un groupe "drillé" — rien
+      // "au-dessus" vers quoi remonter dans ce dernier cas).
+      escalate: dragCtx.escalate || null
     };
     reflowDragSide(); // tague data-drag-id sur le rendu déjà présent + estompe le terme saisi
   }
 
   // Détermine, d'après la position horizontale du curseur, où le terme saisi devrait
-  // s'insérer parmi les AUTRES termes (dans leur ordre d'affichage courant).
+  // s'insérer parmi les AUTRES termes (dans leur ordre d'affichage courant). Le sélecteur
+  // est scopé à `d.tagClass` (voir beginTermDrag/reflowDragSide) : un même `container` peut
+  // héberger DEUX portées de "data-drag-id" en même temps (les facteurs d'un produit ET le
+  // produit lui-même parmi ses frères de premier niveau, voir renderSide) — sans ce filtre,
+  // une valeur numérique partagée par les deux (ex. facteur 0 ET terme de premier niveau 0)
+  // résoudrait au hasard le mauvais élément.
   function computeTargetOrder(clientX) {
     var d = termDrag;
     var elsByOrig = {};
-    Array.prototype.forEach.call(d.container.querySelectorAll('[data-drag-id]'), function (el) {
+    Array.prototype.forEach.call(d.container.querySelectorAll('.' + d.tagClass + '[data-drag-id]'), function (el) {
       elsByOrig[el.getAttribute('data-drag-id')] = el;
     });
     var others = d.order.filter(function (o) { return o !== d.draggedOrigIdx; });
@@ -545,6 +635,24 @@
   function updateTermDrag(clientX, clientY) {
     var d = termDrag;
     if (!d) return;
+    // Glisser PAR FACTEUR uniquement (voir renderSide/beginTermDrag) : le curseur sort des
+    // bornes horizontales du produit ENTIER (mesurées sur son id stable "idPrefix-topIdx",
+    // toujours présent pendant CE glisser précis — voir productGroupFactorsLatexForOrder)
+    // -> bascule sur un glisser de PREMIER NIVEAU du produit tout entier, comme s'il
+    // s'agissait d'un terme classique (voir escalateFactorDragToTopLevel). Un seul sens
+    // (jamais de retour à "par facteur" une fois sorti) : une fois le produit lui-même en
+    // train de glisser parmi ses frères, il n'y a plus de facteur précis à réintégrer.
+    if (d.escalate) {
+      var productEl = d.container.querySelector('#' + escId(d.escalate.idPrefix + '-' + d.escalate.topIdx));
+      if (productEl) {
+        var prect = productEl.getBoundingClientRect();
+        var SLACK = 2;
+        if (clientX < prect.left - SLACK || clientX > prect.right + SLACK) {
+          escalateFactorDragToTopLevel(productEl, clientX, clientY);
+          return;
+        }
+      }
+    }
     var dx = clientX - d.startClientX;
     var dy = clientY - d.startClientY;
     d.ghostEl.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(1.06)';
@@ -556,13 +664,61 @@
     }
   }
 
+  // Bascule un glisser PAR FACTEUR en cours (voir renderSide/beginTermDrag/updateTermDrag)
+  // sur un glisser de PREMIER NIVEAU du produit tout entier, à sa place courante parmi ses
+  // frères — même geste souris, sans relâcher le clic : on remplace juste `termDrag` par
+  // l'équivalent de ce qu'aurait construit beginTermDrag si on avait saisi le produit
+  // directement (même `dragCtx`/`tagClass` que le glisser de premier niveau normal, voir
+  // topLevelDragCtx). Le NOUVEAU fantôme (clone du produit entier tel qu'affiché à cet
+  // instant, facteurs dans leur ordre en cours de glisser) remplace l'ancien (clone du seul
+  // facteur saisi) ; `startClientX/Y` repart du point exact où le curseur est sorti des
+  // bornes du produit, pour que le fantôme continue de suivre le curseur sans "sauter"
+  // (son ancrage `left/top` vient du rect du produit À CET INSTANT, pas de son rect
+  // d'origine avant tout glisser).
+  function escalateFactorDragToTopLevel(productEl, clientX, clientY) {
+    var d = termDrag;
+    var esc = d.escalate;
+    if (d.ghostEl.parentNode) d.ghostEl.parentNode.removeChild(d.ghostEl);
+    var rect = productEl.getBoundingClientRect();
+    var ghost = document.createElement('div');
+    ghost.className = 'drag-ghost katex';
+    ghost.style.left = rect.left + 'px';
+    ghost.style.top = rect.top + 'px';
+    ghost.style.width = rect.width + 'px';
+    ghost.style.height = rect.height + 'px';
+    ghost.style.fontSize = window.getComputedStyle(productEl).fontSize;
+    var inner = productEl.cloneNode(true);
+    inner.removeAttribute('id');
+    inner.classList.remove('draggable-term', 'term', 'factor-slot');
+    ghost.appendChild(inner);
+    document.body.appendChild(ghost);
+
+    termDrag = {
+      side: esc.side,
+      dragCtx: esc.dragCtx,
+      container: d.container,
+      order: esc.side.map(function (_, i) { return i; }),
+      draggedOrigIdx: esc.topIdx,
+      startClientX: clientX,
+      startClientY: clientY,
+      ghostEl: ghost,
+      tagClass: esc.dragCtx.tagClass || 'term',
+      escalate: null // remonté d'un cran : rien "au-dessus" vers quoi remonter encore.
+    };
+    reflowDragSide();
+    updateTermDrag(clientX, clientY); // reflète immédiatement la position du curseur, sans attendre le prochain mousemove.
+  }
+
   // Ré-affiche le membre selon l'ordre courant du glisser (FLIP : les termes qui
   // changent de place s'animent en douceur vers leur nouvelle position, au lieu de
   // "sauter" instantanément).
   function reflowDragSide() {
     var d = termDrag;
     var oldRects = {};
-    Array.prototype.forEach.call(d.container.querySelectorAll('[data-drag-id]'), function (el) {
+    // Même scope que computeTargetOrder ci-dessus (d.tagClass) — sinon, sur ce tout premier
+    // appel (voir beginTermDrag), le DOM porte encore les DEUX portées de "data-drag-id" à la
+    // fois (rendu normal non wipé), avec le même risque de résoudre le mauvais élément.
+    Array.prototype.forEach.call(d.container.querySelectorAll('.' + d.tagClass + '[data-drag-id]'), function (el) {
       oldRects[el.getAttribute('data-drag-id')] = el.getBoundingClientRect();
     });
 
@@ -580,7 +736,7 @@
       var el = d.container.querySelector('#' + escId('dragpv-' + i));
       if (!el) return;
       var origIdx = d.order[i];
-      el.classList.add('term', 'draggable-term');
+      el.classList.add(d.tagClass, 'draggable-term');
       el.setAttribute('data-drag-id', String(origIdx));
       if (origIdx === d.draggedOrigIdx) el.classList.add('drag-source-active');
       if (selectedSet.has(origIdx)) el.classList.add('selected');
