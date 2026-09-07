@@ -295,14 +295,15 @@
     // voir computeExpandTargets). Un seul facteur marqué suffit aussi s'il a lui-même un
     // exposant>1 (ex. "(x-6)²" dans "(x-1)(x-6)²") : il y a alors quelque chose à
     // développer sans second facteur à combiner.
-    if (pending.selectedFactors) {
-      var sfBranches = pending.selectedFactors.branches;
-      var sfNode = eq[pending.selectedFactors.side][pending.selectedFactors.index];
-      if (sfBranches.length >= 2 ||
-          (sfBranches.length === 1 && sfNode && sfNode.factors[sfBranches[0]].exponent > 1)) {
+    ['left', 'right'].forEach(function (side) {
+      var sf = pending.selectedFactors[side];
+      if (!sf) return;
+      var sfNode = eq[side][sf.index];
+      if (sf.branches.length >= 2 ||
+          (sf.branches.length === 1 && sfNode && sfNode.factors[sf.branches[0]].exponent > 1)) {
         canExpand = true;
       }
-    }
+    });
     var canProduitNul = App.History.canProduitNul();
     return {
       canSimplify: canSimplify,
@@ -599,7 +600,8 @@
       // history.js) fait PARTIE de ce qu'il faut vérifier ici : il ne touche jamais
       // selectedLeft/Right, donc sans ce test un facteur sélectionné seul (ex. "(x+5)")
       // n'était jamais désélectionné par un clic en dehors de l'équation.
-      if (!pending.opType && !pending.selectedFactors && pending.selectedLeft.length === 0 && pending.selectedRight.length === 0) return;
+      if (!pending.opType && !pending.selectedFactors.left && !pending.selectedFactors.right &&
+          pending.selectedLeft.length === 0 && pending.selectedRight.length === 0) return;
       var modalOverlay = document.getElementById('modalOverlay');
       if (modalOverlay && !modalOverlay.hidden) return;
       var panel = document.getElementById('controlPanel');

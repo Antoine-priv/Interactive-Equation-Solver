@@ -1015,11 +1015,14 @@
         };
       }
       // Sélection PAR FACTEUR en cours sur CETTE side (voir toggleFactorSelection/
-      // pending.selectedFactors dans history.js) : au plus un produit à la fois, jamais en
-      // même temps que `drilled` (mutuellement exclusifs, voir history.js).
+      // pending.selectedFactors dans history.js) : au plus un produit à la fois PAR MEMBRE
+      // (le membre opposé a sa propre entrée, indépendante — voir computeExpandTargets),
+      // jamais en même temps que `drilled` sur CE membre (mutuellement exclusifs, voir
+      // history.js).
       var selectedFactorsOpt = null;
-      if (pending.selectedFactors && pending.selectedFactors.side === sideName) {
-        selectedFactorsOpt = { index: pending.selectedFactors.index, branches: new Set(pending.selectedFactors.branches) };
+      var sfForSide = pending.selectedFactors && pending.selectedFactors[sideName];
+      if (sfForSide) {
+        selectedFactorsOpt = { index: sfForSide.index, branches: new Set(sfForSide.branches) };
       }
       return {
         selectable: selectable,

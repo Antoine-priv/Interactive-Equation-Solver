@@ -39,9 +39,9 @@ function ok(label, cond) {
   // Sélectionne SEULEMENT "(x-9)²" (2e facteur du 2e produit) par sélection par facteur.
   await page.click('.eq-row.current .side[data-side="left"] [id$="-1-factor-1"]');
   pending = await page.evaluate(() => window.App.History.getPending());
-  ok('squared factor of the second product selected', pending.selectedFactors &&
-    pending.selectedFactors.index === 1 && pending.selectedFactors.branches.length === 1 &&
-    pending.selectedFactors.branches[0] === 1);
+  ok('squared factor of the second product selected', pending.selectedFactors.left &&
+    pending.selectedFactors.left.index === 1 && pending.selectedFactors.left.branches.length === 1 &&
+    pending.selectedFactors.left.branches[0] === 1);
   ok('both selections coexist (free selection untouched by factor selection)',
     pending.selectedLeft.length === 1 && pending.selectedLeft[0] === 0);
 

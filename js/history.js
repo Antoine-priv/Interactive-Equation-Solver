@@ -28,16 +28,17 @@
       drilled: null,
       selectedInner: [],    // indices sélectionnés dans les innerTerms du niveau le plus profond de `drilled`
       // Sélection PAR FACTEUR d'un ProductGroup à ≥2 facteurs (voir toggleFactorSelection) :
-      // { side, index, branches: number[] } — un clic simple sur une parenthèse précise
-      // (jamais un FactorGroup classique, ni un produit à un seul facteur/exponent>1,
-      // aucune ambiguïté là) la bascule dans "branches" SANS toucher selectedLeft/Right,
-      // indépendamment de la sélection classique. Développer devient possible dès que
-      // branches.length >= 2, OU dès qu'un seul facteur marqué a lui-même un exposant>1
-      // (ex. "(x-6)²" dans "(x-1)(x-6)²", qui a alors quelque chose à développer tout seul) :
-      // voir Expr.expandProductFactorSubset/computeSelectionInfo dans toolbar.js. Un seul
-      // produit à la fois (comme `drilled` ci-dessus) ; null si rien n'est actuellement
-      // sélectionné de cette façon.
-      selectedFactors: null,
+      // { left: {index, branches: number[]}|null, right: idem|null } — un clic simple sur
+      // une parenthèse précise (jamais un FactorGroup classique, ni un produit à un seul
+      // facteur/exponent>1, aucune ambiguïté là) la bascule dans "branches" SANS toucher
+      // selectedLeft/Right, indépendamment de la sélection classique. Développer devient
+      // possible dès que branches.length >= 2, OU dès qu'un seul facteur marqué a lui-même
+      // un exposant>1 (ex. "(x-6)²" dans "(x-1)(x-6)²", qui a alors quelque chose à
+      // développer tout seul) : voir Expr.expandProductFactorSubset/computeSelectionInfo
+      // dans toolbar.js. Un seul produit à la fois PAR MEMBRE (comme `drilled` ci-dessus,
+      // mais côté gauche et côté droit restent indépendants — voir computeExpandTargets,
+      // qui combine les deux côtés en une seule étape de "Développer").
+      selectedFactors: { left: null, right: null },
       // Mode 'factor' (bouton "Factoriser") : 2 étapes à partir d'un choix explicite,
       // plutôt que de deviner automatiquement une identité remarquable à partir d'un
       // simple nombre tapé (ancien comportement) — voir chooseFactorMode.
@@ -200,7 +201,7 @@
       // vérifier ici : il ne touche jamais selectedLeft/Right (voir son commentaire), donc
       // sans ce test un facteur sélectionné seul restait bloqué (ni Échap, ni clic en
       // dehors de l'équation ne le désélectionnait, contrairement à un terme classique).
-      if (!pending.opType && !pending.drilled && !pending.selectedFactors &&
+      if (!pending.opType && !pending.drilled && !pending.selectedFactors.left && !pending.selectedFactors.right &&
           pending.selectedLeft.length === 0 && pending.selectedRight.length === 0) return;
       resetPending();
     }
@@ -284,16 +285,19 @@
     }
 
     // Bascule le facteur d'indice `branch` du ProductGroup à (side,index) dans/hors de la
-    // sélection par facteurs en cours (pending.selectedFactors) — un seul produit à la
-    // fois : cliquer un facteur d'un AUTRE produit repart d'une sélection neuve plutôt que
-    // d'accumuler des facteurs de deux produits différents (aucune opération ne combine
-    // ça). Sélectionner AU MOINS 2 facteurs active "Développer" (voir computeSelectionInfo
-    // dans toolbar.js et confirmExpandFullSelection/Expr.expandProductFactorSubset), en
-    // développant SEULEMENT ces facteurs-là entre eux, les autres restant intacts.
+    // sélection par facteurs en cours pour CE membre (pending.selectedFactors[side]) — un
+    // seul produit à la fois PAR MEMBRE : cliquer un facteur d'un AUTRE produit DU MÊME
+    // membre repart d'une sélection neuve pour ce membre (aucune opération ne combine deux
+    // produits d'un même côté), mais le membre opposé garde la sienne intacte — voir
+    // computeExpandTargets, qui combine les deux membres en une seule étape de
+    // "Développer". Sélectionner AU MOINS 2 facteurs (sur un membre donné) active
+    // "Développer" (voir computeSelectionInfo dans toolbar.js et
+    // confirmExpandFullSelection/Expr.expandProductFactorSubset), en développant SEULEMENT
+    // ces facteurs-là entre eux, les autres restant intacts.
     function toggleFactorSelection(side, index, branch) {
-      var sel = pending.selectedFactors;
-      if (!sel || sel.side !== side || sel.index !== index) {
-        pending.selectedFactors = { side: side, index: index, branches: [branch] };
+      var sel = pending.selectedFactors[side];
+      if (!sel || sel.index !== index) {
+        pending.selectedFactors[side] = { index: index, branches: [branch] };
         return;
       }
       var i = sel.branches.indexOf(branch);
@@ -301,7 +305,7 @@
         sel.branches.push(branch);
       } else {
         sel.branches.splice(i, 1);
-        if (sel.branches.length === 0) pending.selectedFactors = null;
+        if (sel.branches.length === 0) pending.selectedFactors[side] = null;
       }
     }
 
@@ -324,7 +328,7 @@
       if (i !== -1) arr.splice(i, 1);
       pending.drilled = { side: side, path: [index] };
       pending.selectedInner = [];
-      pending.selectedFactors = null;
+      pending.selectedFactors[side] = null;
       pending.error = null;
       notify();
     }
@@ -342,7 +346,7 @@
       if (i !== -1) arr.splice(i, 1);
       pending.drilled = { side: side, path: [index], branch: branch };
       pending.selectedInner = [];
-      pending.selectedFactors = null;
+      pending.selectedFactors[side] = null;
       pending.error = null;
       notify();
     }
@@ -1185,14 +1189,18 @@
     // dans toolbar.js, qui ne compte que les indices réellement développables).
     function computeExpandTargets(eq, p) {
       var targets = [];
-      if (p.selectedFactors) {
-        var sf = p.selectedFactors;
-        var nodeSF = eq[sf.side][sf.index];
+      // Sélection par facteur (voir toggleFactorSelection) : au plus UN produit par membre,
+      // mais les deux membres se combinent ici en une seule étape, exactement comme
+      // selectedLeft/Right ci-dessous.
+      ['left', 'right'].forEach(function (side) {
+        var sf = p.selectedFactors[side];
+        if (!sf) return;
+        var nodeSF = eq[side][sf.index];
         if (nodeSF && Expr.isProductGroup(nodeSF) && sf.branches.length >= 1 &&
             !(sf.branches.length === 1 && nodeSF.factors[sf.branches[0]].exponent < 2)) {
-          targets.push({ side: sf.side, index: sf.index, kind: 'partial', branches: sf.branches.slice(), node: nodeSF });
+          targets.push({ side: side, index: sf.index, kind: 'partial', branches: sf.branches.slice(), node: nodeSF });
         }
-      }
+      });
       ['left', 'right'].forEach(function (side) {
         var arr = side === 'left' ? p.selectedLeft : p.selectedRight;
         arr.forEach(function (idx) {

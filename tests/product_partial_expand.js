@@ -32,8 +32,8 @@ function ok(label, cond) {
 
   await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-2"]');
   pending = await page.evaluate(() => window.App.History.getPending());
-  ok('two factors of the same product selected', pending.selectedFactors &&
-    pending.selectedFactors.branches.length === 2 && pending.selectedFactors.branches.indexOf(1) !== -1 && pending.selectedFactors.branches.indexOf(2) !== -1);
+  ok('two factors of the same product selected', pending.selectedFactors.left &&
+    pending.selectedFactors.left.branches.length === 2 && pending.selectedFactors.left.branches.indexOf(1) !== -1 && pending.selectedFactors.left.branches.indexOf(2) !== -1);
   ok('"Développer" enabled with 2 factors selected', await page.evaluate(() => window.App.Toolbar.computeSelectionInfo().canExpand));
 
   await page.screenshot({ path: `${SCRATCH}/product_partial_expand_selected.png` });
@@ -56,7 +56,7 @@ function ok(label, cond) {
   await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-0"]');
   await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-0"]');
   pending = await page.evaluate(() => window.App.History.getPending());
-  ok('clicking the same factor twice deselects it entirely', pending.selectedFactors === null);
+  ok('clicking the same factor twice deselects it entirely', !pending.selectedFactors.left);
 
   // --- 3) Clicking a factor of a DIFFERENT product resets the selection to the new one ---
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '(x+1)(x+2)+(x+3)(x+4)=0');
@@ -68,7 +68,7 @@ function ok(label, cond) {
   pending = await page.evaluate(() => window.App.History.getPending());
   console.log('after switching product:', JSON.stringify(pending.selectedFactors));
   ok('selecting a factor of another product replaces the previous selection (not accumulated)',
-    pending.selectedFactors && pending.selectedFactors.index === 1 && pending.selectedFactors.branches.length === 1);
+    pending.selectedFactors.left && pending.selectedFactors.left.index === 1 && pending.selectedFactors.left.branches.length === 1);
 
   // --- 4) Selecting ALL factors degenerates into the same result as full "Développer" ---
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '(x+2)(x+3)=0');
@@ -95,7 +95,7 @@ function ok(label, cond) {
   await page.click('.eq-row.current .side[data-side="left"] [data-index="0"]');
   pending = await page.evaluate(() => window.App.History.getPending());
   console.log('squared single-factor product click:', JSON.stringify({ selectedLeft: pending.selectedLeft, selectedFactors: pending.selectedFactors }));
-  ok('squared single-factor product uses classic whole-node selection', pending.selectedLeft.length === 1 && pending.selectedFactors === null);
+  ok('squared single-factor product uses classic whole-node selection', pending.selectedLeft.length === 1 && !pending.selectedFactors.left);
   ok('"Développer" enabled on the squared factor as a whole', await page.evaluate(() => window.App.Toolbar.computeSelectionInfo().canExpand));
 
   // --- 7) A single factor CAN be expanded alone when it has an exponent>1 of its own
@@ -105,8 +105,8 @@ function ok(label, cond) {
   await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-1"]');
   pending = await page.evaluate(() => window.App.History.getPending());
   console.log('after selecting the squared factor alone:', JSON.stringify(pending.selectedFactors));
-  ok('single squared factor selected', pending.selectedFactors &&
-    pending.selectedFactors.branches.length === 1 && pending.selectedFactors.branches[0] === 1);
+  ok('single squared factor selected', pending.selectedFactors.left &&
+    pending.selectedFactors.left.branches.length === 1 && pending.selectedFactors.left.branches[0] === 1);
   ok('"Développer" enabled with only the squared factor selected',
     await page.evaluate(() => window.App.Toolbar.computeSelectionInfo().canExpand));
 
@@ -128,21 +128,21 @@ function ok(label, cond) {
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '(x+7)(x+5)+4=4');
   await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-1"]');
   pending = await page.evaluate(() => window.App.History.getPending());
-  ok('single factor selected before testing deselection', pending.selectedFactors &&
-    pending.selectedFactors.branches.length === 1);
+  ok('single factor selected before testing deselection', pending.selectedFactors.left &&
+    pending.selectedFactors.left.branches.length === 1);
 
   await page.keyboard.press('Escape');
   pending = await page.evaluate(() => window.App.History.getPending());
-  ok('Échap deselects a lone selected factor', pending.selectedFactors === null);
+  ok('Échap deselects a lone selected factor', !pending.selectedFactors.left);
 
   await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-1"]');
   pending = await page.evaluate(() => window.App.History.getPending());
-  ok('single factor re-selected', pending.selectedFactors &&
-    pending.selectedFactors.branches.length === 1);
+  ok('single factor re-selected', pending.selectedFactors.left &&
+    pending.selectedFactors.left.branches.length === 1);
 
   await page.mouse.click(20, 20);
   pending = await page.evaluate(() => window.App.History.getPending());
-  ok('left-click outside the equation deselects a lone selected factor', pending.selectedFactors === null);
+  ok('left-click outside the equation deselects a lone selected factor', !pending.selectedFactors.left);
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
