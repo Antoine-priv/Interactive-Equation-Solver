@@ -27,7 +27,10 @@ function ok(label, cond) {
   function lastLabels() {
     return page.evaluate(() => {
       var labels = Array.from(document.querySelectorAll('.arrow-label'));
-      return labels.map((el) => ({ text: el.textContent, warn: el.classList.contains('arrow-label-warning') }));
+      return labels.map((el) => {
+        var ann = el.querySelector('.katex-mathml annotation');
+        return { text: el.textContent, warn: el.classList.contains('arrow-label-warning'), source: ann ? ann.textContent : null };
+      });
     });
   }
 
@@ -62,6 +65,26 @@ function ok(label, cond) {
   console.log('etiquettes apres ×x+2:', JSON.stringify(labels));
   ok('×x+2 keeps the caveat at the end of the whole chain, after "+2"', labels.length === 2 &&
     labels.every((l) => l.text.indexOf('+2') !== -1 && l.text.indexOf('valide') > l.text.indexOf('+2')));
+
+  // --- Test 3c : ×5x^2 (multiplicateur reduit a un seul terme "plat", avec coefficient
+  // ET exposant) -> ni la chaine ni la reserve ne doivent parenthèser ce terme (ex.
+  // "×5x^2 valide si 5x^2≠0", pas "×(5x^2) valide si (5x^2)≠0") : contrairement a une
+  // somme, un monome seul n'a aucune ambiguite a lever.
+  await applyChain('x=5', '\\times5x^2');
+  labels = await lastLabels();
+  console.log('etiquettes apres ×5x^2:', JSON.stringify(labels));
+  ok('×5x^2 (bare monomial) drops the parens around the multiplier and the condition',
+    labels.length === 2 && labels.every((l) => l.source && l.source.indexOf('\\left(') === -1 &&
+      /valide si\s*\}\s*5x\^2\\neq0/.test(l.source)));
+
+  // --- Test 3d (regression) : ×(x+5) (une VRAIE somme) garde ses parentheses, dans la
+  // chaine ET dans la reserve — seule une somme risque de se confondre avec l'operation
+  // suivante de la chaine.
+  await applyChain('x=5', '\\times\\left(x+5\\right)');
+  labels = await lastLabels();
+  ok('×(x+5) (a real sum) keeps its parens in both the chain and the condition',
+    labels.length === 2 && labels.every((l) => l.source && /\\left\(x\s*\+\s*5\\right\)/.test(l.source) &&
+      /valide si\s*\}\s*\\left\(x\s*\+\s*5\\right\)\\neq0/.test(l.source)));
 
   // --- Test 4 : +5 (pas une multiplication) -> pas d'avertissement ---
   await applyChain('x=5', '+5');

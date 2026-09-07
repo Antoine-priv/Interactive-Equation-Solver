@@ -309,6 +309,19 @@
   // terme à terme. S'il n'y a déjà qu'un seul terme, pas d'enveloppe inutile (ex. "2(3)")
   // : on multiplie directement.
   function wrapSideInFactor(side, multiplier) {
+    // Membre déjà un seul ProductGroup (ex. "(-4x+2+6x)x") : contrairement à scaleNode
+    // (multiplication "silencieuse", déjà distribuée dans le premier facteur — utile
+    // ailleurs, ex. simplification interne), une multiplication affichée doit rester une
+    // étape visible et développable : le multiplicateur devient un nouveau facteur en
+    // tête plutôt que d'être absorbé dans un facteur existant (ex. "5(-4x+2+6x)x", pas
+    // directement "(-20x+10+30x)x").
+    if (side.length === 1 && isProductGroup(side[0])) {
+      var node = side[0];
+      return [{
+        sign: node.sign,
+        factors: [{ terms: [{ coeff: multiplier, pow: 0 }], exponent: 1 }].concat(node.factors.map(cloneFactor))
+      }];
+    }
     if (side.length === 1) {
       return [scaleNode(side[0], multiplier)];
     }

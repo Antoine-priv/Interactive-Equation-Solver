@@ -142,13 +142,16 @@
       // Chaque opération garde son propre signe explicite, y compris la première (+5-2x×3).
       var chainLatex = desc.ops.map(function (op) {
         if (op.terms) {
-          // Multiplication par une expression (ex. "×(x+5)"), voir wrapSideInProduct.
+          // Multiplication par une expression (ex. "×(x+5)"), voir wrapSideInProduct. Un
+          // multiplicateur réduit à un seul terme "plat" (ex. "5x²", pas une somme ni un
+          // groupe) n'a besoin d'aucune parenthèse pour rester lisible — comme un
+          // multiplicateur numérique pur (ex. "×-5" juste en dessous) : seule une VRAIE
+          // somme risquerait de se confondre avec l'opération suivante de la chaîne (ex.
+          // "×(x+5)" vs "×x+5").
           var exprOperandLatex = op.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
-          // Contrairement à un facteur numérique, celui-ci peut s'annuler pour une valeur
-          // de x : l'étape n'est alors équivalente à l'originale que sous cette réserve
-          // (voir isZeroRiskMulOp/.arrow-label-warning).
-          if (isZeroRiskMulOp(op)) riskyOperands.push(exprOperandLatex);
-          return OP_SYMBOL_LATEX[op.symbol] + '\\left(' + exprOperandLatex + '\\right)';
+          var isBareMonomial = op.terms.length === 1 && !Expr.isGroup(op.terms[0]);
+          if (isZeroRiskMulOp(op)) riskyOperands.push({ latex: exprOperandLatex, bare: isBareMonomial });
+          return OP_SYMBOL_LATEX[op.symbol] + (isBareMonomial ? exprOperandLatex : '\\left(' + exprOperandLatex + '\\right)');
         }
         if (op.symbol === '×' || op.symbol === '÷') {
           // formatNumberLatex renvoie une valeur absolue : le signe du multiplicateur/
@@ -158,7 +161,9 @@
         return Expr.nodeLatex(op.term, false);
       }).join('');
       if (riskyOperands.length > 0) {
-        var conditions = riskyOperands.map(function (r) { return '\\left(' + r + '\\right)\\neq0'; }).join('\\text{ et }');
+        var conditions = riskyOperands.map(function (r) {
+          return (r.bare ? r.latex : '\\left(' + r.latex + '\\right)') + '\\neq0';
+        }).join('\\text{ et }');
         chainLatex += '\\ \\text{valide si }' + conditions;
       }
       return chainLatex;
