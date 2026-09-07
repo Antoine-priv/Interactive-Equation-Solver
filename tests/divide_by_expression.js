@@ -185,6 +185,53 @@ function ok(label, cond) {
   pending = await page.evaluate(() => window.App.History.getPending());
   ok('Échap exits the denominator cleanly (drilled back to null)', pending.drilled === null);
 
+  // --- Test 9 (bug rapporté) : "(x-2)^2 ÷ (x-2)" doit annuler UNE puissance du facteur
+  // et donner "(x-2)", pas rester une fraction — la cancellation ne se limitait avant
+  // qu'à un facteur d'exposant EXACTEMENT 1.
+  await applyChain('(x-2)^2=0', '\\div(x-2)');
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  ok('(x-2)^2 ÷ (x-2) cancels one power, giving the flat side (x-2)',
+    JSON.stringify(step.equation.left) === JSON.stringify([{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }]));
+
+  await applyChain('(x-2)^3=0', '\\div(x-2)');
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  ok('(x-2)^3 ÷ (x-2) reduces the exponent to 2, not a full removal',
+    JSON.stringify(step.equation.left) === JSON.stringify([{
+      sign: 1, factors: [{ terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 2 }]
+    }]));
+
+  await applyChain('(x+1)(x-2)^2=0', '\\div(x-2)');
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  ok('(x+1)(x-2)^2 ÷ (x-2) keeps both factors, just drops one power of (x-2)',
+    JSON.stringify(step.equation.left) === JSON.stringify([{
+      sign: 1,
+      factors: [{ terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 }, { terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 1 }]
+    }]));
+
+  // --- Test 10 (bug rapporté) : un ProductGroup trouvé dans le numérateur d'une fraction
+  // (ex. "(x+5)²(x-1)" dans "((x+5)²(x-1))/x") doit pouvoir glisser SES facteurs
+  // individuellement, pas seulement le bloc entier — voir le marquage ajouté dans
+  // drilledGroupLatex et son câblage dans renderSide (render.js).
+  await applyChain('(x+5)^2(x-1)=0', '\\div x');
+  box = await page.locator('.eq-row.current .side[data-side="left"] .term').first().boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.3);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.3);
+  await page.waitForTimeout(100);
+  const factorSlots = page.locator('.eq-row.current .side[data-side="left"] .factor-slot');
+  ok('a ProductGroup nested in a drilled numerator gets individually draggable factor-slots',
+    await factorSlots.count() === 2);
+  const fBox0 = await factorSlots.nth(0).boundingBox();
+  const fBox1 = await factorSlots.nth(1).boundingBox();
+  await page.mouse.move(fBox0.x + fBox0.width / 2, fBox0.y + fBox0.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(fBox1.x + fBox1.width + 10, fBox1.y + fBox1.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  ok('dragging the first factor past the second reorders them in the numerator',
+    JSON.stringify(step.equation.left[0].innerTerms[0].factors.map((f) => f.terms)) ===
+    JSON.stringify([[{ coeff: 1, pow: 1 }, { coeff: -1, pow: 0 }], [{ coeff: 1, pow: 1 }, { coeff: 5, pow: 0 }]]));
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;

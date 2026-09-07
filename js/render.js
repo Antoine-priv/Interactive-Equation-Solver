@@ -190,8 +190,16 @@
     var isLeaf = remainingPath.length === 0;
     var innerLatex;
     if (isLeaf) {
+      // Un terme intérieur qui est LUI-MÊME un ProductGroup à >=2 facteurs (ex.
+      // "(x+5)²(x-1)" trouvé dans le numérateur d'une fraction) reçoit en plus le
+      // marquage par facteur de productGroupBranchesLatex (\htmlId "...-inner-i-factor-j"),
+      // câblé plus bas dans renderSide pour permettre de glisser SES facteurs
+      // individuellement — jusqu'ici seul le bloc entier était déplaçable/sélectionnable.
       innerLatex = node.innerTerms.map(function (t, i) {
-        return '\\htmlId{' + idPrefix + '-' + topIdx + '-inner-' + i + '}{' + Expr.nodeLatex(t, i === 0) + '}';
+        var body = Expr.isProductGroup(t) && t.factors.length >= 2
+          ? productGroupBranchesLatex(t, idPrefix + '-' + topIdx + '-inner-' + i, i === 0)
+          : Expr.nodeLatex(t, i === 0);
+        return '\\htmlId{' + idPrefix + '-' + topIdx + '-inner-' + i + '}{' + body + '}';
       }).join('');
     } else {
       var childIdx = remainingPath[0];
@@ -274,18 +282,22 @@
     return prevExponent === 1 && FACTOR_ALNUM_END_RE.test(prevRendered) && /^[0-9]/.test(nextRendered);
   }
 
-  // Rendu (non "drillé") d'un ProductGroup au premier niveau : comme Expr.nodeLatex, mais
-  // chaque facteur porte en plus un attribut data-branch="0"/"1"/... (via \htmlData) ET son
-  // propre \htmlId ("idPrefix-topIdx-factor-i") — le premier sert à retrouver dans quel
-  // facteur précis un clic/double-clic a physiquement atterri (voir attachPointerDrag/
-  // selectDragOptions plus bas), pour "driller" dedans (pending.drilled.branch, voir
-  // history.js) ; le second permet, APRÈS ce même appel KaTeX, de retrouver CE facteur
-  // précis par id pour lui appliquer une classe "sélectionné" — voir toggleFactorSelection/
-  // pending.selectedFactors dans history.js et le câblage juste après renderSide plus bas :
-  // un produit d'au moins 2 facteurs a chacune de ses parenthèses individuellement
-  // sélectionnable pour un développement partiel (ex. sélectionner "(x-5)" et "(x+2)" dans
-  // "(x²-10x+25)(x-5)(x+2)" pour les développer entre elles, sans toucher au 1er facteur).
-  function productGroupBranchesLatex(node, idPrefix, topIdx, isFirst) {
+  // Rendu (non "drillé") d'un ProductGroup, au premier niveau OU niché dans un membre
+  // drillé (voir drilledGroupLatex plus bas, qui lui passe un idBase différent) : comme
+  // Expr.nodeLatex, mais chaque facteur porte en plus un attribut data-branch="0"/"1"/...
+  // (via \htmlData) ET son propre \htmlId ("idBase-factor-i") — le premier sert à
+  // retrouver dans quel facteur précis un clic/double-clic a physiquement atterri (voir
+  // attachPointerDrag/selectDragOptions plus bas), pour "driller" dedans
+  // (pending.drilled.branch, voir history.js — UNIQUEMENT au premier niveau : un produit
+  // niché ne supporte que le glisser, voir plus bas) ; le second permet, APRÈS ce même
+  // appel KaTeX, de retrouver CE facteur précis par id pour lui appliquer une classe
+  // "sélectionné" — voir toggleFactorSelection/pending.selectedFactors dans history.js et
+  // le câblage juste après renderSide plus bas : un produit d'au moins 2 facteurs a chacune
+  // de ses parenthèses individuellement sélectionnable pour un développement partiel (ex.
+  // sélectionner "(x-5)" et "(x+2)" dans "(x²-10x+25)(x-5)(x+2)" pour les développer entre
+  // elles, sans toucher au 1er facteur) — niché, seul le glisser est câblé, data-branch y
+  // reste sans effet (rien ne le lit dans ce contexte).
+  function productGroupBranchesLatex(node, idBase, isFirst) {
     var innerRendered = node.factors.map(function (f) { return Expr.groupSlotLatex(f.terms); });
     var bodyP = '';
     node.factors.forEach(function (f, i) {
@@ -293,7 +305,7 @@
         bodyP += '\\cdot ';
       }
       var inner = '\\htmlData{branch=' + i + '}{' + innerRendered[i] + '}';
-      var slot = '\\htmlId{' + idPrefix + '-' + topIdx + '-factor-' + i + '}{' + inner + '}';
+      var slot = '\\htmlId{' + idBase + '-factor-' + i + '}{' + inner + '}';
       bodyP += f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
     });
     var signP = node.sign < 0 ? '-' : '+';
@@ -396,7 +408,12 @@
   // bornes du produit à chaque mousemove et détecter que le curseur en est sorti (voir
   // escalateFactorDragToTopLevel, qui bascule alors le glisser sur le produit ENTIER, comme
   // un terme de premier niveau classique).
-  function productGroupFactorsLatexForOrder(node, idPrefix, topIdx, orderedFactors, isFirst) {
+  // Corps (sans signe ni id englobant) d'un ProductGroup dont les facteurs viennent de
+  // `orderedFactors` (l'ordre en cours de glisser) et portent chacun un id temporaire
+  // "dragpv-i" — partagé entre productGroupFactorsLatexForOrder (produit de PREMIER NIVEAU)
+  // et le glisser de facteurs d'un produit NICHÉ dans un membre drillé (voir
+  // buildNestedFactorDragLatex plus bas dans renderSide).
+  function factorsDragBodyLatex(orderedFactors) {
     var innerRendered = orderedFactors.map(function (f) { return Expr.groupSlotLatex(f.terms); });
     var bodyP = '';
     orderedFactors.forEach(function (f, i) {
@@ -406,8 +423,12 @@
       var slot = '\\htmlId{dragpv-' + i + '}{' + innerRendered[i] + '}';
       bodyP += f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
     });
+    return bodyP;
+  }
+
+  function productGroupFactorsLatexForOrder(node, idPrefix, topIdx, orderedFactors, isFirst) {
     var signP = node.sign < 0 ? '-' : '+';
-    var body = (isFirst ? (signP === '-' ? '-' : '') : ' ' + signP + ' ') + bodyP;
+    var body = (isFirst ? (signP === '-' ? '-' : '') : ' ' + signP + ' ') + factorsDragBodyLatex(orderedFactors);
     return '\\htmlId{' + idPrefix + '-' + topIdx + '}{' + body + '}';
   }
 
@@ -466,7 +487,7 @@
         }
         return drilledGroupLatex(node, idPrefix, idx, drilled.path.slice(1), idx === 0);
       }
-      var body = Expr.isProductGroup(node) ? productGroupBranchesLatex(node, idPrefix, idx, idx === 0) : Expr.nodeLatex(node, idx === 0);
+      var body = Expr.isProductGroup(node) ? productGroupBranchesLatex(node, idPrefix + '-' + idx, idx === 0) : Expr.nodeLatex(node, idx === 0);
       return '\\htmlId{' + idPrefix + '-' + idx + '}{' + body + '}';
     }).join('');
     window.katex.render(latex || '{}', container, { throwOnError: false, trust: true, strict: false });
@@ -538,6 +559,51 @@
           });
         }
       });
+      // Facteurs d'un ProductGroup NICHÉ dans le numérateur d'une fraction ou l'intérieur
+      // d'un FactorGroup classique drillé (ex. "(x+5)²(x-1)" dans "((x+5)²(x-1))/x", voir
+      // le marquage ajouté dans drilledGroupLatex ci-dessus) : glissables individuellement
+      // pour les réordonner, exactement comme au premier niveau (voir plus bas) — mais SANS
+      // la sélection par facteur pour développement partiel (pas de sens ici, pas câblée),
+      // et limité à une seule profondeur de "drilled" (path.length===1) sans branche/
+      // dénominateur : les combinaisons plus profondes/rares restent un bloc opaque pour
+      // l'instant, comme avant ce correctif.
+      if (!drilled.part && typeof drilled.branch !== 'number' && drilled.path.length === 1 && drilled.draggable) {
+        function buildNestedFactorDragLatex(innerIdx, orderedFactors) {
+          return side.map(function (node, idx) {
+            if (idx !== topIdx) return Expr.nodeLatex(node, idx === 0);
+            var innerLatexP = node.innerTerms.map(function (t, i) {
+              var body = i === innerIdx ? factorsDragBodyLatex(orderedFactors) : Expr.nodeLatex(t, i === 0);
+              return '\\htmlId{' + idPrefix + '-' + topIdx + '-inner-' + i + '}{' + body + '}';
+            }).join('');
+            var innerBody;
+            if (node.isDivision) {
+              var denomLatexP = node.factorTerms ? Expr.innerTermsLatex(node.factorTerms) : Expr.termLatexBody(node.factor);
+              innerBody = '\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{\\frac{' + innerLatexP + '}{' + denomLatexP + '}}';
+            } else {
+              var factorBodyP = node.factor ? Expr.termLatexBody({ coeff: node.factor.coeff, pow: node.factor.pow }) : '';
+              innerBody = factorBodyP + '\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{\\left(' + innerLatexP + '\\right)}';
+            }
+            var signP = node.sign < 0 ? '-' : '+';
+            return (idx === 0 ? (signP === '-' ? '-' : '') : ' ' + signP + ' ') + innerBody;
+          }).join('');
+        }
+        innerArr.forEach(function (t, i) {
+          if (!Expr.isProductGroup(t) || t.factors.length < 2) return;
+          var nestedIdBase = idPrefix + '-' + topIdx + '-inner-' + i;
+          t.factors.forEach(function (f, j) {
+            var factorEl = container.querySelector('#' + escId(nestedIdBase + '-factor-' + j));
+            if (!factorEl) return;
+            factorEl.classList.add('factor-slot', 'draggable-term');
+            factorEl.setAttribute('data-drag-id', String(j));
+            attachPointerDrag(factorEl, container, t.factors, {
+              getSelected: function () { return new Set(); },
+              commit: function (order) { App.History.setDrilledFactorOrder(i, order); },
+              buildLatex: function (orderedFactors) { return buildNestedFactorDragLatex(i, orderedFactors); },
+              tagClass: 'factor-slot'
+            }, j, null);
+          });
+        });
+      }
       var exitEl = container.querySelector('#' + escId(idPrefix + '-' + topIdx + '-exit'));
       if (exitEl) {
         exitEl.classList.add('drilled-exit');

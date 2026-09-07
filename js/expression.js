@@ -410,15 +410,24 @@
         return foldSign(node.sign, node.innerTerms);
       }
       if (isProductGroup(node)) {
+        // Le diviseur peut annuler une SEULE puissance d'un facteur déjà élevé à un
+        // exposant >= 2 (ex. "(x-2)²÷(x-2)" -> "(x-2)"), pas seulement un facteur
+        // d'exposant 1 : on compare toujours à la BASE du facteur (factors[i].terms),
+        // jamais à la base élevée à sa puissance.
         var matchIdx = -1;
         for (var i = 0; i < node.factors.length; i++) {
-          if (node.factors[i].exponent === 1 && sidesEquivalent(node.factors[i].terms, divisorTerms)) {
+          if (sidesEquivalent(node.factors[i].terms, divisorTerms)) {
             matchIdx = i;
             break;
           }
         }
         if (matchIdx !== -1) {
-          var remaining = node.factors.filter(function (_, fi) { return fi !== matchIdx; }).map(cloneFactor);
+          var matched = node.factors[matchIdx];
+          var remaining = matched.exponent === 1
+            ? node.factors.filter(function (_, fi) { return fi !== matchIdx; }).map(cloneFactor)
+            : node.factors.map(function (f, fi) {
+              return fi === matchIdx ? { terms: cloneSide(f.terms), exponent: f.exponent - 1 } : cloneFactor(f);
+            });
           if (remaining.length === 1 && remaining[0].exponent === 1) {
             return foldSign(node.sign, remaining[0].terms);
           }

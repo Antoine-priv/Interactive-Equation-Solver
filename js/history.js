@@ -1604,6 +1604,33 @@
       notify();
     }
 
+    // Même principe que setInnerOrder, mais pour les FACTEURS d'un ProductGroup NICHÉ dans
+    // le membre drillé, à l'indice `innerIndex` de son tableau courant (voir
+    // Expr.drilledWorkingArray) — ex. "(x+5)²(x-1)" trouvé dans le numérateur d'une
+    // fraction (voir le marquage ajouté dans drilledGroupLatex, render.js). Purement
+    // visuel (un produit reste commutatif), donc pas une nouvelle étape — modifie juste ses
+    // `factors` en place, comme setFactorOrder pour un ProductGroup de premier niveau.
+    function setDrilledFactorOrder(innerIndex, orderOfOrigIndices) {
+      if (!pending.drilled) return;
+      var lastStep = steps[steps.length - 1];
+      var d = pending.drilled;
+      var groupNode = Expr.nodeAtPath(lastStep.equation[d.side], d.path);
+      if (!groupNode) return;
+      var workingArr = Expr.drilledWorkingArray(groupNode, d);
+      var productNode = workingArr[innerIndex];
+      if (!productNode || !Expr.isProductGroup(productNode)) return;
+      var oldFactors = productNode.factors;
+      var isIdentity = orderOfOrigIndices.length === oldFactors.length &&
+        orderOfOrigIndices.every(function (v, i) { return v === i; });
+      if (!isIdentity) {
+        var newFactors = orderOfOrigIndices.map(function (i) { return oldFactors[i]; });
+        var newProductNode = { sign: productNode.sign, factors: newFactors };
+        var newArr = workingArr.map(function (n, i) { return i === innerIndex ? newProductNode : n; });
+        lastStep.equation = applyDrilledArray(lastStep.equation, d, newArr);
+      }
+      notify();
+    }
+
     // Même principe que setSideOrder, mais pour les FACTEURS d'un ProductGroup de PREMIER
     // NIVEAU (pas "drillé" — voir productGroupFactorsLatexForOrder/escalateFactorDragToTopLevel
     // dans render.js) : glisser-déposer réordonnant par exemple "(x+7)²(x+5)" en
@@ -1658,6 +1685,7 @@
       computePreview: computePreview,
       setSideOrder: setSideOrder,
       setInnerOrder: setInnerOrder,
+      setDrilledFactorOrder: setDrilledFactorOrder,
       setFactorOrder: setFactorOrder,
       undo: undo
     };
@@ -1955,6 +1983,7 @@
     computePreview: function () { return active().computePreview(); },
     setSideOrder: function (side, order) { active().setSideOrder(side, order); },
     setInnerOrder: function (order) { active().setInnerOrder(order); },
+    setDrilledFactorOrder: function (innerIndex, order) { active().setDrilledFactorOrder(innerIndex, order); },
     setFactorOrder: function (side, groupIndex, order) { active().setFactorOrder(side, groupIndex, order); }
   };
 })(window.App = window.App || {});
