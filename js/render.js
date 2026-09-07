@@ -53,6 +53,17 @@
     }).join('');
   }
 
+  // Multiplier les deux membres par une expression qui dépend de x (op.terms, voir
+  // wrapSideInProduct) n'est valide que si cette expression est non nulle : voir le
+  // rappel ajouté dans formatOpLabel et .arrow-label-warning ci-dessous. Un multiplicateur
+  // purement numérique (op.rawValue, pas de op.terms) n'a pas ce problème.
+  function isZeroRiskMulOp(op) {
+    return op.symbol === '×' && !!op.terms && Expr.sideHasVariable(op.terms);
+  }
+  function descHasZeroRisk(desc) {
+    return !!desc && desc.type === 'expr' && !!desc.ops && desc.ops.some(isZeroRiskMulOp);
+  }
+
   function formatOpLabel(desc) {
     if (!desc) return null;
     if (desc.type === 'simplify') {
@@ -128,7 +139,15 @@
         if (op.terms) {
           // Multiplication par une expression (ex. "×(x+5)"), voir wrapSideInProduct.
           var exprOperandLatex = op.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
-          return OP_SYMBOL_LATEX[op.symbol] + '\\left(' + exprOperandLatex + '\\right)';
+          var mulLatex = OP_SYMBOL_LATEX[op.symbol] + '\\left(' + exprOperandLatex + '\\right)';
+          // Contrairement à un facteur numérique, celui-ci peut s'annuler pour une valeur
+          // de x : l'étape n'est alors équivalente à l'originale que sous cette réserve
+          // (voir isZeroRiskMulOp/.arrow-label-warning) — on le rappelle explicitement
+          // plutôt que de laisser croire que l'étape est inconditionnellement valide.
+          if (isZeroRiskMulOp(op)) {
+            mulLatex += '\\ \\text{valide si }\\left(' + exprOperandLatex + '\\right)\\neq0';
+          }
+          return mulLatex;
         }
         if (op.symbol === '×' || op.symbol === '÷') {
           // formatNumberLatex renvoie une valeur absolue : le signe du multiplicateur/
@@ -1047,6 +1066,8 @@
         el: row,
         opLeft: formatOpLabel(step.opLeft),
         opRight: formatOpLabel(step.opRight),
+        opLeftWarn: descHasZeroRisk(step.opLeft),
+        opRightWarn: descHasZeroRisk(step.opRight),
         pending: false
       });
     });
@@ -1067,6 +1088,8 @@
         el: pendingRow,
         opLeft: formatOpLabel(preview.opLeft),
         opRight: formatOpLabel(preview.opRight),
+        opLeftWarn: descHasZeroRisk(preview.opLeft),
+        opRightWarn: descHasZeroRisk(preview.opRight),
         pending: true
       });
     }
@@ -1186,7 +1209,14 @@
         var row = createRow(step.equation, { pending: false, solved: false, current: false });
         history.appendChild(row);
         autoFitRowFont(row);
-        primaryRowsData.push({ el: row, opLeft: formatOpLabel(step.opLeft), opRight: formatOpLabel(step.opRight), pending: false });
+        primaryRowsData.push({
+          el: row,
+          opLeft: formatOpLabel(step.opLeft),
+          opRight: formatOpLabel(step.opRight),
+          opLeftWarn: descHasZeroRisk(step.opLeft),
+          opRightWarn: descHasZeroRisk(step.opRight),
+          pending: false
+        });
       });
 
       var splitWrap = document.createElement('div');

@@ -84,7 +84,7 @@
   // constrainLabels : recale l'étiquette pour rester DANS `historyRect` plutôt que dans
   // la fenêtre entière — nécessaire dans une colonne "produit nul" (étroite, à côté
   // d'une autre équation) pour ne jamais empiéter sur la colonne voisine.
-  function drawSide(svg, history, historyRect, topEl, botEl, label, dir, markerId, constrainLabels, placedLabels, equationRects) {
+  function drawSide(svg, history, historyRect, topEl, botEl, label, warn, dir, markerId, constrainLabels, placedLabels, equationRects) {
     var topRect = topEl.getBoundingClientRect();
     var botRect = botEl.getBoundingClientRect();
     var topX = (dir < 0 ? topRect.left : topRect.right) - historyRect.left + dir * TEXT_GAP;
@@ -113,7 +113,8 @@
     var midY = (topY + botY) / 2;
 
     var el = document.createElement('div');
-    el.className = 'arrow-label ' + (dir < 0 ? 'arrow-label-left' : 'arrow-label-right');
+    el.className = 'arrow-label ' + (dir < 0 ? 'arrow-label-left' : 'arrow-label-right') +
+      (warn ? ' arrow-label-warning' : '');
     el.style.left = extremeX + 'px';
     el.style.top = midY + 'px';
     // Rendu en LaTeX (comme les équations) : x et signes identiques, plus de police système.
@@ -291,10 +292,10 @@
         var botLeft = botRow.querySelector('.side[data-side="left"]');
         var botRight = botRow.querySelector('.side[data-side="right"]');
         if (topLeft && botLeft && (isPendingArrow || rows[i].opLeft)) {
-          drawSide(svg, history, historyRect, topLeft, botLeft, rows[i].opLeft, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
+          drawSide(svg, history, historyRect, topLeft, botLeft, rows[i].opLeft, rows[i].opLeftWarn, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
         }
         if (topRight && botRight && (isPendingArrow || rows[i].opRight)) {
-          drawSide(svg, history, historyRect, topRight, botRight, rows[i].opRight, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
+          drawSide(svg, history, historyRect, topRight, botRight, rows[i].opRight, rows[i].opRightWarn, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
         }
       }
     }

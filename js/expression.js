@@ -49,6 +49,23 @@
     return isFactorGroup(node) || isProductGroup(node);
   }
 
+  // Un membre dépend-il de x (au moins un terme de degré >= 1, à n'importe quelle
+  // profondeur) ? Utilisé pour savoir si multiplier les deux membres par CE membre-là
+  // (ex. "×(x+5)", voir wrapSideInProduct) peut introduire une valeur qui l'annule — un
+  // multiplicateur purement numérique n'a pas ce problème.
+  function nodeHasVariable(node) {
+    if (isFactorGroup(node)) {
+      return (node.factor && node.factor.pow !== 0) || sideHasVariable(node.innerTerms);
+    }
+    if (isProductGroup(node)) {
+      return node.factors.some(function (f) { return sideHasVariable(f.terms); });
+    }
+    return node.pow !== 0;
+  }
+  function sideHasVariable(side) {
+    return side.some(nodeHasVariable);
+  }
+
   function nodeSign(node) {
     if (isGroup(node)) return node.sign;
     return node.coeff < 0 ? -1 : 1;
@@ -1039,6 +1056,7 @@
     isProductGroup: isProductGroup,
     isSquareFactorGroup: isSquareFactorGroup,
     isGroup: isGroup,
+    sideHasVariable: sideHasVariable,
     wrapSideInProduct: wrapSideInProduct,
     canonicalizeFactors: canonicalizeFactors,
     cloneFactor: cloneFactor,

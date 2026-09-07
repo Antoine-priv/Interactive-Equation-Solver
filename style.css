@@ -22,6 +22,12 @@
 
   --danger: #dc2626;
 
+  /* Étiquette de flèche "×(...) valide si (...)≠0" (voir isZeroRiskMulOp dans render.js) :
+     un pas intermédiaire techniquement pas garanti équivalent, ni une erreur (--danger)
+     ni un résultat validé (--success) — un troisième registre visuel dédié. */
+  --warning: #b45309;
+  --warning-soft: #fef3c7;
+
   --arrow-color: #c7cad3;
 
   /* Fixe (pas redéfinie en sombre) : l'infobulle reste une pastille sombre à texte
@@ -57,6 +63,8 @@
     --success-soft: #143024;
     --success-border: #1f5c3d;
 
+    --warning-soft: #3a2a0f;
+
     --arrow-color: #4a4e5e;
   }
 }
@@ -73,6 +81,8 @@
 
   --success-soft: #143024;
   --success-border: #1f5c3d;
+
+  --warning-soft: #3a2a0f;
 
   --arrow-color: #4a4e5e;
 }
@@ -548,6 +558,10 @@ button {
 }
 .arrow-label-left { transform: translate(-100%, -50%); }
 .arrow-label-right { transform: translate(0, -50%); }
+/* Multiplication des deux membres par une expression qui dépend de x, potentiellement
+   nulle (voir opLeftWarn/opRightWarn dans render.js et isZeroRiskMulOp) : l'étape reste
+   affichée normalement, juste signalée comme valide SOUS RÉSERVE. */
+.arrow-label-warning { color: var(--warning); background: var(--warning-soft); }
 /* "produit nul" (voir drawFork dans arrows.js) : centrée horizontalement sous le "="
    d'origine, pas à côté d'une flèche précise (il y en a deux, une par facteur). */
 .arrow-label-fork { transform: translate(-50%, 0); }
