@@ -236,7 +236,11 @@
       var inner = App.Expr.drilledWorkingArray(groupNode, pending.drilled);
       var sel = pending.selectedInner;
       var innerClean = sel.every(function (i) { return !isGroup(inner[i]); });
-      var innerCanExpand = !isBranch && sel.length === 1 && isGroup(inner[sel[0]]);
+      // Un noeud sélectionné qui serait LUI-MÊME un dénominateur-expression imbriqué (ex.
+      // "÷d1" puis "÷d2" sans annulation, voir wrapSideInQuotient) reste exclu, même niché
+      // dans un membre drillé — mêmes raisons que groupCount plus bas.
+      var innerCanExpand = !isBranch && sel.length === 1 && isGroup(inner[sel[0]]) &&
+        !App.Expr.isExpressionQuotient(inner[sel[0]]);
       // L'AUTRE membre (celui où l'on n'est PAS "entré") reste sélectionnable pendant
       // qu'on est dans un groupe (voir render.js) : Simplifier peut alors porter sur les
       // deux à la fois en une seule étape (l'intérieur du groupe ET l'autre membre),

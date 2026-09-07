@@ -1316,7 +1316,10 @@
         var targetIdx = pending.selectedInner[0];
         var drilledArr = Expr.drilledWorkingArray(groupNode, d);
         var targetNode = drilledArr[targetIdx];
-        if (!targetNode || !Expr.isGroup(targetNode)) return false;
+        // Un dénominateur-expression imbriqué (ex. "÷d1" puis "÷d2" sans annulation, voir
+        // wrapSideInQuotient) reste exclu même trouvé DANS un membre drillé : expandFactorGroup/
+        // expandOneInner supposent un `factor` numérique classique.
+        if (!targetNode || !Expr.isGroup(targetNode) || Expr.isExpressionQuotient(targetNode)) return false;
         var newInnerD, descD;
         try {
           if (Expr.isProductGroup(targetNode)) {
@@ -1387,7 +1390,9 @@
           if (!isBranchPrev && p.selectedInner.length === 1) {
             var targetIdxPrev = p.selectedInner[0];
             var targetNodePrev = innerArrPrev[targetIdxPrev];
-            if (targetNodePrev && Expr.isGroup(targetNodePrev)) {
+            // Même exclusion que confirmExpandFullSelection : un dénominateur-expression
+            // imbriqué n'a pas de `factor` numérique pour expandFactorGroup/expandOneInner.
+            if (targetNodePrev && Expr.isGroup(targetNodePrev) && !Expr.isExpressionQuotient(targetNodePrev)) {
               try {
                 var newInnerExpPrev, descPrev;
                 if (Expr.isProductGroup(targetNodePrev)) {

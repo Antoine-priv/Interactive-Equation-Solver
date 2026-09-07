@@ -93,6 +93,49 @@ function ok(label, cond) {
   ok('round-trip ÷(x+5) then ×(x+5) returns exactly the original equation',
     JSON.stringify(step.equation) === JSON.stringify({ left: [{ coeff: 2, pow: 1 }, { coeff: 3, pow: 0 }], right: [{ coeff: 9, pow: 0 }] }));
 
+  // --- Test 5b (régression, bug rapporté par l'utilisateur) : double-cliquer le
+  // NUMÉRATEUR d'un "÷x" (ou toute expression) ne doit jamais faire disparaître
+  // l'équation — drilledGroupLatex/drilledGroupLatexForOrder appelaient
+  // Expr.termLatexBody(node.factor) sans condition, qui plantait sur un dénominateur-
+  // expression (factorTerms, pas de `factor` numérique).
+  await applyChain('x+3=8', '\\div x');
+  const errsBeforeNumClick = errs.length;
+  let box = await page.locator('.eq-row.current .side[data-side="left"] .term').first().boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.3);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.3);
+  await page.waitForTimeout(100);
+  let pending = await page.evaluate(() => window.App.History.getPending());
+  ok('double-clicking the numerator of ÷x drills into it (not the denominator)',
+    pending.drilled && pending.drilled.side === 'left' && !pending.drilled.part);
+  const bodyLen = await page.evaluate(() => document.body.innerHTML.length);
+  ok('equation did not disappear (page still has real content)', bodyLen > 5000);
+  ok('no JS error was thrown while drilling into the numerator', errs.length === errsBeforeNumClick);
+
+  // --- Test 5c : dénominateur imbriqué (÷(x+1) puis ÷(x+9), qui ne s'annulent pas) —
+  // ne doit ni planter au rendu, ni proposer "Développer" sur ce noeud imbriqué.
+  await page.evaluate(() => {
+    window.App.History.startNewEquation(window.App.Parser.parseEquation('x=5'));
+    window.App.History.selectOp('expr');
+    window.App.History.setExprChainText('\\div(x+1)');
+    window.App.History.confirm();
+    window.App.History.selectOp('expr');
+    window.App.History.setExprChainText('\\div(x+9)');
+    window.App.History.confirm();
+  });
+  await page.waitForTimeout(150);
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  console.log('nested quotient:', JSON.stringify(step.equation.left));
+  ok('÷(x+1) then ÷(x+9) nests a quotient inside a quotient\'s numerator',
+    step.equation.left[0].innerTerms[0].isDivision === true);
+  box = await page.locator('.eq-row.current .side[data-side="left"] .term').first().boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.3);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.3);
+  await page.waitForTimeout(100);
+  ok('drilling into the outer numerator (itself a nested quotient) does not throw',
+    await page.evaluate(() => document.body.innerHTML.length) > 5000);
+  ok('"Développer" stays disabled on the nested quotient node',
+    !(await page.evaluate(() => window.App.Toolbar.computeSelectionInfo().canExpand)));
+
   // --- Test 6 : régression — "Développer" reste désactivé pour le quotient EN ENTIER,
   // et sélectionner le noeud entier ne fait rien planter ---
   await applyChain('(x+1)(x+9)=0', '\\div(x+2)');
@@ -111,7 +154,7 @@ function ok(label, cond) {
   await page.click(denSel, { force: true });
   await page.click(denSel, { force: true });
   await page.waitForTimeout(80);
-  let pending = await page.evaluate(() => window.App.History.getPending());
+  pending = await page.evaluate(() => window.App.History.getPending());
   ok('double-click on the denominator drills into it (pending.drilled.part === "den")',
     pending.drilled && pending.drilled.part === 'den');
   await page.screenshot({ path: `${SCRATCH}/divide_by_expression_denominator_drilled.png` });

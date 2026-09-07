@@ -204,7 +204,12 @@
     }
     var body;
     if (node.isDivision) {
-      var frac = '\\frac{' + innerLatex + '}{' + Expr.termLatexBody(node.factor) + '}';
+      // Dénominateur-EXPRESSION (factorTerms, voir isExpressionQuotient) : rendu en
+      // lecture seule ici, comme un bloc opaque normal — on est entré dans le NUMÉRATEUR
+      // (innerTerms), pas dans le dénominateur (voir drillIntoQuotientDenominator, qui
+      // passe par drilledQuotientDenominatorLatex à la place pour CE cas-là).
+      var denomLatex = node.factorTerms ? Expr.innerTermsLatex(node.factorTerms) : Expr.termLatexBody(node.factor);
+      var frac = '\\frac{' + innerLatex + '}{' + denomLatex + '}';
       body = isLeaf ? '\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{' + frac + '}' : frac;
     } else {
       var factorBody = node.factor ? Expr.termLatexBody({ coeff: node.factor.coeff, pow: node.factor.pow }) : '';
@@ -241,7 +246,8 @@
     }
     var body;
     if (node.isDivision) {
-      body = '\\frac{' + innerLatex + '}{' + Expr.termLatexBody(node.factor) + '}';
+      var denomLatexForOrder = node.factorTerms ? Expr.innerTermsLatex(node.factorTerms) : Expr.termLatexBody(node.factor);
+      body = '\\frac{' + innerLatex + '}{' + denomLatexForOrder + '}';
     } else {
       var factorBody = node.factor ? Expr.termLatexBody({ coeff: node.factor.coeff, pow: node.factor.pow }) : '';
       body = factorBody + '\\left(' + innerLatex + '\\right)';
