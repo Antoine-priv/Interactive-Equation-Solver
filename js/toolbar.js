@@ -591,7 +591,11 @@
     // déclenche un re-rendu qui détacherait cette cible du DOM.
     document.addEventListener('click', function (e) {
       var pending = App.History.getPending();
-      if (!pending.opType && pending.selectedLeft.length === 0 && pending.selectedRight.length === 0) return;
+      // pending.selectedFactors (sélection par facteur, voir toggleFactorSelection dans
+      // history.js) fait PARTIE de ce qu'il faut vérifier ici : il ne touche jamais
+      // selectedLeft/Right, donc sans ce test un facteur sélectionné seul (ex. "(x+5)")
+      // n'était jamais désélectionné par un clic en dehors de l'équation.
+      if (!pending.opType && !pending.selectedFactors && pending.selectedLeft.length === 0 && pending.selectedRight.length === 0) return;
       var modalOverlay = document.getElementById('modalOverlay');
       if (modalOverlay && !modalOverlay.hidden) return;
       var panel = document.getElementById('controlPanel');

@@ -196,7 +196,12 @@
     function cancelOp() {
       // Rien à annuler : ne pas redéclencher un rendu (et l'animation de défilement)
       // pour rien, sinon maintenir Échap enfoncé (répétition clavier) fait "sauter" la page.
-      if (!pending.opType && !pending.drilled && pending.selectedLeft.length === 0 && pending.selectedRight.length === 0) return;
+      // pending.selectedFactors (voir toggleFactorSelection) fait PARTIE de ce qu'il faut
+      // vérifier ici : il ne touche jamais selectedLeft/Right (voir son commentaire), donc
+      // sans ce test un facteur sélectionné seul restait bloqué (ni Échap, ni clic en
+      // dehors de l'équation ne le désélectionnait, contrairement à un terme classique).
+      if (!pending.opType && !pending.drilled && !pending.selectedFactors &&
+          pending.selectedLeft.length === 0 && pending.selectedRight.length === 0) return;
       resetPending();
     }
 

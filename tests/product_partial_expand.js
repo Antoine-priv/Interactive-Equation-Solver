@@ -123,6 +123,27 @@ function ok(label, cond) {
     factors: [{ terms: [{ coeff: 1, pow: 1 }, { coeff: -6, pow: 0 }], exponent: 2 }]
   }));
 
+  // --- 8) Bug fix: a lone selected factor (like a classic term selection) must be
+  // deselectable both via Échap and via a left-click outside the equation.
+  await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '(x+7)(x+5)+4=4');
+  await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-1"]');
+  pending = await page.evaluate(() => window.App.History.getPending());
+  ok('single factor selected before testing deselection', pending.selectedFactors &&
+    pending.selectedFactors.branches.length === 1);
+
+  await page.keyboard.press('Escape');
+  pending = await page.evaluate(() => window.App.History.getPending());
+  ok('Échap deselects a lone selected factor', pending.selectedFactors === null);
+
+  await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-1"]');
+  pending = await page.evaluate(() => window.App.History.getPending());
+  ok('single factor re-selected', pending.selectedFactors &&
+    pending.selectedFactors.branches.length === 1);
+
+  await page.mouse.click(20, 20);
+  pending = await page.evaluate(() => window.App.History.getPending());
+  ok('left-click outside the equation deselects a lone selected factor', pending.selectedFactors === null);
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;
