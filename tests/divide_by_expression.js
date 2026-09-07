@@ -232,6 +232,49 @@ function ok(label, cond) {
     JSON.stringify(step.equation.left[0].innerTerms[0].factors.map((f) => f.terms)) ===
     JSON.stringify([[{ coeff: 1, pow: 1 }, { coeff: -1, pow: 0 }], [{ coeff: 1, pow: 1 }, { coeff: 5, pow: 0 }]]));
 
+  // --- Test 11 (bug rapporté) : "(x+9)²(x-8)/x" — après avoir drillé la fraction PUIS le
+  // numérateur (ProductGroup), double-cliquer un facteur nommé (ex. "(x+9)²") doit à son
+  // tour drill DEDANS pour réordonner SES propres termes ("x" et "+9") — pas juste rester
+  // bloqué sur "sélectionner/glisser le facteur entier" comme avant ce correctif (voir
+  // drillIntoNestedProductBranch/clickNestedFactor dans history.js, et la généralisation
+  // de Expr.withProductBranchAtPath à un chemin niché de longueur > 1).
+  await applyChain('(x+9)^2(x-8)=0', '\\div x');
+  box = await page.locator('.eq-row.current .side[data-side="left"] .term').first().boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.3);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height * 0.3);
+  await page.waitForTimeout(80);
+  const nestedSlots = page.locator('.eq-row.current .side[data-side="left"] .factor-slot');
+  const nSlot0 = await nestedSlots.nth(0).boundingBox();
+  await page.mouse.click(nSlot0.x + nSlot0.width / 2, nSlot0.y + nSlot0.height / 2);
+  await page.mouse.click(nSlot0.x + nSlot0.width / 2, nSlot0.y + nSlot0.height / 2);
+  await page.waitForTimeout(80);
+  pending = await page.evaluate(() => window.App.History.getPending());
+  ok('double-clicking a named factor of the nested product drills into IT (path grows, branch set)',
+    pending.drilled && JSON.stringify(pending.drilled.path) === '[0,0]' && pending.drilled.branch === 0);
+
+  const nestedTerms = page.locator('.eq-row.current .side[data-side="left"] [data-inner-index]');
+  ok('the factor\'s own terms ("x" and "+9") are now individually tagged', await nestedTerms.count() === 2);
+  const nt0 = await nestedTerms.nth(0).boundingBox();
+  const nt1 = await nestedTerms.nth(1).boundingBox();
+  await page.mouse.move(nt0.x + nt0.width / 2, nt0.y + nt0.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(nt1.x + nt1.width + 5, nt1.y + nt1.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  ok('swapping "x" and "+9" gives "(9+x)^2", the other factor and exponent untouched',
+    JSON.stringify(step.equation.left[0].innerTerms[0].factors) === JSON.stringify([
+      { terms: [{ coeff: 9, pow: 0 }, { coeff: 1, pow: 1 }], exponent: 2 },
+      { terms: [{ coeff: 1, pow: 1 }, { coeff: -8, pow: 0 }], exponent: 1 }
+    ]));
+
+  ok('still drilled 2 levels deep before exiting', pending.drilled && pending.drilled.path.length === 2);
+  await page.evaluate(() => window.App.History.exitDrill());
+  await page.waitForTimeout(80);
+  pending = await page.evaluate(() => window.App.History.getPending());
+  ok('exiting once pops back to the numerator view (path shrinks, branch dropped)',
+    pending.drilled && JSON.stringify(pending.drilled.path) === '[0]' && typeof pending.drilled.branch !== 'number');
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;

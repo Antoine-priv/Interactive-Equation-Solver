@@ -1197,13 +1197,34 @@
   // seule copie des termes par facteur (voir modèle de données en tête de fichier) : plus
   // besoin de mirroring particulier pour un facteur répété (ex. "(...)²"), contrairement à
   // l'ancien isSquare qui dupliquait left/right.
+  // path pointe d'ordinaire directement sur le ProductGroup (side[path[0]], cas le plus
+  // courant) — MAIS peut aussi le désigner niché à n'importe quelle profondeur à travers
+  // des FactorGroup classiques (ex. path=[0,1] = side[0].innerTerms[1], voir
+  // Expr.nodeAtPath, déjà générique) : ex. "(x+9)²(x-8)" trouvé dans le numérateur d'une
+  // fraction, elle-même drillée — voir pending.drilled.branch pouvant désormais accompagner
+  // un path de longueur > 1 dans history.js.
   function withProductBranchAtPath(side, path, branch, newBranchTerms) {
-    return side.map(function (n, i) {
-      if (i !== path[0]) return cloneNode(n);
-      var newFactors = n.factors.map(function (f, idx) {
+    function newProductNode(productNode) {
+      var newFactors = productNode.factors.map(function (f, idx) {
         return idx === branch ? { terms: newBranchTerms.map(cloneNode), exponent: f.exponent } : cloneFactor(f);
       });
-      return { sign: n.sign, factors: newFactors };
+      return { sign: productNode.sign, factors: newFactors };
+    }
+    function recur(node, restPath) {
+      var newInner = node.innerTerms.map(function (t, i) {
+        if (i !== restPath[0]) return cloneNode(t);
+        return restPath.length === 1 ? newProductNode(t) : recur(t, restPath.slice(1));
+      });
+      var out = { sign: node.sign };
+      if (node.factorTerms) out.factorTerms = node.factorTerms.map(cloneNode);
+      else out.factor = cloneTerm(node.factor);
+      out.innerTerms = newInner;
+      if (node.isDivision) out.isDivision = true;
+      return out;
+    }
+    return side.map(function (n, i) {
+      if (i !== path[0]) return cloneNode(n);
+      return path.length === 1 ? newProductNode(n) : recur(n, path.slice(1));
     });
   }
 

@@ -186,7 +186,7 @@
   // du niveau le plus profond reste un bloc KaTeX unique (obligatoire pour l'appariement
   // des délimiteurs) mais porte lui-même un id "-exit" : cliquer dans la parenthèse sans
   // viser un terme précis en ressort d'UN niveau (voir onExitDrill).
-  function drilledGroupLatex(node, idPrefix, topIdx, remainingPath, isFirst) {
+  function drilledGroupLatex(node, idPrefix, topIdx, remainingPath, isFirst, branch) {
     var isLeaf = remainingPath.length === 0;
     var innerLatex;
     if (isLeaf) {
@@ -204,10 +204,17 @@
     } else {
       var childIdx = remainingPath[0];
       innerLatex = node.innerTerms.map(function (t, i) {
-        if (i === childIdx) {
-          return drilledGroupLatex(t, idPrefix, topIdx, remainingPath.slice(1), i === 0);
+        if (i !== childIdx) return Expr.nodeLatex(t, i === 0);
+        // Dernier saut du chemin ET la cible est un ProductGroup dont on a précisément
+        // "drillé" UN facteur (pending.drilled.branch, voir drillIntoNestedProductBranch
+        // dans history.js) : bascule sur le rendu "branche" plutôt que de continuer la
+        // récursion FactorGroup (qui suppose toujours un FactorGroup classique). Mêmes
+        // idPrefix/topIdx qu'au niveau le plus haut — un seul "feuille" est jamais rendue
+        // à la fois, aucun risque de collision d'id.
+        if (remainingPath.length === 1 && typeof branch === 'number' && Expr.isProductGroup(t)) {
+          return drilledProductBranchLatex(t, idPrefix, topIdx, branch, i === 0);
         }
-        return Expr.nodeLatex(t, i === 0);
+        return drilledGroupLatex(t, idPrefix, topIdx, remainingPath.slice(1), i === 0, branch);
       }).join('');
     }
     var body;
@@ -236,7 +243,7 @@
   // (au lieu des ids réels "-inner-i"/"-exit", pas utiles ici — ce rendu est jeté au
   // prochain reflow ou remplacé par le rendu normal une fois le glisser terminé). Aucun id
   // aux niveaux intermédiaires/racine : inutile, seuls les "dragpv-i" sont interrogés.
-  function drilledGroupLatexForOrder(node, remainingPath, orderedLeaf, isFirst) {
+  function drilledGroupLatexForOrder(node, remainingPath, orderedLeaf, isFirst, branch) {
     var isLeaf = remainingPath.length === 0;
     var innerLatex;
     if (isLeaf) {
@@ -246,10 +253,11 @@
     } else {
       var childIdx = remainingPath[0];
       innerLatex = node.innerTerms.map(function (t, i) {
-        if (i === childIdx) {
-          return drilledGroupLatexForOrder(t, remainingPath.slice(1), orderedLeaf, i === 0);
+        if (i !== childIdx) return Expr.nodeLatex(t, i === 0);
+        if (remainingPath.length === 1 && typeof branch === 'number' && Expr.isProductGroup(t)) {
+          return drilledProductBranchLatexForOrder(t, branch, orderedLeaf, i === 0);
         }
-        return Expr.nodeLatex(t, i === 0);
+        return drilledGroupLatexForOrder(t, remainingPath.slice(1), orderedLeaf, i === 0, branch);
       }).join('');
     }
     var body;
@@ -482,10 +490,15 @@
         if (drilled.part === 'den') {
           return drilledQuotientDenominatorLatex(node, idPrefix, idx, idx === 0);
         }
-        if (typeof drilled.branch === 'number') {
+        // `branch` niché à plus d'un cran (ex. "(x+9)²(x-8)" trouvé dans un numérateur déjà
+        // drillé, voir drillIntoNestedProductBranch dans history.js) : `node` ici n'est
+        // PAS directement le ProductGroup, il faut descendre via drilledGroupLatex jusqu'à
+        // lui — seul path.length===1 désigne le cas historique (produit au premier niveau
+        // du membre drillé lui-même).
+        if (typeof drilled.branch === 'number' && drilled.path.length === 1) {
           return drilledProductBranchLatex(node, idPrefix, idx, drilled.branch, idx === 0);
         }
-        return drilledGroupLatex(node, idPrefix, idx, drilled.path.slice(1), idx === 0);
+        return drilledGroupLatex(node, idPrefix, idx, drilled.path.slice(1), idx === 0, drilled.branch);
       }
       var body = Expr.isProductGroup(node) ? productGroupBranchesLatex(node, idPrefix + '-' + idx, idx === 0) : Expr.nodeLatex(node, idx === 0);
       return '\\htmlId{' + idPrefix + '-' + idx + '}{' + body + '}';
@@ -512,9 +525,10 @@
         return side.map(function (node, idx) {
           if (idx !== topIdx) return Expr.nodeLatex(node, idx === 0);
           if (drilled.part === 'den') return drilledQuotientDenominatorLatexForOrder(node, orderedLeaf, idx === 0);
-          return typeof drilled.branch === 'number'
-            ? drilledProductBranchLatexForOrder(node, drilled.branch, orderedLeaf, idx === 0)
-            : drilledGroupLatexForOrder(node, drilled.path.slice(1), orderedLeaf, idx === 0);
+          if (typeof drilled.branch === 'number' && drilled.path.length === 1) {
+            return drilledProductBranchLatexForOrder(node, drilled.branch, orderedLeaf, idx === 0);
+          }
+          return drilledGroupLatexForOrder(node, drilled.path.slice(1), orderedLeaf, idx === 0, drilled.branch);
         }).join('');
       }
       innerArr.forEach(function (t, i) {
@@ -600,7 +614,13 @@
               commit: function (order) { App.History.setDrilledFactorOrder(i, order); },
               buildLatex: function (orderedFactors) { return buildNestedFactorDragLatex(i, orderedFactors); },
               tagClass: 'factor-slot'
-            }, j, null);
+            }, j, function () {
+              // Double-clic (détecté dans clickNestedFactor, history.js) : descend encore
+              // d'un cran pour éditer les termes DE CE facteur (ex. "x"/"9" dans "(x+9)"),
+              // exactement comme drillIntoProductBranch le fait déjà pour un produit au
+              // premier niveau du membre — voir drillIntoNestedProductBranch.
+              App.History.clickNestedFactor(i, j);
+            });
           });
         });
       }

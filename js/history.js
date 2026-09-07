@@ -435,6 +435,40 @@
       notify();
     }
 
+    // Même principe que drillIntoInnerGroup, mais pour LE FACTEUR `branch` d'un
+    // ProductGroup trouvé À L'INTÉRIEUR du membre drillé (ex. "(x+9)" dans "(x+9)²(x-8)"
+    // niché dans le numérateur d'une fraction, voir productGroupBranchesLatex/
+    // buildNestedFactorDragLatex dans render.js pour le rendu et le glisser de CES
+    // facteurs) — la cible ici est un ProductGroup, pas un FactorGroup, et on précise EN
+    // PLUS quel facteur précis (voir drillIntoProductBranch, l'équivalent pour un produit
+    // au premier niveau du membre plutôt que niché).
+    function drillIntoNestedProductBranch(innerIndex, branch) {
+      if (!pending.drilled) return;
+      if (pending.opType !== null) return;
+      // Une branche ou un dénominateur déjà engagés sont des profondeurs terminales (voir
+      // toggleInnerSelection) : jamais de nouvelle descente depuis là.
+      if (typeof pending.drilled.branch === 'number' || pending.drilled.part === 'den') return;
+      var currentNode = Expr.nodeAtPath(lastEquation()[pending.drilled.side], pending.drilled.path);
+      var innerNode = currentNode && Expr.drilledWorkingArray(currentNode, pending.drilled)[innerIndex];
+      if (!innerNode || !Expr.isProductGroup(innerNode)) return;
+      var branchArr = innerNode.factors[branch] && innerNode.factors[branch].terms;
+      if (!branchArr || branchArr.length < 2) return;
+      pending.drilled = { side: pending.drilled.side, path: pending.drilled.path.concat([innerIndex]), branch: branch };
+      pending.selectedInner = [];
+      pending.error = null;
+      notify();
+    }
+
+    // Point d'entrée depuis render.js pour un clic sur un facteur d'un ProductGroup
+    // niché (voir ci-dessus) : détecte ICI le double-clic (consumeDoubleClick, privé à ce
+    // moteur) avant de vraiment descendre — un simple clic ne fait rien de plus (pas de
+    // sélection par facteur pour un produit niché, seul le glisser est câblé).
+    function clickNestedFactor(innerIndex, branch) {
+      if (!pending.drilled) return;
+      var key = 'nestedfactor:' + pending.drilled.side + ':' + pending.drilled.path.join(',') + ':' + innerIndex + ':' + branch;
+      if (consumeDoubleClick(key)) drillIntoNestedProductBranch(innerIndex, branch);
+    }
+
     // Ressort d'UN niveau (clic droit n'importe où sur la page, ou clic gauche sur la
     // parenthèse elle-même plutôt que sur un terme précis, voir render.js/main.js) : le
     // groupe qu'on vient de quitter n'est PAS resélectionné (aucune surbrillance jaune
@@ -1686,6 +1720,7 @@
       setSideOrder: setSideOrder,
       setInnerOrder: setInnerOrder,
       setDrilledFactorOrder: setDrilledFactorOrder,
+      clickNestedFactor: clickNestedFactor,
       setFactorOrder: setFactorOrder,
       undo: undo
     };
@@ -1984,6 +2019,7 @@
     setSideOrder: function (side, order) { active().setSideOrder(side, order); },
     setInnerOrder: function (order) { active().setInnerOrder(order); },
     setDrilledFactorOrder: function (innerIndex, order) { active().setDrilledFactorOrder(innerIndex, order); },
+    clickNestedFactor: function (innerIndex, branch) { active().clickNestedFactor(innerIndex, branch); },
     setFactorOrder: function (side, groupIndex, order) { active().setFactorOrder(side, groupIndex, order); }
   };
 })(window.App = window.App || {});
