@@ -32,9 +32,11 @@
       // (jamais un FactorGroup classique, ni un produit à un seul facteur/exponent>1,
       // aucune ambiguïté là) la bascule dans "branches" SANS toucher selectedLeft/Right,
       // indépendamment de la sélection classique. Développer devient possible dès que
-      // branches.length >= 2 : voir Expr.expandProductFactorSubset/computeSelectionInfo
-      // dans toolbar.js. Un seul produit à la fois (comme `drilled` ci-dessus) ; null si
-      // rien n'est actuellement sélectionné de cette façon.
+      // branches.length >= 2, OU dès qu'un seul facteur marqué a lui-même un exposant>1
+      // (ex. "(x-6)²" dans "(x-1)(x-6)²", qui a alors quelque chose à développer tout seul) :
+      // voir Expr.expandProductFactorSubset/computeSelectionInfo dans toolbar.js. Un seul
+      // produit à la fois (comme `drilled` ci-dessus) ; null si rien n'est actuellement
+      // sélectionné de cette façon.
       selectedFactors: null,
       // Mode 'factor' (bouton "Factoriser") : 2 étapes à partir d'un choix explicite,
       // plutôt que de deviner automatiquement une identité remarquable à partir d'un
@@ -1178,7 +1180,9 @@
       if (pending.selectedFactors) {
         var sf = pending.selectedFactors;
         var nodeSF = eq[sf.side][sf.index];
-        if (!nodeSF || !Expr.isProductGroup(nodeSF) || sf.branches.length < 2) return false;
+        if (!nodeSF || !Expr.isProductGroup(nodeSF)) return false;
+        if (sf.branches.length < 1 ||
+            (sf.branches.length === 1 && nodeSF.factors[sf.branches[0]].exponent < 2)) return false;
         var newEqSF, descSF;
         try {
           newEqSF = Eq.applyExpandProductFactorSubset(eq, sf.side, sf.index, sf.branches);
@@ -1352,11 +1356,14 @@
           }
         }
         // Sélection PAR FACTEUR (voir toggleFactorSelection) : aperçu du développement
-        // PARTIEL des seuls facteurs marqués, avant même de cliquer "Développer".
-        if (p.selectedFactors && p.selectedFactors.branches.length >= 2) {
+        // PARTIEL des seuls facteurs marqués, avant même de cliquer "Développer". Un seul
+        // facteur marqué suffit s'il a lui-même un exposant>1 (voir
+        // Expr.expandProductFactorSubset/computeSelectionInfo dans toolbar.js).
+        if (p.selectedFactors && p.selectedFactors.branches.length >= 1) {
           var sfPrev = p.selectedFactors;
           var nodeSfPrev = last[sfPrev.side][sfPrev.index];
-          if (nodeSfPrev && Expr.isProductGroup(nodeSfPrev)) {
+          if (nodeSfPrev && Expr.isProductGroup(nodeSfPrev) &&
+              (sfPrev.branches.length >= 2 || nodeSfPrev.factors[sfPrev.branches[0]].exponent > 1)) {
             try {
               var previewEqSf = Eq.applyExpandProductFactorSubset(last, sfPrev.side, sfPrev.index, sfPrev.branches);
               var sortedBranchesPrev = sfPrev.branches.slice().sort(function (a, b) { return a - b; });

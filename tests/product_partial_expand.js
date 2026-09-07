@@ -98,6 +98,31 @@ function ok(label, cond) {
   ok('squared single-factor product uses classic whole-node selection', pending.selectedLeft.length === 1 && pending.selectedFactors === null);
   ok('"Développer" enabled on the squared factor as a whole', await page.evaluate(() => window.App.Toolbar.computeSelectionInfo().canExpand));
 
+  // --- 7) A single factor CAN be expanded alone when it has an exponent>1 of its own
+  // (ex. "(x-6)²" inside "(x-1)(x-6)²") : self-multiplied against itself, the other
+  // factor(s) left untouched — no need to combine it with a second factor.
+  await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '(x-1)(x-6)^2=0');
+  await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-1"]');
+  pending = await page.evaluate(() => window.App.History.getPending());
+  console.log('after selecting the squared factor alone:', JSON.stringify(pending.selectedFactors));
+  ok('single squared factor selected', pending.selectedFactors &&
+    pending.selectedFactors.branches.length === 1 && pending.selectedFactors.branches[0] === 1);
+  ok('"Développer" enabled with only the squared factor selected',
+    await page.evaluate(() => window.App.Toolbar.computeSelectionInfo().canExpand));
+
+  await page.click('button[data-op="expand"]');
+  await page.waitForTimeout(150);
+  const step7 = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  console.log('after single squared-factor expand:', JSON.stringify(step7.equation.left));
+  ok('other factor untouched, (x-6)^2 expanded into x^2-12x+36',
+    step7.equation.left[0].factors.length === 2 &&
+    JSON.stringify(step7.equation.left[0].factors[0]) === JSON.stringify({ terms: [{ coeff: 1, pow: 1 }, { coeff: -1, pow: 0 }], exponent: 1 }) &&
+    JSON.stringify(step7.equation.left[0].factors[1]) === JSON.stringify({ terms: [{ coeff: 1, pow: 2 }, { coeff: -12, pow: 1 }, { coeff: 36, pow: 0 }], exponent: 1 }));
+  ok('arrow label names exactly the developed (squared) factor', JSON.stringify(step7.opLeft) === JSON.stringify({
+    type: 'expandProduct',
+    factors: [{ terms: [{ coeff: 1, pow: 1 }, { coeff: -6, pow: 0 }], exponent: 2 }]
+  }));
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;

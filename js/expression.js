@@ -876,12 +876,16 @@
   // que l'appelant remplace le noeud par des Term bruts plutôt que par un ProductGroup à un
   // seul facteur d'exposant 1 (qui violerait l'invariant : factors.length===1 exige
   // exponent>=2, voir modèle de données en tête de fichier).
+  // Un SEUL facteur sélectionné reste accepté quand il a lui-même un exposant>1 (ex. "(x-6)²"
+  // dans "(x-1)(x-6)²") : il y a alors quelque chose à développer (l'auto-multiplication de
+  // ce facteur par lui-même) sans avoir besoin d'un second facteur à combiner.
   function expandProductFactorSubset(node, branchIndices) {
     if (!isProductGroup(node)) {
       throw new Error('Ce terme n\'est pas un produit de sommes.');
     }
-    if (branchIndices.length < 2) {
-      throw new Error('Sélectionnez au moins deux parenthèses à développer ensemble.');
+    if (branchIndices.length < 1 ||
+        (branchIndices.length === 1 && node.factors[branchIndices[0]].exponent < 2)) {
+      throw new Error('Sélectionnez au moins deux parenthèses à développer ensemble, ou une seule affectée d\'une puissance.');
     }
     var sortedIdx = branchIndices.slice().sort(function (a, b) { return a - b; });
     sortedIdx.forEach(function (i) {

@@ -87,11 +87,12 @@
     return out;
   }
 
-  // Développe seulement un SOUS-ENSEMBLE (au moins 2) des facteurs d'un ProductGroup entre
-  // eux, les autres restant intacts (voir Expr.expandProductFactorSubset et
-  // toggleFactorSelection dans history.js pour la sélection UI correspondante) : remplace
-  // le noeud par le nouveau ProductGroup résultant, ou par des Term bruts si le
-  // sous-ensemble couvrait TOUS les facteurs (équivalent à un développement complet).
+  // Développe seulement un SOUS-ENSEMBLE des facteurs d'un ProductGroup entre eux (au moins
+  // 2, ou un seul si celui-ci a lui-même un exposant>1), les autres restant intacts (voir
+  // Expr.expandProductFactorSubset et toggleFactorSelection dans history.js pour la
+  // sélection UI correspondante) : remplace le noeud par le nouveau ProductGroup résultant,
+  // ou par des Term bruts si le sous-ensemble couvrait TOUS les facteurs (équivalent à un
+  // développement complet).
   function applyExpandProductFactorSubset(eq, side, groupIndex, branchIndices) {
     var out = cloneEquation(eq);
     var node = eq[side][groupIndex];

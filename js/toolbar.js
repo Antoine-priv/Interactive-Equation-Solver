@@ -289,8 +289,15 @@
     // Sélection PAR FACTEUR d'un produit à ≥2 parenthèses (voir toggleFactorSelection dans
     // history.js) : au moins 2 facteurs marqués suffit à activer Développer, indépendamment
     // de selectedLeft/Right ci-dessus (les deux sélections sont mutuellement exclusives).
-    if (pending.selectedFactors && pending.selectedFactors.branches.length >= 2) {
-      canExpand = true;
+    // Un seul facteur marqué suffit aussi s'il a lui-même un exposant>1 (ex. "(x-6)²" dans
+    // "(x-1)(x-6)²") : il y a alors quelque chose à développer sans second facteur à combiner.
+    if (pending.selectedFactors) {
+      var sfBranches = pending.selectedFactors.branches;
+      var sfNode = eq[pending.selectedFactors.side][pending.selectedFactors.index];
+      if (sfBranches.length >= 2 ||
+          (sfBranches.length === 1 && sfNode && sfNode.factors[sfBranches[0]].exponent > 1)) {
+        canExpand = true;
+      }
     }
     var canProduitNul = App.History.canProduitNul();
     return {
