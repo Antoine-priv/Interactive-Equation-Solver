@@ -121,6 +121,39 @@ async function dragFactor(page, fromSelector, toX, toY) {
 
   await page.screenshot({ path: `${SCRATCH}/product_factor_reorder_internal2.png` });
 
+  // --- 4) Bug fix : le fantôme du produit ENTIER (après bascule d'échappement, voir
+  // escalateFactorDragToTopLevel) ne doit JAMAIS retourner à la ligne (voir .drag-ghost dans
+  // style.css, qui manquait "white-space:nowrap" — KaTeX ne le force pas lui-même sur
+  // l'ensemble de son rendu, voir le commentaire de .eq-line). Reproduit tel quel le rapport
+  // : "7+(x-8)^2(x+5)=121(x+5)", glisser "(x-8)" vers la gauche par-dessus le "7".
+  await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '7+(x-8)^2(x+5)=121(x+5)');
+  await page.waitForTimeout(80);
+
+  const refLine = await page.$('.eq-row.current .eq-line');
+  const refHeight = (await refLine.boundingBox()).height;
+
+  const seven = await page.$('.eq-row.current .side[data-side="left"] [data-index="0"]');
+  const sevenBox = await seven.boundingBox();
+  await dragFactor(page, '.eq-row.current .side[data-side="left"] [id$="-1-factor-0"]', sevenBox.x + sevenBox.width / 2, sevenBox.y + sevenBox.height / 2);
+  await page.waitForTimeout(50);
+
+  const ghostBox = await page.evaluate(() => {
+    var g = document.querySelector('.drag-ghost');
+    if (!g) return null;
+    var r = g.getBoundingClientRect();
+    return { width: r.width, height: r.height, whiteSpace: getComputedStyle(g).whiteSpace };
+  });
+  console.log('fantome pendant le glisser echappe (rapport de bug):', JSON.stringify(ghostBox), 'refHeight:', refHeight);
+  ok('drag ghost has white-space:nowrap set', ghostBox && ghostBox.whiteSpace === 'nowrap');
+  ok('drag ghost stays single-line tall (not ~2x from wrapping)', ghostBox && ghostBox.height < refHeight * 1.5);
+
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+  const afterEq4 = await page.evaluate(() => window.App.History.lastEquation());
+  console.log('equation apres glisser echappe (rapport de bug):', JSON.stringify(afterEq4.left));
+  ok('escalated correctly: whole product now comes before "7"', afterEq4.left.length === 2 &&
+    !!afterEq4.left[0].factors && afterEq4.left[1].pow === 0 && afterEq4.left[1].coeff === 7);
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;

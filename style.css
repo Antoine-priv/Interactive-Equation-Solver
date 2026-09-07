@@ -499,6 +499,14 @@ button {
      la fraction se retrouverait "à plat" (dénominateur à côté du numérateur) plutôt
      qu'empilée. Un simple bloc laisse le rendu KaTeX cloné intact. */
   display: block;
+  /* Même raison que .eq-line ci-dessus (voir son commentaire) : KaTeX ne force pas
+     lui-même le "nowrap" sur l'ensemble de son rendu, seulement groupe interne par
+     groupe interne — rien n'empêche sinon le navigateur de retourner à la ligne DANS ce
+     fantôme dès que sa largeur (fixée pile à celle du contenu, voir beginTermDrag/
+     escalateFactorDragToTopLevel) est atteinte par un contenu un peu long (ex. le produit
+     ENTIER après une bascule d'échappement, voir escalateFactorDragToTopLevel) — jamais
+     visible sur un terme/facteur seul, assez court pour ne jamais l'exposer. */
+  white-space: nowrap;
   color: var(--text);
   /* Pas de fond ni de box-shadow : sur une boîte KaTeX (qui inclut de l'espace vide
      au-dessus/en dessous du glyphe), un fond opaque dessinerait un rectangle visible
