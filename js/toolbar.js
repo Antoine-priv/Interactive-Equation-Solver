@@ -224,12 +224,16 @@
       var groupNode = App.Expr.nodeAtPath(eq[pending.drilled.side], pending.drilled.path);
       // Branche d'un ProductGroup (ex. "(x+2-3)" dans "(x+2-3)(x+2+3)", voir
       // drillIntoProductBranch dans history.js) : ses termes sont supposés plats, jamais de
-      // Développer dessus (une seule profondeur, voir toggleInnerSelection).
+      // Développer dessus (une seule profondeur, voir toggleInnerSelection). Un
+      // dénominateur-expression (pending.drilled.part==='den', voir
+      // drillIntoQuotientDenominator), lui, se comporte exactement comme un FactorGroup
+      // classique ici (voir isDen, seul isBranch désactive Développer ci-dessous).
       var isBranch = typeof pending.drilled.branch === 'number' && groupNode && App.Expr.isProductGroup(groupNode);
-      if (!groupNode || (!isBranch && !App.Expr.isFactorGroup(groupNode))) {
+      var isDen = pending.drilled.part === 'den' && groupNode && App.Expr.isExpressionQuotient(groupNode);
+      if (!groupNode || (!isBranch && !isDen && !App.Expr.isFactorGroup(groupNode))) {
         return { canSimplify: false, canFactor: false, canExpand: false, canProduitNul: false };
       }
-      var inner = isBranch ? groupNode.factors[pending.drilled.branch].terms : groupNode.innerTerms;
+      var inner = App.Expr.drilledWorkingArray(groupNode, pending.drilled);
       var sel = pending.selectedInner;
       var innerClean = sel.every(function (i) { return !isGroup(inner[i]); });
       var innerCanExpand = !isBranch && sel.length === 1 && isGroup(inner[sel[0]]);
@@ -286,8 +290,13 @@
     // ET (via la sélection par facteur ci-dessous) seulement "(x−9)²" les développe tous
     // les deux en une seule étape. Un noeud non-groupe glissé par erreur dans L/R ne
     // compte simplement pas (ni ne bloque le reste), cohérent avec computeExpandTargets.
-    var groupCount = L.filter(function (i) { return isGroup(eq.left[i]); }).length +
-      R.filter(function (i) { return isGroup(eq.right[i]); }).length;
+    // Une fraction dont le dénominateur est une expression (isExpressionQuotient) ne se
+    // développe pas "en entier" au premier niveau (voir computeExpandTargets dans
+    // history.js) — son numérateur/dénominateur restent développables séparément en
+    // "entrant" dedans (pending.drilled).
+    function isFullyExpandableGroup(n) { return isGroup(n) && !App.Expr.isExpressionQuotient(n); }
+    var groupCount = L.filter(function (i) { return isFullyExpandableGroup(eq.left[i]); }).length +
+      R.filter(function (i) { return isFullyExpandableGroup(eq.right[i]); }).length;
     var canExpand = groupCount >= 1;
     // Sélection PAR FACTEUR d'un produit à ≥2 parenthèses (voir toggleFactorSelection dans
     // history.js) : au moins 2 facteurs marqués suffit à activer Développer, indépendamment

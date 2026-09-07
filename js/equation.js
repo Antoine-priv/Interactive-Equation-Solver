@@ -27,10 +27,18 @@
           right = Expr.wrapSideInFactor(right, op.factor);
         }
       } else if (op.symbol === '÷') {
-        // Affiché sous forme de fraction (ex. "\frac{9x-6}{2}") plutôt que distribué
-        // terme à terme, symétrique au traitement de "×" ci-dessus.
-        left = Expr.wrapSideInFraction(left, op.rawValue);
-        right = Expr.wrapSideInFraction(right, op.rawValue);
+        if (op.terms) {
+          // Division par une expression (ex. "÷(x+5)") : voir wrapSideInQuotient, qui
+          // tente d'abord d'annuler (facteur déjà présent, ou fraction déjà par CE
+          // dénominateur) avant d'envelopper en une nouvelle fraction.
+          left = Expr.wrapSideInQuotient(left, op.terms);
+          right = Expr.wrapSideInQuotient(right, op.terms);
+        } else {
+          // Affiché sous forme de fraction (ex. "\frac{9x-6}{2}") plutôt que distribué
+          // terme à terme, symétrique au traitement de "×" ci-dessus.
+          left = Expr.wrapSideInFraction(left, op.rawValue);
+          right = Expr.wrapSideInFraction(right, op.rawValue);
+        }
       } else {
         left = Expr.addTermToSide(left, op.term);
         right = Expr.addTermToSide(right, op.term);

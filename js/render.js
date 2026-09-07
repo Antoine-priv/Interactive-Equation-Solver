@@ -53,15 +53,16 @@
     }).join('');
   }
 
-  // Multiplier les deux membres par une expression qui dépend de x (op.terms, voir
-  // wrapSideInProduct) n'est valide que si cette expression est non nulle : voir le
-  // rappel ajouté dans formatOpLabel et .arrow-label-warning ci-dessous. Un multiplicateur
-  // purement numérique (op.rawValue, pas de op.terms) n'a pas ce problème.
-  function isZeroRiskMulOp(op) {
-    return op.symbol === '×' && !!op.terms && Expr.sideHasVariable(op.terms);
+  // Multiplier OU diviser les deux membres par une expression qui dépend de x (op.terms,
+  // voir wrapSideInProduct/wrapSideInQuotient) n'est valide/défini que si cette expression
+  // est non nulle : voir le rappel ajouté dans formatOpLabel et .arrow-label-warning
+  // ci-dessous. Un multiplicateur/diviseur purement numérique (op.rawValue, pas de
+  // op.terms) n'a pas ce problème.
+  function isZeroRiskOp(op) {
+    return (op.symbol === '×' || op.symbol === '÷') && !!op.terms && Expr.sideHasVariable(op.terms);
   }
   function descHasZeroRisk(desc) {
-    return !!desc && desc.type === 'expr' && !!desc.ops && desc.ops.some(isZeroRiskMulOp);
+    return !!desc && desc.type === 'expr' && !!desc.ops && desc.ops.some(isZeroRiskOp);
   }
 
   function formatOpLabel(desc) {
@@ -150,7 +151,7 @@
           // "×(x+5)" vs "×x+5").
           var exprOperandLatex = op.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
           var isBareMonomial = op.terms.length === 1 && !Expr.isGroup(op.terms[0]);
-          if (isZeroRiskMulOp(op)) riskyOperands.push({ latex: exprOperandLatex, bare: isBareMonomial });
+          if (isZeroRiskOp(op)) riskyOperands.push({ latex: exprOperandLatex, bare: isBareMonomial });
           return OP_SYMBOL_LATEX[op.symbol] + (isBareMonomial ? exprOperandLatex : '\\left(' + exprOperandLatex + '\\right)');
         }
         if (op.symbol === '×' || op.symbol === '÷') {
@@ -348,6 +349,37 @@
     return ' ' + signP + ' ' + bodyP;
   }
 
+  // Rendu "drillé" du DÉNOMINATEUR-EXPRESSION d'une fraction (pending.drilled.part==='den',
+  // voir isExpressionQuotient/drillIntoQuotientDenominator dans history.js) : même principe
+  // que drilledProductBranchLatex (une seule profondeur, ses termes reçoivent chacun leur
+  // "-inner-j", le tout enveloppé d'un "-exit" pour ressortir) mais sur node.factorTerms. Le
+  // NUMÉRATEUR (node.innerTerms), lui, reste un bloc opaque normal — on est "entré" dans le
+  // dénominateur, pas dans lui.
+  function drilledQuotientDenominatorLatex(node, idPrefix, topIdx, isFirst) {
+    var numLatex = Expr.innerTermsLatex(node.innerTerms);
+    var activeLatex = node.factorTerms.map(function (t, j) {
+      return '\\htmlId{' + idPrefix + '-' + topIdx + '-inner-' + j + '}{' + Expr.nodeLatex(t, j === 0) + '}';
+    }).join('');
+    var body = '\\frac{' + numLatex + '}{\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{' + activeLatex + '}}';
+    var sign = node.sign < 0 ? '-' : '+';
+    if (isFirst) return (sign === '-' ? '-' : '') + body;
+    return ' ' + sign + ' ' + body;
+  }
+
+  // Variante de drilledQuotientDenominatorLatex utilisée PENDANT un glisser en cours dans le
+  // dénominateur (voir buildInnerDragLatex plus bas) : même principe que
+  // drilledProductBranchLatexForOrder, sur node.factorTerms.
+  function drilledQuotientDenominatorLatexForOrder(node, orderedLeaf, isFirst) {
+    var numLatex = Expr.innerTermsLatex(node.innerTerms);
+    var activeLatex = orderedLeaf.map(function (t, j) {
+      return '\\htmlId{dragpv-' + j + '}{' + Expr.nodeLatex(t, j === 0) + '}';
+    }).join('');
+    var body = '\\frac{' + numLatex + '}{' + activeLatex + '}';
+    var sign = node.sign < 0 ? '-' : '+';
+    if (isFirst) return (sign === '-' ? '-' : '') + body;
+    return ' ' + sign + ' ' + body;
+  }
+
   // Variante de productGroupBranchesLatex utilisée PENDANT un glisser en cours réordonnant
   // les FACTEURS eux-mêmes d'un ProductGroup de PREMIER NIVEAU, PAS drillé (voir
   // setFactorOrder dans history.js et escalateFactorDragToTopLevel plus bas) : chaque
@@ -388,20 +420,41 @@
   // Rend tout un membre en UN SEUL appel KaTeX (espacement natif LaTeX correct), chaque
   // noeud de premier niveau (Term ou groupe factorisé) tagué et cliquable pour la
   // sélection libre (simplifier/factoriser/développer) et/ou le glisser-déposer.
-  // options.drilled : { path, branch, selectedInner:Set, onInnerClick, onExitDrill } — le
-  // groupe à `path` (path[0] = index de premier niveau, path[1..] = descente dans les
-  // innerTerms successifs — jamais utilisé avec `branch`, une seule profondeur là) est
-  // alors rendu via drilledGroupLatex (FactorGroup) ou drilledProductBranchLatex
-  // (ProductGroup + branch), ses termes intérieurs les plus profonds sélectionnables
-  // individuellement, plutôt que comme un bloc opaque.
+  // options.drilled : { path, branch, part, selectedInner:Set, onInnerClick, onExitDrill } —
+  // le groupe à `path` (path[0] = index de premier niveau, path[1..] = descente dans les
+  // innerTerms successifs — jamais utilisé avec `branch`/`part`, une seule profondeur là)
+  // est alors rendu via drilledGroupLatex (FactorGroup), drilledProductBranchLatex
+  // (ProductGroup + branch) ou drilledQuotientDenominatorLatex (fraction + part==='den'),
+  // ses termes intérieurs les plus profonds sélectionnables individuellement, plutôt que
+  // comme un bloc opaque.
   function renderSide(container, side, sideName, idPrefix, options) {
     container.innerHTML = '';
     container.setAttribute('data-side', sideName);
 
     var drilled = options && options.drilled;
 
+    // Un clic visant le dénominateur-expression d'une fraction (\htmlData{fracpart=den},
+    // voir Expr.nodeLatex) devrait normalement se détecter via targetEl.closest — SAUF que
+    // la mise en page \vlist interne de KaTeX pour \frac place parfois, exactement au
+    // centre géométrique du dénominateur, un strut invisible qui n'est PAS un descendant du
+    // marqueur (sert uniquement à l'alignement vertical) et intercepte le point cliqué à sa
+    // place. Repli géométrique : si l'ancêtre direct ne suffit pas, compare les coordonnées
+    // du clic au rectangle réel du marqueur plutôt qu'à la chaîne DOM du point cliqué.
+    function resolveIsDenPart(idx, targetEl, coords) {
+      if (targetEl && targetEl.closest && targetEl.closest('[data-fracpart]')) return true;
+      if (!coords) return false;
+      var termEl = container.querySelector('#' + escId(idPrefix + '-' + idx));
+      var fracEl = termEl && termEl.querySelector('[data-fracpart="den"]');
+      if (!fracEl) return false;
+      var r = fracEl.getBoundingClientRect();
+      return coords.x >= r.left && coords.x <= r.right && coords.y >= r.top && coords.y <= r.bottom;
+    }
+
     var latex = side.map(function (node, idx) {
       if (drilled && drilled.path[0] === idx) {
+        if (drilled.part === 'den') {
+          return drilledQuotientDenominatorLatex(node, idPrefix, idx, idx === 0);
+        }
         if (typeof drilled.branch === 'number') {
           return drilledProductBranchLatex(node, idPrefix, idx, drilled.branch, idx === 0);
         }
@@ -415,7 +468,7 @@
     if (drilled) {
       var leafNode = Expr.nodeAtPath(side, drilled.path);
       var topIdx = drilled.path[0];
-      var innerArr = typeof drilled.branch === 'number' ? leafNode.factors[drilled.branch].terms : leafNode.innerTerms;
+      var innerArr = Expr.drilledWorkingArray(leafNode, drilled);
       // Pendant un glisser à l'intérieur de la parenthèse, on doit reconstruire TOUT le
       // membre (coefficient devant la parenthèse, autres termes de premier niveau...) en
       // UN SEUL appel KaTeX, comme le fait le rendu normal — jamais juste le contenu de la
@@ -431,6 +484,7 @@
       function buildInnerDragLatex(orderedLeaf) {
         return side.map(function (node, idx) {
           if (idx !== topIdx) return Expr.nodeLatex(node, idx === 0);
+          if (drilled.part === 'den') return drilledQuotientDenominatorLatexForOrder(node, orderedLeaf, idx === 0);
           return typeof drilled.branch === 'number'
             ? drilledProductBranchLatexForOrder(node, drilled.branch, orderedLeaf, idx === 0)
             : drilledGroupLatexForOrder(node, drilled.path.slice(1), orderedLeaf, idx === 0);
@@ -573,11 +627,13 @@
         el.classList.add('draggable-term', 'selectable');
         el.setAttribute('data-drag-id', String(idx));
         attachPointerDrag(el, container, side, topLevelDragCtx, idx,
-          options.onTermClick ? function (targetEl) { options.onTermClick(sideName, idx, targetEl); } : null);
+          options.onTermClick ? function (targetEl, coords) {
+            options.onTermClick(sideName, idx, targetEl, resolveIsDenPart(idx, targetEl, coords));
+          } : null);
       } else if (options.selectable) {
         el.classList.add('selectable');
         el.addEventListener('click', function (e) {
-          options.onTermClick(sideName, idx, e.target);
+          options.onTermClick(sideName, idx, e.target, resolveIsDenPart(idx, e.target, { x: e.clientX, y: e.clientY }));
         });
       }
       // Entrer dans le groupe factorisé (s'il en est un) sur un double-clic se décide par
@@ -619,10 +675,11 @@
       e.stopPropagation();
       var startX = e.clientX, startY = e.clientY;
       // Élément DOM précis sous le curseur AU MOMENT du clic (avant que KaTeX/le DOM ne
-      // bouge) — transmis à `onClick` pour, ex., distinguer laquelle des deux parenthèses
-      // d'un ProductGroup a été visée (voir productGroupBranchesLatex/data-branch et
-      // selectDragOptions plus haut) : ce clic n'utilise jamais l'évènement DOM natif
-      // 'click' (voir onUp ci-dessous), donc rien d'autre ne donnerait cette info.
+      // bouge) — transmis à `onClick` (avec les coordonnées, voir onUp) pour, ex.,
+      // distinguer laquelle des deux parenthèses d'un ProductGroup a été visée (voir
+      // productGroupBranchesLatex/data-branch et selectDragOptions plus haut) : ce clic
+      // n'utilise jamais l'évènement DOM natif 'click' (voir onUp ci-dessous), donc rien
+      // d'autre ne donnerait cette info.
       var mousedownTarget = e.target;
       var moved = false;
 
@@ -640,7 +697,7 @@
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         if (moved) endTermDrag();
-        else if (onClick) onClick(mousedownTarget);
+        else if (onClick) onClick(mousedownTarget, { x: startX, y: startY });
       }
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
@@ -996,6 +1053,7 @@
         drilledOpt = {
           path: pending.drilled.path,
           branch: pending.drilled.branch,
+          part: pending.drilled.part,
           selectedInner: new Set(pending.selectedInner),
           draggable: innerDraggable,
           onInnerClick: function (innerIdx) {
@@ -1030,16 +1088,19 @@
         selected: selected,
         drilled: drilledOpt,
         selectedFactors: selectedFactorsOpt,
-        onTermClick: function (side, idx, targetEl) {
+        onTermClick: function (side, idx, targetEl, isDenPart) {
           if (opts.onBeforeAction) opts.onBeforeAction();
-          // Le double-clic (entrer dans le groupe, ou dans UNE branche précise d'un
-          // ProductGroup) est détecté par mesure de temps DANS toggleTermSelection
-          // elle-même (voir consumeDoubleClick dans history.js), pas ici. `targetEl` :
-          // l'élément DOM réellement cliqué (voir attachPointerDrag) — sert uniquement à
-          // repérer, pour un ProductGroup, dans laquelle des deux parenthèses (data-branch,
-          // voir productGroupBranchesLatex) le clic a physiquement atterri.
+          // Le double-clic (entrer dans le groupe, dans UNE branche précise d'un
+          // ProductGroup, ou dans le dénominateur-expression d'une fraction) est détecté
+          // par mesure de temps DANS toggleTermSelection elle-même (voir consumeDoubleClick
+          // dans history.js), pas ici. `targetEl` : l'élément DOM réellement cliqué (voir
+          // attachPointerDrag) — sert à repérer, pour un ProductGroup, dans laquelle des
+          // parenthèses (data-branch, voir productGroupBranchesLatex) le clic a atterri.
+          // `isDenPart` (déjà résolu par resolveIsDenPart dans renderSide, avec repli
+          // géométrique — un strut interne de \frac peut intercepter targetEl) : s'il a
+          // atterri dans le dénominateur d'une fraction.
           var branchSpan = targetEl && targetEl.closest && targetEl.closest('[data-branch]');
-          engine.toggleTermSelection(side, idx, branchSpan ? parseInt(branchSpan.getAttribute('data-branch'), 10) : null);
+          engine.toggleTermSelection(side, idx, branchSpan ? parseInt(branchSpan.getAttribute('data-branch'), 10) : null, isDenPart);
         }
       };
     }

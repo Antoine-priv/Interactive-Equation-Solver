@@ -8,11 +8,17 @@
                    d'un autre degré, voir factorRemarkableIdentityChoice/detectSquareRoot
                    dans history.js) — ce ne sont pas des limites du modèle de données.
    FactorGroup = { sign: 1|-1, factor: { coeff:number, pow:0|1|2 }, innerTerms: Node[],
-                   isDivision?: boolean }
+                   isDivision?: boolean, factorTerms?: Node[] }
    isDivision distingue "k(...)"  (multiplication, défaut) de "(...)/k" (division, affichée
    en fraction) : même structure, juste un mode de rendu et de calcul différent. `factor`
    reste un simple nombre (pow 0) en pratique — c'est le facteur commun/diviseur, jamais un
-   terme en x.
+   terme en x — SAUF quand `isDivision` ET `factorTerms` sont tous deux présents : le
+   dénominateur est alors une expression quelconque (ex. "(...)/(x+5)", voir
+   wrapSideInQuotient et isExpressionQuotient), `factorTerms` remplaçant entièrement
+   `factor` (les deux sont mutuellement exclusifs, jamais renseignés ensemble). Ce cas ne
+   peut être produit QUE par l'opération "÷" du pavé "Opération" sur un opérande qui n'est
+   pas un simple nombre — jamais par la saisie manuelle d'une équation (voir parser.js, dont
+   \frac{a}{b} exige toujours un `b` numérique).
    ProductGroup = { sign: 1|-1, factors: Array<{ terms: Node[], exponent: number }> }
    Représente le produit de N facteurs, ex. "(x+2)(x+3)" = 2 facteurs d'exposant 1 chacun,
    "(x+3)²" = UN SEUL facteur d'exposant 2 (pas deux facteurs identiques dupliqués — un
@@ -47,6 +53,16 @@
   // directement, il faut d'abord le développer.
   function isGroup(node) {
     return isFactorGroup(node) || isProductGroup(node);
+  }
+
+  // Une division par une EXPRESSION (ex. "(...)/(x+5)", voir wrapSideInQuotient), pas par
+  // un simple nombre : `factor` (un Term) est alors absent, remplacé par `factorTerms` (un
+  // Side). Utilisé pour EXCLURE ce cas des chemins qui supposent `factor` numérique
+  // (expandFactorGroup/expandOneInner, "Développer" un groupe entier) — la division ne se
+  // distribue pas sur ce genre de dénominateur, voir le commentaire de modèle de données en
+  // tête de fichier.
+  function isExpressionQuotient(node) {
+    return isFactorGroup(node) && !!node.isDivision && !!node.factorTerms;
   }
 
   // Un membre dépend-il de x (au moins un terme de degré >= 1, à n'importe quelle
@@ -84,11 +100,13 @@
       return { sign: node.sign, factors: node.factors.map(cloneFactor) };
     }
     if (isFactorGroup(node)) {
-      var cloned = {
-        sign: node.sign,
-        factor: cloneTerm(node.factor),
-        innerTerms: node.innerTerms.map(cloneNode)
-      };
+      // Ordre des clés préservé (sign, factor[Terms], innerTerms, isDivision) : plusieurs
+      // tests comparent des équations via JSON.stringify(...) === JSON.stringify(...),
+      // sensible à l'ordre d'insertion des propriétés.
+      var cloned = { sign: node.sign };
+      if (node.factorTerms) cloned.factorTerms = node.factorTerms.map(cloneNode);
+      else cloned.factor = cloneTerm(node.factor);
+      cloned.innerTerms = node.innerTerms.map(cloneNode);
       if (node.isDivision) cloned.isDivision = true;
       return cloned;
     }
@@ -221,7 +239,14 @@
     if (isFactorGroup(node)) {
       var body;
       if (node.isDivision) {
-        body = '\\frac{' + innerTermsLatex(node.innerTerms) + '}{' + termLatexBody(node.factor) + '}';
+        // Dénominateur-EXPRESSION (factorTerms, voir isExpressionQuotient) : marqué
+        // \htmlData{fracpart=den} pour que le clic qui y atterrit soit distingué de celui
+        // dans le numérateur (voir drillIntoQuotientDenominator/onTermClick) — un
+        // dénominateur numérique classique (`factor`) n'est, lui, jamais "entrable".
+        var denomLatex = node.factorTerms
+          ? '\\htmlData{fracpart=den}{' + innerTermsLatex(node.factorTerms) + '}'
+          : termLatexBody(node.factor);
+        body = '\\frac{' + innerTermsLatex(node.innerTerms) + '}{' + denomLatex + '}';
       } else {
         // factor === null : aperçu "en direct" avant saisie du facteur commun, comme si
         // c'était 1 (donc pas de chiffre affiché du tout devant la parenthèse).
@@ -284,6 +309,19 @@
     }
     if (isFactorGroup(node)) {
       if (node.isDivision) {
+        // Dénominateur-EXPRESSION (factorTerms, voir isExpressionQuotient) : pas de
+        // `factor` numérique à diviser ici — un multiplicateur/diviseur numérique scale le
+        // NUMÉRATEUR à la place (ex. "(N/(x+5))×3" = "(3N)/(x+5)", "(N/(x+5))÷2" =
+        // "(N/2)/(x+5)" — voir wrapSideInFraction/wrapSideInFactor, qui délèguent tous deux
+        // ici pour un membre à un seul noeud).
+        if (node.factorTerms) {
+          return {
+            sign: node.sign,
+            factorTerms: node.factorTerms.map(cloneNode),
+            innerTerms: node.innerTerms.map(function (t) { return scaleNode(t, factor); }),
+            isDivision: true
+          };
+        }
         return {
           sign: node.sign,
           factor: { coeff: roundClean(node.factor.coeff / factor), pow: node.factor.pow },
@@ -348,6 +386,52 @@
     }];
   }
 
+  // Divise le membre entier par une EXPRESSION (ex. "÷(x+5)", voir classifyMulDivOperand
+  // dans history.js). Contrairement à wrapSideInFraction (diviseur numérique, toujours
+  // enveloppé si plusieurs termes), on tente d'abord d'ANNULER la division quand ce
+  // dénominateur est déjà, structurellement (voir sidesEquivalent), un facteur du membre —
+  // exactement ce qu'un élève ferait à la main — plutôt que d'empiler une fraction dessus :
+  // 1) le membre est déjà UNE fraction avec CE MÊME dénominateur -> ressort le numérateur ;
+  // 2) le membre est un ProductGroup dont un facteur (exposant 1) vaut CE dénominateur ->
+  //    retire ce facteur (s'effondre en simple Side si un seul facteur d'exposant 1 reste) ;
+  // 3) le membre est "k(...)" (multiplication, pas une division) dont l'intérieur vaut CE
+  //    dénominateur -> ne reste que "k". Sinon (cas par défaut), le membre entier devient le
+  // numérateur d'une nouvelle fraction, son dénominateur restant une expression à part
+  // entière (voir isExpressionQuotient) — ni distribué, ni développable comme un tout (voir
+  // computeExpandTargets), mais numérateur ET dénominateur restent chacun librement
+  // manipulables via pending.drilled (part 'den' pour le second, voir history.js).
+  function wrapSideInQuotient(side, divisorTerms) {
+    function foldSign(sign, terms) {
+      return sign < 0 ? terms.map(function (t) { return scaleNode(t, -1); }) : cloneSide(terms);
+    }
+    if (side.length === 1) {
+      var node = side[0];
+      if (isExpressionQuotient(node) && sidesEquivalent(node.factorTerms, divisorTerms)) {
+        return foldSign(node.sign, node.innerTerms);
+      }
+      if (isProductGroup(node)) {
+        var matchIdx = -1;
+        for (var i = 0; i < node.factors.length; i++) {
+          if (node.factors[i].exponent === 1 && sidesEquivalent(node.factors[i].terms, divisorTerms)) {
+            matchIdx = i;
+            break;
+          }
+        }
+        if (matchIdx !== -1) {
+          var remaining = node.factors.filter(function (_, fi) { return fi !== matchIdx; }).map(cloneFactor);
+          if (remaining.length === 1 && remaining[0].exponent === 1) {
+            return foldSign(node.sign, remaining[0].terms);
+          }
+          return [{ sign: node.sign, factors: remaining }];
+        }
+      }
+      if (isFactorGroup(node) && !node.isDivision && sidesEquivalent(node.innerTerms, divisorTerms)) {
+        return [{ coeff: node.sign * node.factor.coeff, pow: node.factor.pow }];
+      }
+    }
+    return [{ sign: 1, factorTerms: cloneSide(divisorTerms), innerTerms: cloneSide(side), isDivision: true }];
+  }
+
   // Fusionne dans `factors` toute paire de facteurs structurellement équivalents (voir
   // sidesEquivalent, plus bas dans ce fichier — accessible ici grâce au hoisting des
   // déclarations de fonction) en un seul, exposant additionné : "(x+2)(x+2)" doit produire
@@ -404,6 +488,16 @@
   // ProductGroup imbriqué dans un autre — voir operandFactors ci-dessus, appliqué aux DEUX
   // côtés (le membre courant ET le multiplicateur) de façon symétrique.
   function wrapSideInProduct(side, multiplierTerms) {
+    // Annule une division PAR CETTE MÊME expression plutôt que de multiplier dessus (ex.
+    // "÷(x+5)" puis "×(x+5)" redonne exactement le membre de départ) — voir
+    // wrapSideInQuotient, dont ceci est le symétrique. Un ProductGroup/FactorGroup
+    // classique, lui, ne s'annule JAMAIS en multipliant (canonicalizeFactors se contente
+    // d'augmenter l'exposant du facteur déjà présent, ce qui reste mathématiquement correct
+    // pour une multiplication).
+    if (side.length === 1 && isExpressionQuotient(side[0]) && sidesEquivalent(side[0].factorTerms, multiplierTerms)) {
+      var q = side[0];
+      return q.sign < 0 ? q.innerTerms.map(function (t) { return scaleNode(t, -1); }) : cloneSide(q.innerTerms);
+    }
     var base = operandFactors(side);
     var add = operandFactors(multiplierTerms);
     return [{ sign: base.sign * add.sign, factors: canonicalizeFactors(base.factors.concat(add.factors)) }];
@@ -1029,22 +1123,62 @@
   // factoriser/simplifier À L'INTÉRIEUR d'un groupe déjà factorisé, lui-même
   // potentiellement à l'intérieur d'un autre (voir "drilled" dans history.js).
   function withGroupInnerTermsAtPath(side, path, newInnerTerms) {
+    // Ordre des clés préservé (sign, factor[Terms], innerTerms, isDivision) : plusieurs
+    // tests comparent des équations via JSON.stringify(...) === JSON.stringify(...),
+    // sensible à l'ordre d'insertion des propriétés.
+    function withOuterFields(node, innerTerms) {
+      var out = { sign: node.sign };
+      if (node.factorTerms) out.factorTerms = node.factorTerms.map(cloneNode);
+      else out.factor = cloneTerm(node.factor);
+      out.innerTerms = innerTerms;
+      if (node.isDivision) out.isDivision = true;
+      return out;
+    }
     function recur(node, restPath) {
       if (restPath.length === 0) {
-        var out = { sign: node.sign, factor: cloneTerm(node.factor), innerTerms: newInnerTerms };
-        if (node.isDivision) out.isDivision = true;
-        return out;
+        return withOuterFields(node, newInnerTerms);
       }
       var newInner = node.innerTerms.map(function (t, i) {
         return i === restPath[0] ? recur(t, restPath.slice(1)) : cloneNode(t);
       });
-      var out2 = { sign: node.sign, factor: cloneTerm(node.factor), innerTerms: newInner };
-      if (node.isDivision) out2.isDivision = true;
-      return out2;
+      return withOuterFields(node, newInner);
     }
     return side.map(function (n, i) {
       return i === path[0] ? recur(n, path.slice(1)) : cloneNode(n);
     });
+  }
+
+  // Remplace le dénominateur-EXPRESSION (factorTerms) du FactorGroup situé à `path` — path
+  // toujours de longueur 1 ici (voir pending.drilled.part==='den' dans history.js : une
+  // seule profondeur, comme withProductBranchAtPath pour une branche de ProductGroup,
+  // jamais imbriqué plus loin qu'un cran).
+  function withQuotientDenominatorAtPath(side, path, newDenominatorTerms) {
+    return side.map(function (n, i) {
+      if (i !== path[0]) return cloneNode(n);
+      return { sign: n.sign, factorTerms: newDenominatorTerms.map(cloneNode), innerTerms: n.innerTerms.map(cloneNode), isDivision: true };
+    });
+  }
+
+  // Résout, pour un `pending.drilled` (history.js) donné, quel tableau de Node[] est
+  // actuellement "en cours d'édition" une fois `groupNode` déjà résolu via nodeAtPath :
+  // l'intérieur d'un FactorGroup classique (innerTerms, cas normal), les termes d'UNE
+  // branche de ProductGroup (d.branch, voir withProductBranchAtPath), ou le dénominateur-
+  // expression d'une fraction (d.part==='den', voir withQuotientDenominatorAtPath) — les
+  // trois se comportent identiquement pour Simplifier/Factoriser/Développer/le
+  // glisser-déposer (voir history.js ET toolbar.js, qui utilisent tous deux ceci), seule
+  // la façon de RECONSTITUER le membre ensuite diffère (voir withDrilledArrayAtPath).
+  function drilledWorkingArray(groupNode, d) {
+    if (d.part === 'den') return groupNode.factorTerms;
+    if (typeof d.branch === 'number') return groupNode.factors[d.branch].terms;
+    return groupNode.innerTerms;
+  }
+
+  // Symétrique de drilledWorkingArray : reconstruit `side` avec `newArray` remis à sa place
+  // (path/branch-ou-part de `d`).
+  function withDrilledArrayAtPath(side, d, newArray) {
+    if (d.part === 'den') return withQuotientDenominatorAtPath(side, d.path, newArray);
+    if (typeof d.branch === 'number') return withProductBranchAtPath(side, d.path, d.branch, newArray);
+    return withGroupInnerTermsAtPath(side, d.path, newArray);
   }
 
   // Remplace les termes du facteur d'INDICE `branch` du ProductGroup situé à `path`
@@ -1069,6 +1203,7 @@
     isProductGroup: isProductGroup,
     isSquareFactorGroup: isSquareFactorGroup,
     isGroup: isGroup,
+    isExpressionQuotient: isExpressionQuotient,
     sideHasVariable: sideHasVariable,
     wrapSideInProduct: wrapSideInProduct,
     canonicalizeFactors: canonicalizeFactors,
@@ -1106,6 +1241,10 @@
     flattenProductFactors: flattenProductFactors,
     sidesEquivalent: sidesEquivalent,
     nodeAtPath: nodeAtPath,
-    withGroupInnerTermsAtPath: withGroupInnerTermsAtPath
+    withGroupInnerTermsAtPath: withGroupInnerTermsAtPath,
+    withQuotientDenominatorAtPath: withQuotientDenominatorAtPath,
+    wrapSideInQuotient: wrapSideInQuotient,
+    drilledWorkingArray: drilledWorkingArray,
+    withDrilledArrayAtPath: withDrilledArrayAtPath
   };
 })(window.App = window.App || {});

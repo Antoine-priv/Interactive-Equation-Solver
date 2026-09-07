@@ -45,8 +45,15 @@ Each `.js` file is independently runnable (`node tests/<name>.js`) for faster it
 Equations are `{ left: Side, right: Side }`. A `Side` is `Array<Node>`. A `Node` is one of:
 
 - `Term = { coeff: number, pow: number }` — a monomial (`pow` 0 = constant, 1 = `x`, 2 = `x²`, ... — **not capped**).
-- `FactorGroup = { sign: 1|-1, factor: Term, innerTerms: Node[], isDivision?: boolean }` —
-  represents `factor·(innerTerms)`, or `(innerTerms)/factor` when `isDivision` is set.
+- `FactorGroup = { sign: 1|-1, factor: Term, innerTerms: Node[], isDivision?: boolean, factorTerms?: Node[] }` —
+  represents `factor·(innerTerms)`, or `(innerTerms)/factor` when `isDivision` is set. When
+  the divisor is an expression rather than a number (only ever produced by "÷" in the
+  Opération chain, e.g. `÷(x+5)`), `factorTerms` (a `Side`) replaces `factor` entirely — see
+  `Expr.isExpressionQuotient`/`wrapSideInQuotient`. Such a quotient is excluded from
+  "Développer" as a whole, but both its numerator and its expression-denominator remain
+  independently drillable/simplifiable/factorable/expandable (`pending.drilled.part ===
+  'den'` for the denominator, mirroring `pending.drilled.branch` for a ProductGroup factor —
+  see `Expr.drilledWorkingArray`/`withDrilledArrayAtPath`).
 - `ProductGroup = { sign: 1|-1, factors: Array<{ terms: Node[], exponent: number }> }` —
   represents a product of N factors, e.g. `(x+2)(x+3)` is 2 factors of exponent 1 each;
   `(x+3)²` is a SINGLE factor of exponent 2.

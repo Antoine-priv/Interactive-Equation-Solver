@@ -217,7 +217,7 @@
     // réellement ciblé, "data-branch", jamais depuis le geste lui-même) ; sans incidence
     // sur un simple clic (toggle normal), ni sur un FactorGroup (une seule innerTerms,
     // aucune ambiguïté).
-    function toggleTermSelection(side, index, branchHint) {
+    function toggleTermSelection(side, index, branchHint, isDenPart) {
       if (pending.opType !== null && pending.opType !== 'factor') return;
       // Le membre où l'on est "entré" (pending.drilled.side) n'est plus cliquable à son
       // premier niveau (voir render.js) : ce cas ne devrait donc pas se produire, gardé
@@ -263,6 +263,15 @@
       else arr.splice(i, 1);
       pending.error = null;
       if (isDouble) {
+        // Double-clic visant précisément le dénominateur-expression d'une fraction (voir
+        // \htmlData{fracpart=den} dans Expr.nodeLatex et sa détection dans onTermClick,
+        // render.js) : entre DANS ce dénominateur plutôt que dans le numérateur (le
+        // comportement par défaut de isFactorGroup ci-dessous, qui reste celui d'un
+        // double-clic ailleurs sur la même fraction).
+        if (isDenPart && node && Expr.isExpressionQuotient(node)) {
+          drillIntoQuotientDenominator(side, index);
+          return;
+        }
         if (node && Expr.isFactorGroup(node)) {
           drillIntoGroup(side, index);
           return; // drillIntoGroup appelle déjà notify()
@@ -351,6 +360,37 @@
       notify();
     }
 
+    // Même principe, pour le DÉNOMINATEUR d'une fraction dont le diviseur est une
+    // expression (ex. "(...)/(x+5)", voir isExpressionQuotient/wrapSideInQuotient dans
+    // expression.js) — ex. double-clic sur "(x+5)" dans "\frac{...}{x+5}" (voir
+    // \htmlData{fracpart=den} dans nodeLatex et sa détection dans onTermClick/render.js).
+    // Même restriction qu'une branche de ProductGroup : une seule profondeur, jamais
+    // imbriquée plus loin (voir toggleInnerSelection).
+    function drillIntoQuotientDenominator(side, index) {
+      if (pending.opType !== null) return;
+      if (pending.drilled) return;
+      var node = lastEquation()[side][index];
+      if (!node || !Expr.isExpressionQuotient(node)) return;
+      var arr = side === 'left' ? pending.selectedLeft : pending.selectedRight;
+      var i = arr.indexOf(index);
+      if (i !== -1) arr.splice(i, 1);
+      pending.drilled = { side: side, path: [index], part: 'den' };
+      pending.selectedInner = [];
+      pending.selectedFactors[side] = null;
+      pending.error = null;
+      notify();
+    }
+
+    // Reconstruit l'équation avec `newArray` remis à sa place pour ce `pending.drilled`
+    // (voir Expr.drilledWorkingArray/withDrilledArrayAtPath — partagés avec toolbar.js —
+    // pour la résolution du tableau Node[] correspondant : intérieur d'un FactorGroup
+    // classique, branche de ProductGroup, ou dénominateur-expression d'une fraction).
+    function applyDrilledArray(eq, d, newArray) {
+      var out = Eq.cloneEquation(eq);
+      out[d.side] = Expr.withDrilledArrayAtPath(eq[d.side], d, newArray);
+      return out;
+    }
+
     // Sélectionne/désélectionne un terme À L'INTÉRIEUR du groupe dans lequel on est
     // "entré" (voir toggleTermSelection/drillIntoGroup ci-dessus et pending.drilled).
     // Simple bascule — descendre encore d'un niveau se fait par double-clic (voir
@@ -364,11 +404,12 @@
       else pending.selectedInner.splice(i, 1);
       pending.error = null;
       // Descendre encore d'un niveau (drillIntoInnerGroup) suppose un FactorGroup — une
-      // branche de ProductGroup (pending.drilled.branch) est toujours une profondeur
-      // terminale (voir drillIntoProductBranch), ses termes sont supposés plats.
-      if (isDouble && typeof pending.drilled.branch !== 'number') {
+      // branche de ProductGroup (pending.drilled.branch) OU un dénominateur-expression
+      // (pending.drilled.part==='den', voir drillIntoQuotientDenominator) sont toujours une
+      // profondeur terminale, leurs termes sont supposés plats.
+      if (isDouble && typeof pending.drilled.branch !== 'number' && pending.drilled.part !== 'den') {
         var currentNode = Expr.nodeAtPath(lastEquation()[pending.drilled.side], pending.drilled.path);
-        var innerNode = currentNode && currentNode.innerTerms[innerIndex];
+        var innerNode = currentNode && Expr.drilledWorkingArray(currentNode, pending.drilled)[innerIndex];
         if (innerNode && Expr.isFactorGroup(innerNode)) {
           drillIntoInnerGroup(innerIndex);
           return; // drillIntoInnerGroup appelle déjà notify()
@@ -384,7 +425,7 @@
       if (!pending.drilled) return;
       if (pending.opType !== null) return;
       var currentNode = Expr.nodeAtPath(lastEquation()[pending.drilled.side], pending.drilled.path);
-      var innerNode = currentNode && currentNode.innerTerms[innerIndex];
+      var innerNode = currentNode && Expr.drilledWorkingArray(currentNode, pending.drilled)[innerIndex];
       if (!innerNode || !Expr.isFactorGroup(innerNode)) return;
       var i = pending.selectedInner.indexOf(innerIndex);
       if (i !== -1) pending.selectedInner.splice(i, 1);
@@ -424,33 +465,17 @@
         var d = pending.drilled;
         var groupNode = Expr.nodeAtPath(eq[d.side], d.path);
         if (!groupNode) return null;
-        // Branche d'un ProductGroup (ex. "(x+2-3)" dans "(x+2-3)(x+2+3)", voir
-        // drillIntoProductBranch) : même principe qu'un FactorGroup ci-dessous, mais
-        // l'array cible est factors[d.branch].terms et la reconstitution passe par
-        // withProductBranchAtPath plutôt que withGroupInnerTermsAtPath.
-        if (typeof d.branch === 'number') {
-          if (!Expr.isProductGroup(groupNode)) return null;
-          return {
-            side: d.side,
-            array: groupNode.factors[d.branch].terms,
-            indices: pending.selectedInner,
-            apply: function (newArray) {
-              var out = Eq.cloneEquation(eq);
-              out[d.side] = Expr.withProductBranchAtPath(eq[d.side], d.path, d.branch, newArray);
-              return out;
-            }
-          };
-        }
-        if (!Expr.isFactorGroup(groupNode)) return null;
+        // Branche d'un ProductGroup, dénominateur-expression d'une fraction, ou intérieur
+        // d'un FactorGroup classique (voir drilledWorkingArray/applyDrilledArray) : même
+        // tableau Node[] dans les trois cas, seule la reconstitution ensuite diffère.
+        if (typeof d.branch === 'number' && !Expr.isProductGroup(groupNode)) return null;
+        if (d.part === 'den' && !Expr.isExpressionQuotient(groupNode)) return null;
+        if (!d.part && typeof d.branch !== 'number' && !Expr.isFactorGroup(groupNode)) return null;
         return {
           side: d.side,
-          array: groupNode.innerTerms,
+          array: Expr.drilledWorkingArray(groupNode, d),
           indices: pending.selectedInner,
-          apply: function (newArray) {
-            var out = Eq.cloneEquation(eq);
-            out[d.side] = Expr.withGroupInnerTermsAtPath(eq[d.side], d.path, newArray);
-            return out;
-          }
+          apply: function (newArray) { return applyDrilledArray(eq, d, newArray); }
         };
       }
       var side = pending.selectedLeft.length > 0 ? 'left' : (pending.selectedRight.length > 0 ? 'right' : null);
@@ -589,13 +614,17 @@
         var sD = raw;
         var negD = false;
         if (sD.charAt(0) === '-') { negD = true; sD = sD.slice(1); }
-        if (!/^[0-9]+(?:[.,][0-9]+)?$/.test(sD)) {
-          throw new Error('Division seulement par un nombre (pas par x).');
+        if (/^[0-9]+(?:[.,][0-9]+)?$/.test(sD)) {
+          var value = parseFloat(sD.replace(',', '.'));
+          if (negD) value = -value;
+          if (Expr.roundClean(value) === 0) throw new Error('Division par zéro impossible.');
+          return { symbol: '÷', factor: 1 / value, rawValue: value };
         }
-        var value = parseFloat(sD.replace(',', '.'));
-        if (negD) value = -value;
-        if (Expr.roundClean(value) === 0) throw new Error('Division par zéro impossible.');
-        return { symbol: '÷', factor: 1 / value, rawValue: value };
+        // Pas un nombre nu : diviser par une EXPRESSION (ex. "÷(x+5)") tombe dans le même
+        // parsing générique que "×" ci-dessous (voir wrapSideInQuotient/Eq.applyOpSequence)
+        // — plus de restriction "division seulement par un nombre" : le risque (dénominateur
+        // pouvant s'annuler) est signalé sur l'étiquette de flèche, voir isZeroRiskOp
+        // dans render.js.
       }
       var s = raw;
       var negate = false;
@@ -603,11 +632,13 @@
       if (s === '') throw new Error('Saisissez une valeur.');
       // Un simple nombre nu reste un facteur scalaire "classique" (distribué terme à
       // terme via wrapSideInFactor, voir Eq.applyOpSequence), jamais enveloppé dans un
-      // ProductGroup — exactement comme avant.
+      // ProductGroup — exactement comme avant. Pour "÷", ce cas est déjà couvert par le
+      // test numérique ci-dessus (donc jamais atteint ici) ; `symbol` (pas '×' en dur)
+      // reste correct si cette fonction change un jour d'ordre d'appel.
       if (/^[0-9]+(?:[.,][0-9]+)?$/.test(s)) {
         var xVal = parseFloat(s.replace(',', '.'));
         if (negate) xVal = -xVal;
-        return { symbol: '×', factor: xVal, rawValue: xVal };
+        return { symbol: symbol, factor: xVal, rawValue: xVal };
       }
       // Cas particulier : une SEULE parenthèse nue, sans coefficient devant ni "^N"/"²"
       // derrière (ex. "(5+2x)") — un opérande de multiplication tout à fait normal ("×
@@ -627,16 +658,17 @@
           if (!bareInner) throw new Error('Parenthèses vides.');
           var bareTerms = App.Parser.parseSide(bareInner);
           if (negate) bareTerms = negateTerms(bareTerms);
-          return { symbol: '×', terms: bareTerms };
+          return { symbol: symbol, terms: bareTerms };
         }
       }
       // Tout le reste (x, x^N, N(...), (...)(...) ..., (...)^N, N(...)(...)^N chaîné...) :
       // délègue entièrement au même parseur que la saisie manuelle d'équation, réutilisé
       // ici pour UN opérande isolé — déjà généralisé aux produits N-aires et aux exposants
-      // quelconques (voir parser.js), pas de logique dupliquée à maintenir ici.
+      // quelconques (voir parser.js), pas de logique dupliquée à maintenir ici. Partagé
+      // entre "×" et "÷" (voir ci-dessus) : `symbol` porte lequel des deux appelle.
       var terms = App.Parser.parseSide(s);
       if (negate) terms = negateTerms(terms);
-      return { symbol: '×', terms: terms };
+      return { symbol: symbol, terms: terms };
     }
 
     // Classe un opérande "+"/"-" : soit un simple terme signé (nombre, x, "Nx^N", "x^N"),
@@ -984,8 +1016,9 @@
         var otherIndices = otherSide === 'left' ? pending.selectedLeft : pending.selectedRight;
         var groupNode = Expr.nodeAtPath(eq[d.side], d.path);
         var isBranch = typeof d.branch === 'number' && groupNode && Expr.isProductGroup(groupNode);
-        if (!groupNode || (!isBranch && !Expr.isFactorGroup(groupNode))) return false;
-        var innerArr = isBranch ? groupNode.factors[d.branch].terms : groupNode.innerTerms;
+        var isDen = d.part === 'den' && groupNode && Expr.isExpressionQuotient(groupNode);
+        if (!groupNode || (!isBranch && !isDen && !Expr.isFactorGroup(groupNode))) return false;
+        var innerArr = Expr.drilledWorkingArray(groupNode, d);
         var innerOk = pending.selectedInner.length >= 2;
         var otherOk = otherIndices.length >= 2;
         if (!innerOk && !otherOk) return false;
@@ -1000,9 +1033,7 @@
           }
           var selectedTerms = pending.selectedInner.slice().sort(function (a, b) { return a - b; })
             .map(function (i) { return innerArr[i]; });
-          outD[d.side] = isBranch
-            ? Expr.withProductBranchAtPath(eq[d.side], d.path, d.branch, newInner)
-            : Expr.withGroupInnerTermsAtPath(eq[d.side], d.path, newInner);
+          outD[d.side] = applyDrilledArray(eq, d, newInner)[d.side];
           innerOpDesc = { type: 'simplify', terms: selectedTerms };
         }
         // L'autre membre se simplifie indépendamment, dans la MÊME étape (voir
@@ -1205,7 +1236,15 @@
         var arr = side === 'left' ? p.selectedLeft : p.selectedRight;
         arr.forEach(function (idx) {
           var node = eq[side][idx];
-          if (node && Expr.isGroup(node)) targets.push({ side: side, index: idx, kind: 'full', node: node });
+          // Une fraction dont le dénominateur est une expression (isExpressionQuotient) ne
+          // se développe pas "en entier" (distribuer la division sur chaque terme du
+          // numérateur répéterait juste le même dénominateur, voir wrapSideInQuotient) —
+          // son numérateur ET son dénominateur restent chacun développables séparément en
+          // "entrant" dedans (pending.drilled), pas via cette sélection libre au premier
+          // niveau.
+          if (node && Expr.isGroup(node) && !Expr.isExpressionQuotient(node)) {
+            targets.push({ side: side, index: idx, kind: 'full', node: node });
+          }
         });
       });
       return targets;
@@ -1268,23 +1307,29 @@
       if (pending.drilled) {
         var d = pending.drilled;
         var groupNode = Expr.nodeAtPath(eq[d.side], d.path);
-        if (!groupNode || !Expr.isFactorGroup(groupNode) || pending.selectedInner.length !== 1) return false;
+        // Une branche de ProductGroup (d.branch) n'atteint jamais ce cas : `groupNode` y est
+        // un ProductGroup, jamais un FactorGroup (voir isFactorGroup) — exclue naturellement
+        // ci-dessous, exactement comme avant. Le dénominateur-expression (d.part==='den'),
+        // lui, EST un FactorGroup : ajouté explicitement.
+        var isDenExp = d.part === 'den' && groupNode && Expr.isExpressionQuotient(groupNode);
+        if (!groupNode || (!isDenExp && !Expr.isFactorGroup(groupNode)) || pending.selectedInner.length !== 1) return false;
         var targetIdx = pending.selectedInner[0];
-        var targetNode = groupNode.innerTerms[targetIdx];
+        var drilledArr = Expr.drilledWorkingArray(groupNode, d);
+        var targetNode = drilledArr[targetIdx];
         if (!targetNode || !Expr.isGroup(targetNode)) return false;
         var newInnerD, descD;
         try {
           if (Expr.isProductGroup(targetNode)) {
             var expandedTermsD = Expr.expandProductGroup(targetNode);
             newInnerD = [];
-            groupNode.innerTerms.forEach(function (t, i) {
+            drilledArr.forEach(function (t, i) {
               if (i === targetIdx) expandedTermsD.forEach(function (e) { newInnerD.push(e); });
               else newInnerD.push(Expr.cloneNode(t));
             });
             descD = fullExpandProductDesc(targetNode);
           } else {
             var allInnerIdx = targetNode.innerTerms.map(function (_, i) { return i; });
-            newInnerD = Expr.expandFactorGroup(groupNode.innerTerms, targetIdx, allInnerIdx);
+            newInnerD = Expr.expandFactorGroup(drilledArr, targetIdx, allInnerIdx);
             descD = fullExpandDesc(targetNode);
           }
         } catch (eExp) {
@@ -1292,8 +1337,7 @@
           notify();
           return false;
         }
-        var outExpD = Eq.cloneEquation(eq);
-        outExpD[d.side] = Expr.withGroupInnerTermsAtPath(eq[d.side], d.path, newInnerD);
+        var outExpD = applyDrilledArray(eq, d, newInnerD);
         var stepExpD = { equation: outExpD, opLeft: null, opRight: null };
         stepExpD[d.side === 'left' ? 'opLeft' : 'opRight'] = descD;
         steps.push(stepExpD);
@@ -1331,34 +1375,35 @@
           var dPrev = p.drilled;
           var groupNodePrev = Expr.nodeAtPath(last[dPrev.side], dPrev.path);
           var isBranchPrev = typeof dPrev.branch === 'number' && groupNodePrev && Expr.isProductGroup(groupNodePrev);
-          if (!groupNodePrev || (!isBranchPrev && !Expr.isFactorGroup(groupNodePrev))) {
+          var isDenPrev = dPrev.part === 'den' && groupNodePrev && Expr.isExpressionQuotient(groupNodePrev);
+          if (!groupNodePrev || (!isBranchPrev && !isDenPrev && !Expr.isFactorGroup(groupNodePrev))) {
             return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
           }
-          var innerArrPrev = isBranchPrev ? groupNodePrev.factors[dPrev.branch].terms : groupNodePrev.innerTerms;
+          var innerArrPrev = Expr.drilledWorkingArray(groupNodePrev, dPrev);
           // Une branche de ProductGroup n'a jamais de descente plus profonde (voir
           // drillIntoProductBranch/toggleInnerSelection) : pas d'aperçu "Développer" à y
-          // chercher, ses termes sont supposés plats.
+          // chercher, ses termes sont supposés plats. Un dénominateur-expression, lui, se
+          // comporte comme un FactorGroup classique ici (voir isDenPrev ci-dessus).
           if (!isBranchPrev && p.selectedInner.length === 1) {
             var targetIdxPrev = p.selectedInner[0];
-            var targetNodePrev = groupNodePrev.innerTerms[targetIdxPrev];
+            var targetNodePrev = innerArrPrev[targetIdxPrev];
             if (targetNodePrev && Expr.isGroup(targetNodePrev)) {
               try {
                 var newInnerExpPrev, descPrev;
                 if (Expr.isProductGroup(targetNodePrev)) {
                   var expandedPrev = Expr.expandProductGroup(targetNodePrev);
                   newInnerExpPrev = [];
-                  groupNodePrev.innerTerms.forEach(function (t, i) {
+                  innerArrPrev.forEach(function (t, i) {
                     if (i === targetIdxPrev) expandedPrev.forEach(function (e) { newInnerExpPrev.push(e); });
                     else newInnerExpPrev.push(Expr.cloneNode(t));
                   });
                   descPrev = fullExpandProductDesc(targetNodePrev);
                 } else {
                   var allInnerIdxPrev = targetNodePrev.innerTerms.map(function (_, i) { return i; });
-                  newInnerExpPrev = Expr.expandFactorGroup(groupNodePrev.innerTerms, targetIdxPrev, allInnerIdxPrev);
+                  newInnerExpPrev = Expr.expandFactorGroup(innerArrPrev, targetIdxPrev, allInnerIdxPrev);
                   descPrev = fullExpandDesc(targetNodePrev);
                 }
-                var eqExpPrev = Eq.cloneEquation(last);
-                eqExpPrev[dPrev.side] = Expr.withGroupInnerTermsAtPath(last[dPrev.side], dPrev.path, newInnerExpPrev);
+                var eqExpPrev = applyDrilledArray(last, dPrev, newInnerExpPrev);
                 var stepExpPrev = { equation: eqExpPrev, opLeft: null, opRight: null };
                 stepExpPrev[dPrev.side === 'left' ? 'opLeft' : 'opRight'] = descPrev;
                 return stepExpPrev;
@@ -1385,9 +1430,7 @@
               var newInnerPrev = Expr.simplifyNodes(innerArrPrev, p.selectedInner);
               var selectedTermsPrev = p.selectedInner.slice().sort(function (a, b) { return a - b; })
                 .map(function (i) { return innerArrPrev[i]; });
-              eqPrevD[dPrev.side] = isBranchPrev
-                ? Expr.withProductBranchAtPath(last[dPrev.side], dPrev.path, dPrev.branch, newInnerPrev)
-                : Expr.withGroupInnerTermsAtPath(last[dPrev.side], dPrev.path, newInnerPrev);
+              eqPrevD[dPrev.side] = applyDrilledArray(last, dPrev, newInnerPrev)[dPrev.side];
               innerDescPrev = { type: 'simplify', terms: selectedTermsPrev };
             }
             if (otherOkPrev) {
@@ -1541,23 +1584,17 @@
     function setInnerOrder(orderOfOrigIndices) {
       if (!pending.drilled) return;
       var lastStep = steps[steps.length - 1];
-      var side = pending.drilled.side;
-      var path = pending.drilled.path;
-      var branch = pending.drilled.branch;
-      var isBranchIdx = typeof branch === 'number';
+      var d = pending.drilled;
+      var side = d.side;
+      var path = d.path;
       var node = Expr.nodeAtPath(lastStep.equation[side], path);
       if (!node) return;
-      var oldArr = isBranchIdx ? node.factors[branch].terms : node.innerTerms;
+      var oldArr = Expr.drilledWorkingArray(node, d);
       var isIdentity = orderOfOrigIndices.length === oldArr.length &&
         orderOfOrigIndices.every(function (v, i) { return v === i; });
       if (!isIdentity) {
         var newArr = orderOfOrigIndices.map(function (i) { return oldArr[i]; });
-        var newSide = isBranchIdx
-          ? Expr.withProductBranchAtPath(lastStep.equation[side], path, branch, newArr)
-          : Expr.withGroupInnerTermsAtPath(lastStep.equation[side], path, newArr);
-        var newEquation = { left: lastStep.equation.left, right: lastStep.equation.right };
-        newEquation[side] = newSide;
-        lastStep.equation = newEquation;
+        lastStep.equation = applyDrilledArray(lastStep.equation, d, newArr);
       }
       notify();
     }
@@ -1885,7 +1922,7 @@
     lastEquation: function () { return active().lastEquation(); },
     selectOp: function (t) { active().selectOp(t); },
     cancelOp: function () { active().cancelOp(); },
-    toggleTermSelection: function (side, idx, branchHint) { active().toggleTermSelection(side, idx, branchHint); },
+    toggleTermSelection: function (side, idx, branchHint, isDenPart) { active().toggleTermSelection(side, idx, branchHint, isDenPart); },
     toggleInnerSelection: function (idx) { active().toggleInnerSelection(idx); },
     drillIntoGroup: function (side, idx) { active().drillIntoGroup(side, idx); },
     drillIntoProductBranch: function (side, idx, branch) { active().drillIntoProductBranch(side, idx, branch); },

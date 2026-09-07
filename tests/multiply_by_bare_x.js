@@ -63,7 +63,10 @@ function ok(label, cond) {
     step.equation.left[0].factors[0].exponent === 2 &&
     JSON.stringify(step.equation.left[0].factors[0].terms) === JSON.stringify([{ coeff: 1, pow: 1 }]));
 
-  // --- Test 4 : ÷ par x reste interdit (regression "Multiplier seulement") ---
+  // --- Test 4 : ÷ par x est maintenant accepté (voir Expr.wrapSideInQuotient et
+  // tests/divide_by_expression.js pour la couverture complète de cette fonctionnalité) —
+  // ancienne restriction "division seulement par un nombre" levée pour les mêmes raisons
+  // que "×" (avertissement "valide si x≠0" sur l'étiquette plutôt qu'un blocage).
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x=5');
   await page.evaluate(() => {
     window.App.History.selectOp('expr');
@@ -71,8 +74,14 @@ function ok(label, cond) {
     window.App.History.confirm();
   });
   const afterDivX = await page.evaluate(() => window.App.History.getPending());
-  console.log('erreur apres ÷x:', JSON.stringify(afterDivX.error));
-  ok('÷x is rejected (division by x still forbidden)', !!afterDivX.error);
+  const stepDivX = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  console.log('equation apres ÷x:', JSON.stringify(stepDivX.equation));
+  ok('÷x is now accepted (no pending error)', !afterDivX.error);
+  ok('÷x wraps both sides as a quotient with x as the denominator',
+    JSON.stringify(stepDivX.equation) === JSON.stringify({
+      left: [{ sign: 1, factorTerms: [{ coeff: 1, pow: 1 }], innerTerms: [{ coeff: 1, pow: 1 }], isDivision: true }],
+      right: [{ sign: 1, factorTerms: [{ coeff: 1, pow: 1 }], innerTerms: [{ coeff: 5, pow: 0 }], isDivision: true }]
+    }));
 
   // --- Test 5 : round-trip avec Developper ---
   await applyChain('x=5', '\\times x');
