@@ -55,8 +55,12 @@ function ok(label, cond) {
   await page.waitForTimeout(150);
   const step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
   console.log('final equation:', JSON.stringify(step.equation));
-  ok('confirmed equation is correct (x)(2(3x+5))=... ', step.equation.left[0].factors[1].terms[0].factor.coeff === 2 &&
-    JSON.stringify(step.equation.left[0].factors[1].terms[0].innerTerms) === JSON.stringify([{ coeff: 3, pow: 1 }, { coeff: 5, pow: 0 }]));
+  // "2(3x+5)" se déplie en 2 facteurs distincts du produit (coefficient "2" PUIS "(3x+5)",
+  // voir operandFactors dans expression.js et multiply_coeff_paren.js) — jamais un
+  // FactorGroup imbriqué comme facteur unique.
+  ok('confirmed equation is correct (x)(2)(3x+5)=... ', step.equation.left[0].factors.length === 3 &&
+    JSON.stringify(step.equation.left[0].factors[1]) === JSON.stringify({ terms: [{ coeff: 2, pow: 0 }], exponent: 1 }) &&
+    JSON.stringify(step.equation.left[0].factors[2]) === JSON.stringify({ terms: [{ coeff: 3, pow: 1 }, { coeff: 5, pow: 0 }], exponent: 1 }));
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');

@@ -337,24 +337,46 @@
     return out;
   }
 
+  // Décompose un opérande de multiplication (le membre actuel, OU le multiplicateur — voir
+  // wrapSideInProduct ci-dessous, qui appelle ceci pour les deux) en sa liste de facteurs +
+  // son signe global. Un ProductGroup à UN SEUL noeud (ex. via la touche "×(...)²" du pavé)
+  // déplie directement ses propres facteurs plutôt que de s'imbriquer tel quel comme facteur
+  // UNIQUE d'un autre ProductGroup (que la plupart des fonctions de ce fichier ne savent pas
+  // traiter, voir expandProductGroup). Un FactorGroup à coefficient (ex. "5(x+13)", jamais
+  // une division — voir isDivision, qui ne se décompose pas de la même façon) se déplie de
+  // la même façon en DEUX facteurs distincts (le coefficient, PUIS la parenthèse) : sans
+  // ça, le coefficient resterait collé DANS le facteur imbriqué et s'afficherait accolé au
+  // facteur précédent sans aucun signe "×" visible (ex. "25" suivi de "5(x+13)" -> "255(x+13)"),
+  // et "Développer" ne saurait pas non plus le traiter (expandProductFactorSubset attend des
+  // facteurs plats, jamais un FactorGroup imbriqué dans un facteur).
+  function operandFactors(terms) {
+    if (terms.length === 1 && isProductGroup(terms[0])) {
+      return { factors: terms[0].factors.map(cloneFactor), sign: terms[0].sign };
+    }
+    if (terms.length === 1 && isFactorGroup(terms[0]) && !terms[0].isDivision) {
+      var fg = terms[0];
+      return {
+        factors: [
+          { terms: [{ coeff: fg.factor.coeff, pow: fg.factor.pow }], exponent: 1 },
+          { terms: cloneSide(fg.innerTerms), exponent: 1 }
+        ],
+        sign: fg.sign
+      };
+    }
+    return { factors: [{ terms: cloneSide(terms), exponent: 1 }], sign: 1 };
+  }
+
   // Multiplication par une expression à plusieurs termes (ex. "×(x+5)") : le membre est
   // toujours enveloppé dans un ProductGroup, même s'il n'a qu'un seul terme (contrairement
   // à wrapSideInFactor) — l'élève peut ensuite développer ce produit via "Développer".
   // Si le membre est DÉJÀ un ProductGroup (ex. multiplier une seconde fois un membre déjà
   // factorisé), le nouveau facteur s'AJOUTE à ses facteurs existants plutôt que de créer un
-  // ProductGroup imbriqué dans un autre (que la plupart des fonctions de ce fichier ne
-  // savent pas traiter, voir expandProductGroup) ; si `multiplierTerms` est LUI-MÊME un
-  // ProductGroup à un seul élément (ex. via la touche "×(...)²" du pavé, qui produit un
-  // ProductGroup.isSquare-équivalent comme unique terme), ses facteurs sont dépliés de la
-  // même façon plutôt que d'imbriquer un groupe dans un facteur.
+  // ProductGroup imbriqué dans un autre — voir operandFactors ci-dessus, appliqué aux DEUX
+  // côtés (le membre courant ET le multiplicateur) de façon symétrique.
   function wrapSideInProduct(side, multiplierTerms) {
-    var baseIsProduct = side.length === 1 && isProductGroup(side[0]);
-    var baseFactors = baseIsProduct ? side[0].factors.map(cloneFactor) : [{ terms: cloneSide(side), exponent: 1 }];
-    var baseSign = baseIsProduct ? side[0].sign : 1;
-    var addIsProduct = multiplierTerms.length === 1 && isProductGroup(multiplierTerms[0]);
-    var addFactors = addIsProduct ? multiplierTerms[0].factors.map(cloneFactor) : [{ terms: cloneSide(multiplierTerms), exponent: 1 }];
-    var addSign = addIsProduct ? multiplierTerms[0].sign : 1;
-    return [{ sign: baseSign * addSign, factors: canonicalizeFactors(baseFactors.concat(addFactors)) }];
+    var base = operandFactors(side);
+    var add = operandFactors(multiplierTerms);
+    return [{ sign: base.sign * add.sign, factors: canonicalizeFactors(base.factors.concat(add.factors)) }];
   }
 
   // Fusionne (simplifie) les noeuds aux indices `indices`. La sélection peut mélanger des

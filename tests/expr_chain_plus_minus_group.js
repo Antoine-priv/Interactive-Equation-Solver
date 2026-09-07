@@ -69,12 +69,15 @@ function ok(label, cond) {
   ok('embedded "-" sign combines correctly with the "+" operator', embeddedTerm && embeddedTerm.sign === -1 && embeddedTerm.factor.coeff === 5);
 
   // --- 4) Regression : "×5(8x-2)" (deja existant) continue de MULTIPLIER tout le membre,
-  // comportement totalement different de "+5(8x-2)"/"-5(8x-2)" ---
+  // comportement totalement different de "+5(8x-2)"/"-5(8x-2)" — le multiplicateur se
+  // deplie desormais en 2 facteurs distincts (coefficient "5" PUIS "(8x-2)", voir
+  // operandFactors dans expression.js et multiply_coeff_paren.js), donc 3 facteurs au
+  // total avec le "x" de base, pas un FactorGroup imbrique comme facteur unique.
   await applyChain('x=3', '\\times5(8x-2)');
   step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
   console.log('equation apres ×5(8x-2) (regression):', JSON.stringify(step.equation));
   ok('"×" still multiplies the whole member (unchanged regression)',
-    step.equation.left[0].factors && step.equation.left[0].factors.length === 2);
+    step.equation.left[0].factors && step.equation.left[0].factors.length === 3);
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');

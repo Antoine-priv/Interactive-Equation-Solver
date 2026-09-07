@@ -220,6 +220,23 @@
     return ' ' + sign + ' ' + body;
   }
 
+  // Deux facteurs "nus" adjacents d'un produit (sans parenthèse ni exposant les délimitant)
+  // se liraient comme collés si le second commence par un chiffre — soit un seul nombre
+  // ("25" puis "5" -> "255" au lieu de "25 fois 5", ex. après avoir multiplié un membre par
+  // "5(x+13)", voir operandFactors dans expression.js), soit une variable qui n'existe pas
+  // ("x" puis "5" -> "x5"). Un "\cdot" explicite lève l'ambiguïté ; l'ordre inverse (chiffre
+  // puis "x", ex. "5x") reste la notation habituelle d'un coefficient, pas concerné ici. Un
+  // exposant (f.exponent>1) sur le facteur précédent protège déjà visuellement (l'exposant
+  // se lit en indice supérieur, jamais confondu avec le facteur suivant) : seul le cas
+  // exponent===1 est testé. Même logique que le "ALNUM_END_RE" de nodeLatex (Expr), mais
+  // ici sur le rendu déjà wrappé en \htmlId — appliquée AVANT le wrap, sur le texte
+  // visuellement rendu de chaque facteur, jamais sur le marquage \htmlId{...} lui-même (qui
+  // se termine toujours par "}", jamais par le vrai dernier caractère visible).
+  var FACTOR_ALNUM_END_RE = /[0-9A-Za-z]$/;
+  function needsCdotBetweenFactors(prevRendered, prevExponent, nextRendered) {
+    return prevExponent === 1 && FACTOR_ALNUM_END_RE.test(prevRendered) && /^[0-9]/.test(nextRendered);
+  }
+
   // Rendu (non "drillé") d'un ProductGroup au premier niveau : comme Expr.nodeLatex, mais
   // chaque facteur porte en plus un attribut data-branch="0"/"1"/... (via \htmlData) ET son
   // propre \htmlId ("idPrefix-topIdx-factor-i") — le premier sert à retrouver dans quel
@@ -232,11 +249,16 @@
   // sélectionnable pour un développement partiel (ex. sélectionner "(x-5)" et "(x+2)" dans
   // "(x²-10x+25)(x-5)(x+2)" pour les développer entre elles, sans toucher au 1er facteur).
   function productGroupBranchesLatex(node, idPrefix, topIdx, isFirst) {
-    var bodyP = node.factors.map(function (f, i) {
-      var inner = '\\htmlData{branch=' + i + '}{' + Expr.groupSlotLatex(f.terms) + '}';
+    var innerRendered = node.factors.map(function (f) { return Expr.groupSlotLatex(f.terms); });
+    var bodyP = '';
+    node.factors.forEach(function (f, i) {
+      if (i > 0 && needsCdotBetweenFactors(innerRendered[i - 1], node.factors[i - 1].exponent, innerRendered[i])) {
+        bodyP += '\\cdot ';
+      }
+      var inner = '\\htmlData{branch=' + i + '}{' + innerRendered[i] + '}';
       var slot = '\\htmlId{' + idPrefix + '-' + topIdx + '-factor-' + i + '}{' + inner + '}';
-      return f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
-    }).join('');
+      bodyP += f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
+    });
     var signP = node.sign < 0 ? '-' : '+';
     if (isFirst) return (signP === '-' ? '-' : '') + bodyP;
     return ' ' + signP + ' ' + bodyP;
@@ -251,17 +273,20 @@
   // history.js, qui n'y autorisent pas de second niveau de "drill"). Les AUTRES facteurs,
   // à leur position d'origine, restent des blocs opaques normaux, non cliquables.
   function drilledProductBranchLatex(node, idPrefix, topIdx, branch, isFirst) {
-    var bodyP = node.factors.map(function (f, i) {
-      if (i !== branch) {
-        var slot = Expr.groupSlotLatex(f.terms);
-        return f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
-      }
+    var rendered = node.factors.map(function (f, i) {
+      if (i !== branch) return Expr.groupSlotLatex(f.terms);
       var activeLatex = f.terms.map(function (t, j) {
         return '\\htmlId{' + idPrefix + '-' + topIdx + '-inner-' + j + '}{' + Expr.nodeLatex(t, j === 0) + '}';
       }).join('');
-      var activeParen = '\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{\\left(' + activeLatex + '\\right)}';
-      return f.exponent === 1 ? activeParen : activeParen + '^{' + f.exponent + '}';
-    }).join('');
+      return '\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{\\left(' + activeLatex + '\\right)}';
+    });
+    var bodyP = '';
+    node.factors.forEach(function (f, i) {
+      if (i > 0 && needsCdotBetweenFactors(rendered[i - 1], node.factors[i - 1].exponent, rendered[i])) {
+        bodyP += '\\cdot ';
+      }
+      bodyP += f.exponent === 1 ? rendered[i] : rendered[i] + '^{' + f.exponent + '}';
+    });
     var signP = node.sign < 0 ? '-' : '+';
     if (isFirst) return (signP === '-' ? '-' : '') + bodyP;
     return ' ' + signP + ' ' + bodyP;
@@ -274,17 +299,20 @@
   // drilledGroupLatexForOrder) — les AUTRES facteurs restent des blocs opaques normaux,
   // aucun id dessus (inutile, jamais interrogé ici).
   function drilledProductBranchLatexForOrder(node, branch, orderedLeaf, isFirst) {
-    var bodyP = node.factors.map(function (f, i) {
-      if (i !== branch) {
-        var slot = Expr.groupSlotLatex(f.terms);
-        return f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
-      }
+    var rendered = node.factors.map(function (f, i) {
+      if (i !== branch) return Expr.groupSlotLatex(f.terms);
       var activeLatex = orderedLeaf.map(function (t, j) {
         return '\\htmlId{dragpv-' + j + '}{' + Expr.nodeLatex(t, j === 0) + '}';
       }).join('');
-      var activeParen = '\\left(' + activeLatex + '\\right)';
-      return f.exponent === 1 ? activeParen : activeParen + '^{' + f.exponent + '}';
-    }).join('');
+      return '\\left(' + activeLatex + '\\right)';
+    });
+    var bodyP = '';
+    node.factors.forEach(function (f, i) {
+      if (i > 0 && needsCdotBetweenFactors(rendered[i - 1], node.factors[i - 1].exponent, rendered[i])) {
+        bodyP += '\\cdot ';
+      }
+      bodyP += f.exponent === 1 ? rendered[i] : rendered[i] + '^{' + f.exponent + '}';
+    });
     var signP = node.sign < 0 ? '-' : '+';
     if (isFirst) return (signP === '-' ? '-' : '') + bodyP;
     return ' ' + signP + ' ' + bodyP;
@@ -301,10 +329,15 @@
   // escalateFactorDragToTopLevel, qui bascule alors le glisser sur le produit ENTIER, comme
   // un terme de premier niveau classique).
   function productGroupFactorsLatexForOrder(node, idPrefix, topIdx, orderedFactors, isFirst) {
-    var bodyP = orderedFactors.map(function (f, i) {
-      var slot = '\\htmlId{dragpv-' + i + '}{' + Expr.groupSlotLatex(f.terms) + '}';
-      return f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
-    }).join('');
+    var innerRendered = orderedFactors.map(function (f) { return Expr.groupSlotLatex(f.terms); });
+    var bodyP = '';
+    orderedFactors.forEach(function (f, i) {
+      if (i > 0 && needsCdotBetweenFactors(innerRendered[i - 1], orderedFactors[i - 1].exponent, innerRendered[i])) {
+        bodyP += '\\cdot ';
+      }
+      var slot = '\\htmlId{dragpv-' + i + '}{' + innerRendered[i] + '}';
+      bodyP += f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
+    });
     var signP = node.sign < 0 ? '-' : '+';
     var body = (isFirst ? (signP === '-' ? '-' : '') : ' ' + signP + ' ') + bodyP;
     return '\\htmlId{' + idPrefix + '-' + topIdx + '}{' + body + '}';
