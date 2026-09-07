@@ -280,17 +280,21 @@
     // Factoriser un terme seul n'a rien à "extraire de commun" : exige au moins 2 termes.
     var canFactor = (L.length >= 2 && R.length === 0 && leftClean) ||
       (R.length >= 2 && L.length === 0 && rightClean) || canFactorGroup || canFactorAlreadyGrouped;
-    var canExpand = false;
-    if (L.length + R.length === 1) {
-      var side = L.length === 1 ? 'left' : 'right';
-      var idx = L.length === 1 ? L[0] : R[0];
-      canExpand = isGroup(eq[side][idx]);
-    }
+    // Chaque groupe factorisé marqué dans L/R compte comme une cible de développement
+    // indépendante (voir computeExpandTargets/applyExpandTargets dans history.js) : PLUS
+    // d'une seule à la fois désormais — ex. "(x−6)²−(x+6)(x−9)²=0", sélectionner "(x−6)²"
+    // ET (via la sélection par facteur ci-dessous) seulement "(x−9)²" les développe tous
+    // les deux en une seule étape. Un noeud non-groupe glissé par erreur dans L/R ne
+    // compte simplement pas (ni ne bloque le reste), cohérent avec computeExpandTargets.
+    var groupCount = L.filter(function (i) { return isGroup(eq.left[i]); }).length +
+      R.filter(function (i) { return isGroup(eq.right[i]); }).length;
+    var canExpand = groupCount >= 1;
     // Sélection PAR FACTEUR d'un produit à ≥2 parenthèses (voir toggleFactorSelection dans
     // history.js) : au moins 2 facteurs marqués suffit à activer Développer, indépendamment
-    // de selectedLeft/Right ci-dessus (les deux sélections sont mutuellement exclusives).
-    // Un seul facteur marqué suffit aussi s'il a lui-même un exposant>1 (ex. "(x-6)²" dans
-    // "(x-1)(x-6)²") : il y a alors quelque chose à développer sans second facteur à combiner.
+    // de selectedLeft/Right ci-dessus (les deux sélections peuvent désormais se combiner,
+    // voir computeExpandTargets). Un seul facteur marqué suffit aussi s'il a lui-même un
+    // exposant>1 (ex. "(x-6)²" dans "(x-1)(x-6)²") : il y a alors quelque chose à
+    // développer sans second facteur à combiner.
     if (pending.selectedFactors) {
       var sfBranches = pending.selectedFactors.branches;
       var sfNode = eq[pending.selectedFactors.side][pending.selectedFactors.index];

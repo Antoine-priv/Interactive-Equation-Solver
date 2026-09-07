@@ -27,6 +27,32 @@
   // même police, plutôt que la police système du texte brut.
   var OP_SYMBOL_LATEX = { '+': '+', '-': '-', '×': '\\times\\,', '÷': '\\div\\,' };
 
+  // Corps LaTeX (sans le préfixe "développer ") d'un desc 'expand' — partagé entre
+  // l'étiquette standalone et 'expandMulti' (plusieurs groupes développés en une seule
+  // étape, voir confirmExpandFullSelection dans history.js).
+  function expandDescBody(desc) {
+    if (!desc.factor || !desc.terms || desc.terms.length === 0) return null;
+    // Un terme développé peut lui-même être un groupe imbriqué (ex. "3(-2)") : nodeLatex
+    // gère déjà correctement les deux cas et leur signe.
+    var innerLatex = desc.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
+    if (desc.isDivision) {
+      return '\\frac{' + innerLatex + '}{' + Expr.termLatexBody(desc.factor) + '}';
+    }
+    var factorBody = Expr.termLatexBody(desc.factor);
+    return factorBody + '\\left(' + innerLatex + '\\right)';
+  }
+
+  // Même principe qu'expandDescBody, pour un desc 'expandProduct' (développement complet
+  // d'un ProductGroup, OU développement PARTIEL d'un sous-ensemble de ses facteurs — voir
+  // Expr.expandProductFactorSubset — les deux partagent la même forme de desc).
+  function expandProductDescBody(desc) {
+    if (!desc.factors) return null;
+    return desc.factors.map(function (f) {
+      var slot = '\\left(' + f.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('') + '\\right)';
+      return f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
+    }).join('');
+  }
+
   function formatOpLabel(desc) {
     if (!desc) return null;
     if (desc.type === 'simplify') {
@@ -35,23 +61,24 @@
       return '\\text{simplifier }' + simplifiedLatex;
     }
     if (desc.type === 'expand') {
-      if (!desc.factor || !desc.terms || desc.terms.length === 0) return '\\text{développer}';
-      // Un terme développé peut lui-même être un groupe imbriqué (ex. "3(-2)") : nodeLatex
-      // gère déjà correctement les deux cas et leur signe.
-      var innerLatex = desc.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
-      if (desc.isDivision) {
-        return '\\text{développer }\\frac{' + innerLatex + '}{' + Expr.termLatexBody(desc.factor) + '}';
-      }
-      var factorBody = Expr.termLatexBody(desc.factor);
-      return '\\text{développer }' + factorBody + '\\left(' + innerLatex + '\\right)';
+      var bodyExp = expandDescBody(desc);
+      return bodyExp === null ? '\\text{développer}' : '\\text{développer }' + bodyExp;
     }
     if (desc.type === 'expandProduct') {
-      if (!desc.factors) return '\\text{développer}';
-      var bodyDev = desc.factors.map(function (f) {
-        var slot = '\\left(' + f.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('') + '\\right)';
-        return f.exponent === 1 ? slot : slot + '^{' + f.exponent + '}';
-      }).join('');
-      return '\\text{développer }' + bodyDev;
+      var bodyDev = expandProductDescBody(desc);
+      return bodyDev === null ? '\\text{développer}' : '\\text{développer }' + bodyDev;
+    }
+    // Plusieurs groupes développés en une seule étape sur le même membre (ex. "(x-6)²"
+    // développé en entier ET, indépendamment, seul le facteur au carré d'un AUTRE produit
+    // du même membre — voir computeExpandTargets/applyExpandTargets dans history.js) :
+    // une seule flèche/étiquette combinant chaque partie, plutôt qu'une par groupe.
+    if (desc.type === 'expandMulti') {
+      if (!desc.parts || desc.parts.length === 0) return '\\text{développer}';
+      var bodies = desc.parts.map(function (part) {
+        return part.type === 'expand' ? expandDescBody(part) : expandProductDescBody(part);
+      }).filter(function (b) { return b !== null; });
+      if (bodies.length === 0) return '\\text{développer}';
+      return '\\text{développer }' + bodies.join('\\text{ et }');
     }
     if (desc.type === 'produitnul') {
       return '\\text{produit nul}';

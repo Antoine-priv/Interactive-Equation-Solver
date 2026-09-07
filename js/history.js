@@ -1172,43 +1172,91 @@
       notify();
     }
 
-    // "Développer" agit immédiatement sur l'unique groupe factorisé sélectionné, en le
-    // développant entièrement (plus de développement partiel terme par terme).
+    // Rassemble, pour une sélection libre (jamais drilled) donnée, TOUS les groupes à
+    // développer en une seule étape : chaque top-level group marqué dans
+    // selectedLeft/Right (développement COMPLET chacun) PLUS, indépendamment, le
+    // sous-ensemble de facteurs marqué via toggleFactorSelection sur UN ProductGroup
+    // (développement PARTIEL de celui-ci, voir Expr.expandProductFactorSubset) — ex.
+    // "(x−6)²−(x+6)(x−9)²=0" : sélectionner "(x−6)²" en entier ET seulement la
+    // parenthèse "(x−9)²" du second produit développe les deux à la fois, "(x+6)"
+    // restant intact. Renvoie [] si rien de valide n'est sélectionné (jamais null) : les
+    // noeuds non-groupes glissés par erreur dans selectedLeft/Right sont simplement
+    // ignorés plutôt que d'invalider toute la sélection (cohérent avec computeSelectionInfo
+    // dans toolbar.js, qui ne compte que les indices réellement développables).
+    function computeExpandTargets(eq, p) {
+      var targets = [];
+      if (p.selectedFactors) {
+        var sf = p.selectedFactors;
+        var nodeSF = eq[sf.side][sf.index];
+        if (nodeSF && Expr.isProductGroup(nodeSF) && sf.branches.length >= 1 &&
+            !(sf.branches.length === 1 && nodeSF.factors[sf.branches[0]].exponent < 2)) {
+          targets.push({ side: sf.side, index: sf.index, kind: 'partial', branches: sf.branches.slice(), node: nodeSF });
+        }
+      }
+      ['left', 'right'].forEach(function (side) {
+        var arr = side === 'left' ? p.selectedLeft : p.selectedRight;
+        arr.forEach(function (idx) {
+          var node = eq[side][idx];
+          if (node && Expr.isGroup(node)) targets.push({ side: side, index: idx, kind: 'full', node: node });
+        });
+      });
+      return targets;
+    }
+
+    // Applique tous les `targets` (voir computeExpandTargets) en une seule étape, en
+    // traitant les indices d'un même membre du plus grand au plus petit (un développement
+    // change la longueur du membre — traiter dans cet ordre garde les indices des
+    // groupes restant à traiter valides). Combine les étiquettes de chaque membre touché
+    // en un seul desc ('expandMulti' dès que >1 partie, sinon la forme habituelle
+    // inchangée — voir formatOpLabel dans render.js) pour rester une seule flèche/étape.
+    function applyExpandTargets(eq, targets) {
+      var eqOut = Eq.cloneEquation(eq);
+      var partsBySide = { left: [], right: [] };
+      ['left', 'right'].forEach(function (side) {
+        var sideTargets = targets.filter(function (t) { return t.side === side; });
+        if (sideTargets.length === 0) return;
+        sideTargets.sort(function (a, b) { return b.index - a.index; });
+        var descsDesc = [];
+        sideTargets.forEach(function (t) {
+          if (t.kind === 'full') {
+            if (Expr.isProductGroup(t.node)) {
+              eqOut = Eq.applyExpandProduct(eqOut, side, t.index);
+              descsDesc.push(fullExpandProductDesc(t.node));
+            } else {
+              var allIdx = t.node.innerTerms.map(function (_, i) { return i; });
+              eqOut = Eq.applyExpand(eqOut, side, t.index, allIdx);
+              descsDesc.push(fullExpandDesc(t.node));
+            }
+          } else {
+            eqOut = Eq.applyExpandProductFactorSubset(eqOut, side, t.index, t.branches);
+            var sortedBranches = t.branches.slice().sort(function (a, b) { return a - b; });
+            descsDesc.push({
+              type: 'expandProduct',
+              factors: sortedBranches.map(function (i) {
+                return { terms: t.node.factors[i].terms.slice(), exponent: t.node.factors[i].exponent };
+              })
+            });
+          }
+        });
+        // Reconstitué en ordre descendant (voir tri ci-dessus) : remis en ordre de lecture
+        // gauche->droite pour l'étiquette combinée.
+        partsBySide[side] = descsDesc.reverse();
+      });
+      var out = { equation: eqOut, opLeft: null, opRight: null };
+      if (partsBySide.left.length === 1) out.opLeft = partsBySide.left[0];
+      else if (partsBySide.left.length > 1) out.opLeft = { type: 'expandMulti', parts: partsBySide.left };
+      if (partsBySide.right.length === 1) out.opRight = partsBySide.right[0];
+      else if (partsBySide.right.length > 1) out.opRight = { type: 'expandMulti', parts: partsBySide.right };
+      return out;
+    }
+
+    // "Développer" agit immédiatement sur la sélection courante, en la développant
+    // entièrement (plus de développement partiel terme par terme) — voir
+    // computeExpandTargets/applyExpandTargets ci-dessus pour la sélection libre (un ou
+    // plusieurs groupes/sous-ensembles de facteurs à la fois, combinés en une seule étape).
     function confirmExpandFullSelection() {
       if (pending.opType !== null) return false;
       var eq = lastEquation();
-      // Sélection PAR FACTEUR (voir toggleFactorSelection) : au moins 2 parenthèses d'un
-      // même produit marquées développe SEULEMENT celles-ci entre elles, les autres
-      // facteurs restant intacts — voir Expr.expandProductFactorSubset. Toujours en
-      // sélection libre (jamais drilled : les deux sont mutuellement exclusifs, voir
-      // drillIntoGroup/drillIntoProductBranch qui remettent selectedFactors à null).
-      if (pending.selectedFactors) {
-        var sf = pending.selectedFactors;
-        var nodeSF = eq[sf.side][sf.index];
-        if (!nodeSF || !Expr.isProductGroup(nodeSF)) return false;
-        if (sf.branches.length < 1 ||
-            (sf.branches.length === 1 && nodeSF.factors[sf.branches[0]].exponent < 2)) return false;
-        var newEqSF, descSF;
-        try {
-          newEqSF = Eq.applyExpandProductFactorSubset(eq, sf.side, sf.index, sf.branches);
-          var sortedBranches = sf.branches.slice().sort(function (a, b) { return a - b; });
-          descSF = {
-            type: 'expandProduct',
-            factors: sortedBranches.map(function (i) {
-              return { terms: nodeSF.factors[i].terms.slice(), exponent: nodeSF.factors[i].exponent };
-            })
-          };
-        } catch (eSF) {
-          pending.error = eSF.message;
-          notify();
-          return false;
-        }
-        var stepSF = { equation: newEqSF, opLeft: null, opRight: null };
-        stepSF[sf.side === 'left' ? 'opLeft' : 'opRight'] = descSF;
-        steps.push(stepSF);
-        resetPending();
-        return true;
-      }
       if (pending.drilled) {
         var d = pending.drilled;
         var groupNode = Expr.nodeAtPath(eq[d.side], d.path);
@@ -1244,29 +1292,17 @@
         resetPending();
         return true;
       }
-      var L = pending.selectedLeft, R = pending.selectedRight;
-      if (L.length + R.length !== 1) return false;
-      var side = L.length === 1 ? 'left' : 'right';
-      var groupIndex = L.length === 1 ? L[0] : R[0];
-      var node = eq[side][groupIndex];
-      if (!node || !Expr.isGroup(node)) return false;
-      var newEq, desc;
+      var targets = computeExpandTargets(eq, pending);
+      if (targets.length === 0) return false;
+      var res;
       try {
-        if (Expr.isProductGroup(node)) {
-          newEq = Eq.applyExpandProduct(eq, side, groupIndex);
-          desc = fullExpandProductDesc(node);
-        } else {
-          var allIndices = node.innerTerms.map(function (_, i) { return i; });
-          newEq = Eq.applyExpand(eq, side, groupIndex, allIndices);
-          desc = fullExpandDesc(node);
-        }
-      } catch (e) {
-        pending.error = e.message;
+        res = applyExpandTargets(eq, targets);
+      } catch (eT) {
+        pending.error = eT.message;
         notify();
         return false;
       }
-      var stepExpand = { equation: newEq, opLeft: null, opRight: null };
-      stepExpand[side === 'left' ? 'opLeft' : 'opRight'] = desc;
+      var stepExpand = { equation: res.equation, opLeft: res.opLeft, opRight: res.opRight };
       steps.push(stepExpand);
       resetPending();
       return true;
@@ -1360,58 +1396,18 @@
             return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
           }
         }
-        // Sélection PAR FACTEUR (voir toggleFactorSelection) : aperçu du développement
-        // PARTIEL des seuls facteurs marqués, avant même de cliquer "Développer". Un seul
-        // facteur marqué suffit s'il a lui-même un exposant>1 (voir
-        // Expr.expandProductFactorSubset/computeSelectionInfo dans toolbar.js).
-        if (p.selectedFactors && p.selectedFactors.branches.length >= 1) {
-          var sfPrev = p.selectedFactors;
-          var nodeSfPrev = last[sfPrev.side][sfPrev.index];
-          if (nodeSfPrev && Expr.isProductGroup(nodeSfPrev) &&
-              (sfPrev.branches.length >= 2 || nodeSfPrev.factors[sfPrev.branches[0]].exponent > 1)) {
-            try {
-              var previewEqSf = Eq.applyExpandProductFactorSubset(last, sfPrev.side, sfPrev.index, sfPrev.branches);
-              var sortedBranchesPrev = sfPrev.branches.slice().sort(function (a, b) { return a - b; });
-              var descSfPrev = {
-                type: 'expandProduct',
-                factors: sortedBranchesPrev.map(function (i) {
-                  return { terms: nodeSfPrev.factors[i].terms.slice(), exponent: nodeSfPrev.factors[i].exponent };
-                })
-              };
-              var stepPreviewSf = { equation: previewEqSf, opLeft: null, opRight: null };
-              stepPreviewSf[sfPrev.side === 'left' ? 'opLeft' : 'opRight'] = descSfPrev;
-              return stepPreviewSf;
-            } catch (ePrevSf) {
-              return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
-            }
-          }
-        }
-        // Sélection libre : aperçu de ce que ferait Développer (un seul groupe factorisé
-        // sélectionné) ou Simplifier (sélection suffisante), pour voir le résultat avant
+        // Sélection libre : aperçu de ce que ferait Développer (un ou plusieurs groupes/
+        // sous-ensembles de facteurs marqués, voir computeExpandTargets/applyExpandTargets
+        // ci-dessus) ou Simplifier (sélection suffisante), pour voir le résultat avant
         // même de cliquer sur le bouton correspondant.
         var pL = p.selectedLeft, pR = p.selectedRight;
-        if (pL.length + pR.length === 1) {
-          var pSideE = pL.length === 1 ? 'left' : 'right';
-          var pIdxE = pL.length === 1 ? pL[0] : pR[0];
-          var pNodeE = last[pSideE][pIdxE];
-          if (pNodeE && Expr.isGroup(pNodeE)) {
-            try {
-              var stepPreviewExp;
-              if (Expr.isProductGroup(pNodeE)) {
-                var previewEqProd = Eq.applyExpandProduct(last, pSideE, pIdxE);
-                stepPreviewExp = { equation: previewEqProd, opLeft: null, opRight: null };
-                stepPreviewExp[pSideE === 'left' ? 'opLeft' : 'opRight'] = fullExpandProductDesc(pNodeE);
-              } else {
-                var pAllIdx = pNodeE.innerTerms.map(function (_, i) { return i; });
-                var previewEqExp = Eq.cloneEquation(last);
-                previewEqExp[pSideE] = Expr.expandFactorGroup(last[pSideE], pIdxE, pAllIdx);
-                stepPreviewExp = { equation: previewEqExp, opLeft: null, opRight: null };
-                stepPreviewExp[pSideE === 'left' ? 'opLeft' : 'opRight'] = fullExpandDesc(pNodeE);
-              }
-              return stepPreviewExp;
-            } catch (ePrevExp) {
-              return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
-            }
+        var pTargets = computeExpandTargets(last, p);
+        if (pTargets.length > 0) {
+          try {
+            var previewRes = applyExpandTargets(last, pTargets);
+            return { equation: previewRes.equation, opLeft: previewRes.opLeft, opRight: previewRes.opRight };
+          } catch (ePrevExp) {
+            return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
           }
         }
         if (pL.length >= 2 || pR.length >= 2) {
