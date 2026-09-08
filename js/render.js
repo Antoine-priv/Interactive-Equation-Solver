@@ -1251,12 +1251,17 @@
       var pendingRow = createRow(preview.equation, { pending: true, solved: false });
       container.appendChild(pendingRow);
       autoFitRowFont(pendingRow);
+      // Pendant que 'expr'/'factor' est en cours de saisie, ce qui serait affiché ici
+      // (ex. "-2", "factoriser par 2") est déjà visible, EN DIRECT et avec le curseur,
+      // dans le champ du pavé (voir js/mathKeypad.js) : pas besoin de la même chose en
+      // double sous forme d'étiquette statique à côté de la flèche.
+      var liveFieldActive = pending.opType === 'expr' || pending.opType === 'factor';
       rowsData.push({
         el: pendingRow,
-        opLeft: formatOpLabel(preview.opLeft),
-        opRight: formatOpLabel(preview.opRight),
-        opLeftWarn: descHasZeroRisk(preview.opLeft),
-        opRightWarn: descHasZeroRisk(preview.opRight),
+        opLeft: liveFieldActive ? null : formatOpLabel(preview.opLeft),
+        opRight: liveFieldActive ? null : formatOpLabel(preview.opRight),
+        opLeftWarn: !liveFieldActive && descHasZeroRisk(preview.opLeft),
+        opRightWarn: !liveFieldActive && descHasZeroRisk(preview.opRight),
         pending: true
       });
     }

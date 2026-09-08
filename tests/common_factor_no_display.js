@@ -35,12 +35,16 @@ function ok(label, cond) {
   const displayStillGone = await page.$('.operand-display');
   ok('still no operand-display panel after typing a digit', displayStillGone === null);
 
+  // Le pavé (voir js/mathKeypad.js) affiche déjà "2" EN DIRECT avec le curseur : pas
+  // besoin d'une étiquette statique redondante à côté de la flèche pendant la saisie
+  // (voir renderChain/liveFieldActive dans render.js) — elle ne réapparaît qu'une fois
+  // confirmé, ci-dessous.
   const label = await page.evaluate(() => {
     var el = document.querySelector('.arrow-label annotation');
     return el ? el.textContent : null;
   });
   console.log('live label while typing common factor "2":', JSON.stringify(label));
-  ok('live arrow label shows "factoriser par 2"', label && /factoriser/.test(label) && /2/.test(label));
+  ok('no redundant live arrow label while typing (already shown in the keypad field)', label === null);
 
   await page.screenshot({ path: `${SCRATCH}/common_factor_no_display.png` });
 
@@ -50,6 +54,14 @@ function ok(label, cond) {
   console.log('equation after facteur commun 2:', JSON.stringify(step.equation));
   ok('confirming still produces 2(x+3)=0', step.equation.left[0].factor.coeff === 2 &&
     JSON.stringify(step.equation.left[0].innerTerms) === JSON.stringify([{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }]));
+
+  const confirmedLabel = await page.evaluate(() => {
+    var el = document.querySelector('.arrow-label annotation');
+    return el ? el.textContent : null;
+  });
+  console.log('label once confirmed:', JSON.stringify(confirmedLabel));
+  ok('confirmed step still shows "factoriser par 2" on its arrow',
+    confirmedLabel && /factoriser/.test(confirmedLabel) && /2/.test(confirmedLabel));
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
