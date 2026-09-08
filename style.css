@@ -598,7 +598,23 @@ button {
   padding: 6px 14px;
 }
 .arrow-label-live[hidden] { display: none; }
-.arrow-label-live .math-keypad-field {
+/* .arrow-label-live et .arrow-label-warning ont la même spécificité (une seule classe
+   chacune) : sans cette règle composée, l'ordre d'apparition dans la feuille de style
+   déciderait laquelle l'emporte plutôt que le sens voulu — ici .arrow-label-live est
+   déclarée après .arrow-label-warning (voir plus haut), donc gagnerait TOUJOURS sans ce
+   correctif, laissant le pill "live" bleu même en cas d'alerte "valide si...". */
+.arrow-label-live.arrow-label-warning { color: var(--warning); background: var(--warning-soft); }
+/* Rangée horizontale "préfixe + champ" (ex. "factoriser par [champ]", voir
+   liveOpPrefix/prefixLatex dans mathKeypad.js/render.js) — 'expr' n'a pas de préfixe
+   (masqué, voir plus bas), seul le facteur commun en a un. */
+.arrow-label-live-row { display: flex; align-items: center; gap: 4px; }
+.arrow-label-live-prefix[hidden] { display: none; }
+/* Styles du <math-field> une fois "en pill" : partagés entre le vrai champ live
+   (.arrow-label-live) ET son miroir en lecture seule sur le membre opposé en mode 'expr'
+   (.arrow-label-mirror, voir drawMirrorField dans arrows.js) — les deux doivent se
+   ressembler trait pour trait, seul l'un des deux a réellement un curseur. */
+.arrow-label-live .math-keypad-field,
+.arrow-label-mirror .math-keypad-field {
   display: inline-block;
   width: auto;
   min-width: 1.4em;
@@ -612,12 +628,31 @@ button {
   --caret-color: var(--accent);
   --selection-background-color: var(--accent-soft);
 }
-.arrow-label-live.arrow-label-warning .math-keypad-field { --caret-color: var(--warning); }
-/* Réserve ("valide si ... ≠ 0", voir liveWarnLatex dans render.js) : sous-légende figée,
-   jamais dans le <math-field> lui-même (qui reste éditable) — même info que celle déjà
-   embarquée dans le pill statique du membre non-live, voir formatOpLabel. */
-.arrow-label-live-warn { font-size: 0.78rem; font-weight: 600; opacity: 0.9; }
+.arrow-label-live.arrow-label-warning .math-keypad-field,
+.arrow-label-mirror.arrow-label-warning .math-keypad-field {
+  --caret-color: var(--warning);
+}
+/* Réserve ("valide si ... ≠ 0", voir warnLatex dans render.js) : sous-légende figée,
+   jamais dans le <math-field> lui-même (qui reste éditable) — affichée sous CHAQUE membre
+   concerné (live ET miroir), la couleur suit celle, déjà correcte, du pill parent
+   (.arrow-label-warning / .arrow-label-live.arrow-label-warning ci-dessus) par héritage. */
+.arrow-label-live-warn,
+.arrow-label-mirror .arrow-label-live-warn {
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.9;
+}
 .arrow-label-live-warn[hidden] { display: none; }
+/* .arrow-label-mirror : un second <math-field>, recréé à chaque rendu comme un pill
+   normal (voir drawMirrorField) — partage la mise en page verticale de .arrow-label-live
+   (champ puis, le cas échéant, la réserve juste en dessous) mais PAS son display:flex de
+   base (déjà porté par .arrow-label, dont il hérite la classe, voir arrows.js). */
+.arrow-label-mirror {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
 
 /* ---- Boutons d'opération flottants, en bas à gauche ---- */
 #opButtons {

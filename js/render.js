@@ -1095,16 +1095,29 @@
   // Détermine si/où la ligne "pending" doit héberger le pavé "live" (le <math-field>
   // partagé lui-même, voir bindLiveOpField dans mathKeypad.js) plutôt qu'un pill KaTeX
   // statique — uniquement pendant la composition d'une "Opération" (chaîne +/-/×/÷,
-  // toujours symétrique sur les deux membres : convention arbitraire mais stable, le côté
-  // gauche héberge le champ réel, le côté droit garde son pill statique habituel, déjà
-  // recalculé à chaque frappe donc jamais "figé") ou d'un facteur commun (un seul membre
+  // toujours symétrique sur les deux membres) ou d'un facteur commun (un seul membre
   // concerné, déterminé par la sélection de départ). L'identité remarquable garde son
   // propre pavé dédié (deux champs "a"/"b" dans #controlPanel, pas réductible à un pill
   // unique) — non concernée ici. Renvoie null si aucun côté n'est "live" cette fois-ci
   // (ex. racine carrée armée, ou étape 1 du choix de méthode de factorisation).
+  //
+  // `mirror`+`rawLatex` : pour 'expr', l'opération porte TOUJOURS sur les deux membres à
+  // la fois — le côté "live" (`side`, convention arbitraire mais stable : le gauche) tape
+  // dans le vrai champ partagé, l'AUTRE affiche un second <math-field> "en lecture seule"
+  // (voir drawMirrorField dans arrows.js) qui recopie le même texte tapé, pour que les
+  // deux membres restent visuellement de vrais champs mathématiques identiques plutôt
+  // qu'un champ d'un côté et un simple pill KaTeX de l'autre. `prefixLatex` : légende
+  // figée avant le champ (ex. "factoriser par", voir formatOpLabel) — 'expr' n'en a pas
+  // besoin (l'opérateur +/-/×/÷ fait déjà partie du texte tapé lui-même).
   function computeLiveOpInfo(pending, preview) {
     if (pending.opType === 'expr') {
-      return { side: 'left', warnLatex: exprRiskyConditionsLatex(preview.opLeft) };
+      return {
+        side: 'left',
+        mirror: true,
+        rawLatex: pending.exprLatex || '',
+        prefixLatex: null,
+        warnLatex: exprRiskyConditionsLatex(preview.opLeft)
+      };
     }
     if (pending.opType === 'factor' && pending.factorMode === 'common') {
       var side = (preview.opLeft && preview.opLeft.type === 'factor') ? 'left'
@@ -1112,7 +1125,9 @@
         : pending.selectedLeft.length > 0 ? 'left'
         : pending.selectedRight.length > 0 ? 'right'
         : null;
-      return side ? { side: side, warnLatex: null } : null;
+      return side
+        ? { side: side, mirror: false, rawLatex: null, prefixLatex: '\\text{factoriser par }', warnLatex: null }
+        : null;
     }
     return null;
   }

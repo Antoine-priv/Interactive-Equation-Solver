@@ -40,17 +40,22 @@ function ok(label, cond) {
   const pillInfo = await page.evaluate(() => {
     var pill = document.getElementById('liveOpPill');
     var field = pill && pill.querySelector('math-field');
+    var prefix = pill && pill.querySelector('.arrow-label-live-prefix');
     return {
       visible: !!pill && !pill.hidden,
       onLeftOrRight: !!pill && (pill.classList.contains('arrow-label-left') || pill.classList.contains('arrow-label-right')),
       latex: window.App.MathKeypad.getLatex(),
-      fieldIsFocused: field ? document.activeElement === field : false
+      fieldIsFocused: field ? document.activeElement === field : false,
+      prefixHidden: !prefix || prefix.hidden,
+      prefixText: prefix ? prefix.textContent : null
     };
   });
   console.log('live pill while typing common factor "2":', JSON.stringify(pillInfo));
   ok('the live pill (shared math-field) is shown next to the arrow', pillInfo.visible && pillInfo.onLeftOrRight);
   ok('it shows exactly what was typed ("2")', pillInfo.latex === '2');
   ok('the field stays focused (real input, not a separate echo)', pillInfo.fieldIsFocused);
+  ok('the "factoriser par" legend is shown BEFORE the live field, inside the same pill',
+    !pillInfo.prefixHidden && /factoriser par/.test(pillInfo.prefixText));
   ok('no old-style "factoriser par 2" static pill duplicates it', !(await page.evaluate(() =>
     Array.from(document.querySelectorAll('.arrow-label:not(#liveOpPill)')).some((el) => /factoriser/.test(el.textContent)))));
 

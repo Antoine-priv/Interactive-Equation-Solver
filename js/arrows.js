@@ -157,7 +157,7 @@
   // PERSISTANT de #historyScroll (jamais de `history`, reconstruit à chaque frappe, voir
   // renderAll dans render.js), positionné en absolute pour défiler avec le contenu SANS
   // le moindre code de synchronisation JS dédié au scroll.
-  function positionLiveField(historyRect, topEl, botEl, dir, warn, warnLatex, constrainLabels, placedLabels, equationRects) {
+  function positionLiveField(historyRect, topEl, botEl, dir, warn, warnLatex, prefixLatex, constrainLabels, placedLabels, equationRects) {
     var pillEl = App.MathKeypad.getLiveOpPillEl();
     if (!pillEl) return;
     var geom = computeSideGeometry(historyRect, topEl, botEl, dir);
@@ -166,6 +166,13 @@
     pillEl.classList.toggle('arrow-label-left', dir < 0);
     pillEl.classList.toggle('arrow-label-right', dir >= 0);
     pillEl.classList.toggle('arrow-label-warning', !!warn);
+    var prefixEl = App.MathKeypad.getLiveOpPrefixEl();
+    if (prefixLatex) {
+      prefixEl.hidden = false;
+      window.katex.render(prefixLatex, prefixEl, { throwOnError: false, trust: true, strict: false });
+    } else {
+      prefixEl.hidden = true;
+    }
     var warnEl = App.MathKeypad.getLiveOpWarnEl();
     if (warnLatex) {
       warnEl.hidden = false;
@@ -195,6 +202,56 @@
       pillEl.style.left = (parseFloat(pillEl.style.left) - (rect.right - (boundRight - margin))) + 'px';
     }
     avoidLabelCollisions(pillEl, placedLabels, equationRects);
+  }
+
+  // "Miroir" du pavé "live" (voir positionLiveField) pour le membre OPPOSÉ, uniquement en
+  // mode 'expr' (voir computeLiveOpInfo dans render.js) : la même chaîne tapée s'applique
+  // TOUJOURS aux deux membres à la fois, donc les deux affichent un <math-field> — mais un
+  // seul (positionLiveField) est le vrai champ partagé (curseur/saisie réels), CELUI-CI
+  // n'est qu'un second <math-field> "read-only" recopiant le même texte tapé, recréé à
+  // chaque rendu comme un pill statique ordinaire (aucun focus/curseur à y préserver,
+  // donc aucun besoin de le rendre persistant comme liveOpPill). Rendu APRÈS le tracé du
+  // chemin (voir l'appel drawSide(..., null, ...) juste avant, dans drawAll) pour la même
+  // raison que drawSide : la flèche existe même quand rien n'est encore à afficher.
+  function drawMirrorField(history, historyRect, topEl, botEl, dir, warn, rawLatex, warnLatex, constrainLabels, placedLabels, equationRects) {
+    var anchor = computeLabelAnchor(computeSideGeometry(historyRect, topEl, botEl, dir), dir);
+
+    var el = document.createElement('div');
+    el.className = 'arrow-label arrow-label-mirror ' + (dir < 0 ? 'arrow-label-left' : 'arrow-label-right') +
+      (warn ? ' arrow-label-warning' : '');
+    el.style.left = anchor.extremeX + 'px';
+    el.style.top = anchor.midY + 'px';
+    history.appendChild(el);
+
+    var mf = document.createElement('math-field');
+    mf.className = 'math-keypad-field';
+    mf.setAttribute('tabindex', '-1');
+    // Posé en ATTRIBUT AVANT l'ajout au DOM (comme math-virtual-keyboard-policy dans
+    // mathKeypad.js/init) plutôt qu'en propriété `.readOnly` après coup : cette dernière
+    // retombe sur les options internes de MathLive, pas fiables tant que l'élément n'a
+    // pas fini son "upgrade" de custom element. Aucun curseur/interaction sur ce second
+    // champ : seul le pavé "live" (positionLiveField) est réellement saisissable.
+    mf.setAttribute('read-only', '');
+    el.appendChild(mf);
+    mf.value = rawLatex || '';
+
+    if (warnLatex) {
+      var warnEl = document.createElement('div');
+      warnEl.className = 'arrow-label-live-warn';
+      el.appendChild(warnEl);
+      window.katex.render(warnLatex, warnEl, { throwOnError: false, trust: true, strict: false });
+    }
+
+    var margin = 6;
+    var rect = el.getBoundingClientRect();
+    var boundLeft = constrainLabels ? historyRect.left : 0;
+    var boundRight = constrainLabels ? historyRect.right : window.innerWidth;
+    if (rect.left < boundLeft + margin) {
+      el.style.left = (anchor.extremeX + (boundLeft + margin - rect.left)) + 'px';
+    } else if (rect.right > boundRight - margin) {
+      el.style.left = (anchor.extremeX - (rect.right - (boundRight - margin))) + 'px';
+    }
+    avoidLabelCollisions(el, placedLabels, equationRects);
   }
 
   // Cubique en forme de S : tangente de départ VERTICALE (premier point de contrôle
@@ -353,6 +410,10 @@
         // confirmée — sur CE côté, le pill statique habituel (drawSide) est remplacé par
         // le champ éditable lui-même plutôt que dupliqué à côté de lui.
         var liveSide = (isPendingArrow && opts.live) ? opts.live.side : null;
+        // opts.live.mirror (voir computeLiveOpInfo) : 'expr' porte TOUJOURS sur les deux
+        // membres — le membre qui n'héberge pas le vrai champ affiche un second
+        // <math-field> "en lecture seule" (voir drawMirrorField) plutôt qu'un pill KaTeX.
+        var mirrorSide = (liveSide && opts.live.mirror) ? (liveSide === 'left' ? 'right' : 'left') : null;
         var topLeft = topRow.querySelector('.side[data-side="left"]');
         var topRight = topRow.querySelector('.side[data-side="right"]');
         var botLeft = botRow.querySelector('.side[data-side="left"]');
@@ -360,7 +421,10 @@
         if (topLeft && botLeft && (isPendingArrow || rows[i].opLeft)) {
           if (liveSide === 'left') {
             drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
-            positionLiveField(historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects);
+            positionLiveField(historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.warnLatex, opts.live.prefixLatex, opts.constrainLabels, placedLabels, equationRects);
+          } else if (mirrorSide === 'left') {
+            drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
+            drawMirrorField(history, historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.rawLatex, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects);
           } else {
             drawSide(svg, history, historyRect, topLeft, botLeft, rows[i].opLeft, rows[i].opLeftWarn, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
           }
@@ -368,7 +432,10 @@
         if (topRight && botRight && (isPendingArrow || rows[i].opRight)) {
           if (liveSide === 'right') {
             drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
-            positionLiveField(historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects);
+            positionLiveField(historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.warnLatex, opts.live.prefixLatex, opts.constrainLabels, placedLabels, equationRects);
+          } else if (mirrorSide === 'right') {
+            drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
+            drawMirrorField(history, historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.rawLatex, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects);
           } else {
             drawSide(svg, history, historyRect, topRight, botRight, rows[i].opRight, rows[i].opRightWarn, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
           }

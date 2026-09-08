@@ -131,6 +131,7 @@
   // chaque frappe, voir renderAll dans render.js) — créé une seule fois ici, repositionné
   // (jamais détruit/reparenté) à chaque rendu par arrows.js (voir positionLiveField).
   var liveOpPill = null;
+  var liveOpPrefix = null;
   var liveOpFieldWrap = null;
   var liveOpWarn = null;
 
@@ -306,8 +307,18 @@
     // styles de base nécessaires (voir style.css).
     liveOpPill.className = 'arrow-label-live';
     liveOpPill.hidden = true;
+    // Rangée horizontale "préfixe + champ" (ex. "factoriser par [champ]", voir
+    // liveOpPrefix/positionLiveField dans arrows.js) — la réserve ("valide si..."), elle,
+    // reste EN DESSOUS de cette rangée, jamais dedans (voir liveOpWarn plus bas).
+    var liveOpRow = document.createElement('div');
+    liveOpRow.className = 'arrow-label-live-row';
+    liveOpPrefix = document.createElement('span');
+    liveOpPrefix.className = 'arrow-label-live-prefix';
+    liveOpPrefix.hidden = true;
+    liveOpRow.appendChild(liveOpPrefix);
     liveOpFieldWrap = document.createElement('div');
-    liveOpPill.appendChild(liveOpFieldWrap);
+    liveOpRow.appendChild(liveOpFieldWrap);
+    liveOpPill.appendChild(liveOpRow);
     liveOpWarn = document.createElement('div');
     liveOpWarn.className = 'arrow-label-live-warn';
     liveOpWarn.hidden = true;
@@ -330,8 +341,10 @@
 
   // Accesseurs DOM bruts pour arrows.js/positionLiveField, seul endroit qui repositionne
   // réellement le pavé (coordonnées calculées après mise en page, recalculées à chaque
-  // rendu) et rend le texte de la réserve ("valide si ...") dans liveOpWarn.
+  // rendu), rend le texte de la réserve ("valide si ...") dans liveOpWarn, et le préfixe
+  // ("factoriser par", voir liveOpPrefix) dans liveOpPrefix.
   function getLiveOpPillEl() { return liveOpPill; }
+  function getLiveOpPrefixEl() { return liveOpPrefix; }
   function getLiveOpWarnEl() { return liveOpWarn; }
 
   // Masque le pavé "live" sans désengager le champ (voir hideLiveOpPill) — utilisé par
@@ -447,6 +460,7 @@
     setAllKeysDisabled: setAllKeysDisabled,
     bindLiveOpField: bindLiveOpField,
     getLiveOpPillEl: getLiveOpPillEl,
+    getLiveOpPrefixEl: getLiveOpPrefixEl,
     getLiveOpWarnEl: getLiveOpWarnEl,
     hideLiveOpPill: hideLiveOpPill
   };
