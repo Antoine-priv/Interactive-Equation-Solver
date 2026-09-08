@@ -40,7 +40,7 @@
     });
     document.addEventListener('click', function (e) {
       if (modalOpen() || !App.History.getPending().drilled) return;
-      if (e.target.closest('.term, .drilled-exit, button, #controlPanel, #opButtons, #mathKeypadPanel, #mathKeypadPeekTab, math-field')) return;
+      if (e.target.closest('.term, .drilled-exit, button, #controlPanel, #opButtons, #mathKeypadPanel, #mathKeypadPeekTab, #liveOpPill, math-field')) return;
       App.History.cancelOp();
     });
   }

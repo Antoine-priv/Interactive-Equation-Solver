@@ -65,6 +65,27 @@
     return !!desc && desc.type === 'expr' && !!desc.ops && desc.ops.some(isZeroRiskOp);
   }
 
+  // Corps LaTeX de la réserve ("valide si (x)≠0", potentiellement plusieurs conditions
+  // jointes par "et") pour un desc 'expr' — partagé entre formatOpLabel (qui l'ajoute à la
+  // fin de la chaîne complète) et le pavé "live" de la ligne "pending" (voir
+  // liveWarnLatex dans renderChain), qui l'affiche séparément SOUS le <math-field>
+  // éditable plutôt que dans le même texte (impossible d'ajouter du texte figé à
+  // l'intérieur d'un champ éditable). Renvoie null si aucune opération à risque.
+  function exprRiskyConditionsLatex(desc) {
+    if (!descHasZeroRisk(desc)) return null;
+    var riskyOperands = [];
+    desc.ops.forEach(function (op) {
+      if (!isZeroRiskOp(op)) return;
+      var exprOperandLatex = op.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
+      var isBareMonomial = op.terms.length === 1 && !Expr.isGroup(op.terms[0]);
+      riskyOperands.push({ latex: exprOperandLatex, bare: isBareMonomial });
+    });
+    var conditions = riskyOperands.map(function (r) {
+      return (r.bare ? r.latex : '\\left(' + r.latex + '\\right)') + '\\neq0';
+    }).join('\\text{ et }');
+    return '\\text{valide si }' + conditions;
+  }
+
   function formatOpLabel(desc) {
     if (!desc) return null;
     if (desc.type === 'simplify') {
@@ -135,11 +156,6 @@
     }
     if (desc.type === 'expr') {
       if (!desc.ops || desc.ops.length === 0) return null;
-      // Les éventuelles réserves ("valide si ...") sont accumulées à part et rajoutées
-      // toutes à la fin, APRÈS la chaîne complète (jamais entre deux opérations : sinon un
-      // "+2" venant après un "×(x)" à risque se lirait, à tort, comme collé à la réserve
-      // elle-même plutôt qu'à la chaîne — ex. "×(x) valide si (x)≠0+2").
-      var riskyOperands = [];
       // Chaque opération garde son propre signe explicite, y compris la première (+5-2x×3).
       var chainLatex = desc.ops.map(function (op) {
         if (op.terms) {
@@ -151,7 +167,6 @@
           // "×(x+5)" vs "×x+5").
           var exprOperandLatex = op.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
           var isBareMonomial = op.terms.length === 1 && !Expr.isGroup(op.terms[0]);
-          if (isZeroRiskOp(op)) riskyOperands.push({ latex: exprOperandLatex, bare: isBareMonomial });
           return OP_SYMBOL_LATEX[op.symbol] + (isBareMonomial ? exprOperandLatex : '\\left(' + exprOperandLatex + '\\right)');
         }
         if (op.symbol === '×' || op.symbol === '÷') {
@@ -161,12 +176,12 @@
         }
         return Expr.nodeLatex(op.term, false);
       }).join('');
-      if (riskyOperands.length > 0) {
-        var conditions = riskyOperands.map(function (r) {
-          return (r.bare ? r.latex : '\\left(' + r.latex + '\\right)') + '\\neq0';
-        }).join('\\text{ et }');
-        chainLatex += '\\ \\text{valide si }' + conditions;
-      }
+      // La réserve ("valide si ...", voir exprRiskyConditionsLatex) est accumulée à part et
+      // rajoutée à la fin, APRÈS la chaîne complète (jamais entre deux opérations : sinon un
+      // "+2" venant après un "×(x)" à risque se lirait, à tort, comme collé à la réserve
+      // elle-même plutôt qu'à la chaîne — ex. "×(x) valide si (x)≠0+2").
+      var riskyConditions = exprRiskyConditionsLatex(desc);
+      if (riskyConditions) chainLatex += '\\ ' + riskyConditions;
       return chainLatex;
     }
     return null;
@@ -1077,6 +1092,31 @@
   //   dont l'action s'applique réellement à cette sélection (Simplifier/Développer —
   //   "Factoriser" n'a pas d'aperçu tant que le facteur n'est pas saisi, "Produit nul"
   //   scinde en deux nouvelles lignes, rien à prévisualiser sur une seule ligne).
+  // Détermine si/où la ligne "pending" doit héberger le pavé "live" (le <math-field>
+  // partagé lui-même, voir bindLiveOpField dans mathKeypad.js) plutôt qu'un pill KaTeX
+  // statique — uniquement pendant la composition d'une "Opération" (chaîne +/-/×/÷,
+  // toujours symétrique sur les deux membres : convention arbitraire mais stable, le côté
+  // gauche héberge le champ réel, le côté droit garde son pill statique habituel, déjà
+  // recalculé à chaque frappe donc jamais "figé") ou d'un facteur commun (un seul membre
+  // concerné, déterminé par la sélection de départ). L'identité remarquable garde son
+  // propre pavé dédié (deux champs "a"/"b" dans #controlPanel, pas réductible à un pill
+  // unique) — non concernée ici. Renvoie null si aucun côté n'est "live" cette fois-ci
+  // (ex. racine carrée armée, ou étape 1 du choix de méthode de factorisation).
+  function computeLiveOpInfo(pending, preview) {
+    if (pending.opType === 'expr') {
+      return { side: 'left', warnLatex: exprRiskyConditionsLatex(preview.opLeft) };
+    }
+    if (pending.opType === 'factor' && pending.factorMode === 'common') {
+      var side = (preview.opLeft && preview.opLeft.type === 'factor') ? 'left'
+        : (preview.opRight && preview.opRight.type === 'factor') ? 'right'
+        : pending.selectedLeft.length > 0 ? 'left'
+        : pending.selectedRight.length > 0 ? 'right'
+        : null;
+      return side ? { side: side, warnLatex: null } : null;
+    }
+    return null;
+  }
+
   function shouldShowLivePreview(pending, opts) {
     if (opts.focused === false) return false;
     // "√" armée (voir pending.sqrtArmed dans history.js) : la ligne "pending" générique
@@ -1245,28 +1285,25 @@
     // vraiment quelque chose à prévisualiser : voir shouldShowLivePreview — pas de
     // ligne fantôme permanente juste parce que l'équation n'est pas encore résolue.
     var showPendingRow = shouldShowLivePreview(pending, opts);
+    var liveInfo = null;
 
     if (showPendingRow) {
       var preview = engine.computePreview();
       var pendingRow = createRow(preview.equation, { pending: true, solved: false });
       container.appendChild(pendingRow);
       autoFitRowFont(pendingRow);
-      // Pendant que 'expr'/'factor' est en cours de saisie, ce qui serait affiché ici
-      // (ex. "-2", "factoriser par 2") est déjà visible, EN DIRECT et avec le curseur,
-      // dans le champ du pavé (voir js/mathKeypad.js) : pas besoin de la même chose en
-      // double sous forme d'étiquette statique à côté de la flèche.
-      var liveFieldActive = pending.opType === 'expr' || pending.opType === 'factor';
       rowsData.push({
         el: pendingRow,
-        opLeft: liveFieldActive ? null : formatOpLabel(preview.opLeft),
-        opRight: liveFieldActive ? null : formatOpLabel(preview.opRight),
-        opLeftWarn: !liveFieldActive && descHasZeroRisk(preview.opLeft),
-        opRightWarn: !liveFieldActive && descHasZeroRisk(preview.opRight),
+        opLeft: formatOpLabel(preview.opLeft),
+        opRight: formatOpLabel(preview.opRight),
+        opLeftWarn: descHasZeroRisk(preview.opLeft),
+        opRightWarn: descHasZeroRisk(preview.opRight),
         pending: true
       });
+      liveInfo = computeLiveOpInfo(pending, preview);
     }
 
-    return { rowsData: rowsData, framedRowEl: framedRowEl };
+    return { rowsData: rowsData, framedRowEl: framedRowEl, liveInfo: liveInfo };
   }
 
   // Valeur de x une fois une branche résolue (voir Equation.isSolved : un membre "x",
@@ -1303,6 +1340,14 @@
       scrollTarget = res.framedRowEl;
       var steps = Hist.getSteps();
       scrollIdentity = steps[steps.length - 1];
+
+      // Décision de visibilité du pavé "live" (voir computeLiveOpInfo) : masquée tout de
+      // suite et de façon SYNCHRONE (jamais depuis le rAF différé de drawAll plus bas) si
+      // rien n'est "live" cette fois-ci — sinon il resterait visible un instant à sa
+      // dernière position connue, potentiellement obsolète, jusqu'au prochain rendu.
+      // Positionné/montré, lui, uniquement par drawAll (voir drawOpts.live ci-dessous) :
+      // seule cette étape différée connaît les coordonnées réelles après mise en page.
+      if (!res.liveInfo) App.MathKeypad.hideLiveOpPill();
 
       // Aperçu de "Produit nul" (survol de son bouton, voir previewProduitNul dans
       // history.js) ou de "Racine carrée" (une fois la touche √ du pavé "Opération"
@@ -1361,6 +1406,7 @@
             ? res.rowsData[res.rowsData.length - 1].el.querySelector('.eq-sign') : null;
           drawOpts.fork = { from: lastEqSign, to: previewCols, label: previewLabel };
         }
+        if (res.liveInfo) drawOpts.live = res.liveInfo;
         App.Arrows.drawAll(history, res.rowsData, drawOpts);
       });
     } else {
@@ -1436,10 +1482,18 @@
         // avant tout ajout de flèche) pour cibler la dernière ligne de façon fiable.
         var chainRows = chainEl.querySelectorAll('.eq-row');
         if (chainRows.length > 0) chainRows[chainRows.length - 1].classList.add('eq-row-flush-bottom');
+        // Décision de visibilité du pavé "live" (voir computeLiveOpInfo) : SYNCHRONE, comme
+        // dans le cas sans branches — seule la branche focalisée peut jamais être "live"
+        // (focused:false ci-dessus interdit toute ligne "pending" ailleurs), donc masquer
+        // ici pour les autres est sans danger pour elle (son propre rAF, plus bas, la
+        // montrera/positionnera si besoin).
+        if (!branchRes.liveInfo) App.MathKeypad.hideLiveOpPill();
         requestAnimationFrame(function () {
           // constrainLabels : les étiquettes d'opération restent DANS cette colonne,
           // jamais à cheval sur la colonne voisine (juxtaposées, séparées de 56px seulement).
-          App.Arrows.drawAll(chainEl, branchRes.rowsData, { constrainLabels: true });
+          var branchDrawOpts = { constrainLabels: true };
+          if (branchRes.liveInfo) branchDrawOpts.live = branchRes.liveInfo;
+          App.Arrows.drawAll(chainEl, branchRes.rowsData, branchDrawOpts);
         });
         return { container: chainEl, col: col, res: branchRes, engine: engine };
       });

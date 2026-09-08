@@ -124,6 +124,16 @@
   var onTabCb = null;
   var collapsed = false;
 
+  // Pavé "live" (voir #liveOpPill dans style.css) : accueille le <math-field> partagé à
+  // même la ligne "pending" (pendant qu'une "Opération" ou un facteur commun est en train
+  // d'être tapé, voir bindLiveOpField) plutôt que dans le pavé ancré/#controlPanel. Un
+  // enfant PERSISTANT de #historyScroll (jamais #history, entièrement reconstruit à
+  // chaque frappe, voir renderAll dans render.js) — créé une seule fois ici, repositionné
+  // (jamais détruit/reparenté) à chaque rendu par arrows.js (voir positionLiveField).
+  var liveOpPill = null;
+  var liveOpFieldWrap = null;
+  var liveOpWarn = null;
+
   try {
     collapsed = localStorage.getItem(COLLAPSE_KEY) === '1';
   } catch (e) { /* stockage indisponible : réduit à false */ }
@@ -280,6 +290,57 @@
     peekTab.innerHTML = KEYBOARD_UP_SVG;
     peekTab.addEventListener('click', function () { setCollapsed(false); });
     document.body.appendChild(peekTab);
+
+    // Voir la déclaration de liveOpPill plus haut : un enfant persistant de
+    // #historyScroll (jamais document.body — doit défiler AVEC l'historique, pas rester
+    // fixe à l'écran), créé une seule fois, jamais retiré du DOM ensuite.
+    var historyScroll = document.getElementById('historyScroll');
+    liveOpPill = document.createElement('div');
+    liveOpPill.id = 'liveOpPill';
+    // PAS la classe partagée .arrow-label (voir style.css) : cet élément existe en
+    // PERMANENCE dans le DOM (juste masqué via `hidden` quand inactif, jamais retiré, voir
+    // sa déclaration plus haut), et .arrow-label est utilisée par plusieurs tests Playwright
+    // pour compter les étiquettes RÉELLEMENT affichées à un instant donné (ex.
+    // no_orphan_labels.js, mul_zero_warning.js) — le compte serait faussé par cet élément
+    // toujours présent, même masqué. .arrow-label-live porte donc sa PROPRE copie des
+    // styles de base nécessaires (voir style.css).
+    liveOpPill.className = 'arrow-label-live';
+    liveOpPill.hidden = true;
+    liveOpFieldWrap = document.createElement('div');
+    liveOpPill.appendChild(liveOpFieldWrap);
+    liveOpWarn = document.createElement('div');
+    liveOpWarn.className = 'arrow-label-live-warn';
+    liveOpWarn.hidden = true;
+    liveOpPill.appendChild(liveOpWarn);
+    if (historyScroll) historyScroll.appendChild(liveOpPill);
+  }
+
+  // Déplace le <math-field> partagé dans le pavé "live" de la ligne "pending" (voir
+  // liveOpPill ci-dessus) au lieu d'un emplacement du pavé ancré/#controlPanel — utilisé
+  // par le mode 'expr' ("Opération") et 'factor'/'common' (facteur commun), voir
+  // bindMathKeypad/bindFactorKeypad dans toolbar.js. Rend le pavé visible ET focalise le
+  // champ immédiatement (avant même que arrows.js ne le positionne précisément au prochain
+  // rendu — un élément masqué ne peut pas recevoir le focus) ; ne JAMAIS appeler ceci à
+  // chaque rendu (seulement sur une vraie transition d'entrée dans le mode, comme
+  // setActiveField), sous peine de réinitialiser le curseur/contenu à chaque frappe.
+  function bindLiveOpField(opts, initialLatex) {
+    liveOpPill.hidden = false;
+    setActiveField(liveOpFieldWrap, opts, initialLatex);
+  }
+
+  // Accesseurs DOM bruts pour arrows.js/positionLiveField, seul endroit qui repositionne
+  // réellement le pavé (coordonnées calculées après mise en page, recalculées à chaque
+  // rendu) et rend le texte de la réserve ("valide si ...") dans liveOpWarn.
+  function getLiveOpPillEl() { return liveOpPill; }
+  function getLiveOpWarnEl() { return liveOpWarn; }
+
+  // Masque le pavé "live" sans désengager le champ (voir hideLiveOpPill) — utilisé par
+  // render.js dès que la ligne "pending" en cours n'a de toute façon aucun côté "live" à
+  // montrer cette fois-ci (ex. racine carrée armée, voir shouldShowLivePreview) : appelé
+  // de façon SYNCHRONE (jamais depuis le rAF différé de drawAll) pour ne jamais laisser le
+  // champ visible un instant à une position obsolète avant d'être cliché lors du dessin.
+  function hideLiveOpPill() {
+    if (liveOpPill) liveOpPill.hidden = true;
   }
 
   // Lie le pavé à un champ logique : `slot` est l'élément DOM qui doit accueillir le
@@ -362,6 +423,7 @@
     onSqrtCb = null;
     onTabCb = null;
     fieldSlot.hidden = true;
+    hideLiveOpPill();
     setError(null);
     render();
   }
@@ -382,6 +444,10 @@
     setLatex: setLatex,
     setError: setError,
     setKeyState: setKeyState,
-    setAllKeysDisabled: setAllKeysDisabled
+    setAllKeysDisabled: setAllKeysDisabled,
+    bindLiveOpField: bindLiveOpField,
+    getLiveOpPillEl: getLiveOpPillEl,
+    getLiveOpWarnEl: getLiveOpWarnEl,
+    hideLiveOpPill: hideLiveOpPill
   };
 })(window.App = window.App || {});

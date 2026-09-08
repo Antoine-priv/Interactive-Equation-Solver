@@ -80,11 +80,12 @@
     placedLabels.push({ full: finalRect, hitbox: shrinkRect(finalRect, LABEL_HITBOX_INSET_X, LABEL_HITBOX_INSET_Y) });
   }
 
-  // dir: -1 pour le membre gauche (routé dans la marge gauche), +1 pour le membre droit.
-  // constrainLabels : recale l'étiquette pour rester DANS `historyRect` plutôt que dans
-  // la fenêtre entière — nécessaire dans une colonne "produit nul" (étroite, à côté
-  // d'une autre équation) pour ne jamais empiéter sur la colonne voisine.
-  function drawSide(svg, history, historyRect, topEl, botEl, label, warn, dir, markerId, constrainLabels, placedLabels, equationRects) {
+  // Géométrie partagée entre le tracé du chemin (path) et le positionnement d'une
+  // étiquette, statique (drawSide) ou "live" (positionLiveField) — toutes deux exprimées
+  // en coordonnées relatives à `historyRect` (le conteneur passé à drawAll, `#history` ou
+  // une colonne "produit nul"). dir: -1 pour le membre gauche (routé dans la marge
+  // gauche), +1 pour le membre droit.
+  function computeSideGeometry(historyRect, topEl, botEl, dir) {
     var topRect = topEl.getBoundingClientRect();
     var botRect = botEl.getBoundingClientRect();
     var topX = (dir < 0 ? topRect.left : topRect.right) - historyRect.left + dir * TEXT_GAP;
@@ -93,30 +94,43 @@
     // au-dessus du milieu de la ligne du bas : l'un et l'autre restent à distance du texte.
     var topY = topRect.top + topRect.height * 0.74 - historyRect.top;
     var botY = botRect.top + botRect.height * 0.26 - historyRect.top;
-
     var available = dir < 0
       ? Math.min(topX, botX)
       : Math.min(historyRect.width - topX, historyRect.width - botX);
     // bulge = décalage du point de contrôle ; le renflement visuel réel d'une quadratique
     // symétrique n'est qu'environ la moitié de cette valeur.
     var bulge = Math.max(34, Math.min(130, available * 1.15)) * dir;
+    return { topX: topX, topY: topY, botX: botX, botY: botY, bulge: bulge };
+  }
+
+  function computeLabelAnchor(geom, dir) {
+    var visualBulge = geom.bulge / 2;
+    return {
+      extremeX: (geom.topX + geom.botX) / 2 + visualBulge + dir * 14,
+      midY: (geom.topY + geom.botY) / 2
+    };
+  }
+
+  // constrainLabels : recale l'étiquette pour rester DANS `historyRect` plutôt que dans
+  // la fenêtre entière — nécessaire dans une colonne "produit nul" (étroite, à côté
+  // d'une autre équation) pour ne jamais empiéter sur la colonne voisine.
+  function drawSide(svg, history, historyRect, topEl, botEl, label, warn, dir, markerId, constrainLabels, placedLabels, equationRects) {
+    var geom = computeSideGeometry(historyRect, topEl, botEl, dir);
 
     var path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', buildPathD(topX, topY, botX, botY, bulge));
+    path.setAttribute('d', buildPathD(geom.topX, geom.topY, geom.botX, geom.botY, geom.bulge));
     path.setAttribute('class', 'arrow-path');
     path.setAttribute('marker-end', 'url(#' + markerId + ')');
     svg.appendChild(path);
 
     if (!label) return;
-    var visualBulge = bulge / 2;
-    var extremeX = (topX + botX) / 2 + visualBulge + dir * 14;
-    var midY = (topY + botY) / 2;
+    var anchor = computeLabelAnchor(geom, dir);
 
     var el = document.createElement('div');
     el.className = 'arrow-label ' + (dir < 0 ? 'arrow-label-left' : 'arrow-label-right') +
       (warn ? ' arrow-label-warning' : '');
-    el.style.left = extremeX + 'px';
-    el.style.top = midY + 'px';
+    el.style.left = anchor.extremeX + 'px';
+    el.style.top = anchor.midY + 'px';
     // Rendu en LaTeX (comme les équations) : x et signes identiques, plus de police système.
     window.katex.render(label, el, { throwOnError: false, trust: true, strict: false });
     history.appendChild(el);
@@ -129,11 +143,58 @@
     var boundLeft = constrainLabels ? historyRect.left : 0;
     var boundRight = constrainLabels ? historyRect.right : window.innerWidth;
     if (rect.left < boundLeft + margin) {
-      el.style.left = (extremeX + (boundLeft + margin - rect.left)) + 'px';
+      el.style.left = (anchor.extremeX + (boundLeft + margin - rect.left)) + 'px';
     } else if (rect.right > boundRight - margin) {
-      el.style.left = (extremeX - (rect.right - (boundRight - margin))) + 'px';
+      el.style.left = (anchor.extremeX - (rect.right - (boundRight - margin))) + 'px';
     }
     avoidLabelCollisions(el, placedLabels, equationRects);
+  }
+
+  // Positionne le pavé "live" partagé (le <math-field> lui-même, voir bindLiveOpField
+  // dans mathKeypad.js) à l'endroit exact où un pill statique apparaîtrait pour ce côté —
+  // même géométrie que drawSide, mais écrite en coordonnées de #historyScroll
+  // (scrollLeft/scrollTop inclus) plutôt qu'en viewport : le pavé est un enfant
+  // PERSISTANT de #historyScroll (jamais de `history`, reconstruit à chaque frappe, voir
+  // renderAll dans render.js), positionné en absolute pour défiler avec le contenu SANS
+  // le moindre code de synchronisation JS dédié au scroll.
+  function positionLiveField(historyRect, topEl, botEl, dir, warn, warnLatex, constrainLabels, placedLabels, equationRects) {
+    var pillEl = App.MathKeypad.getLiveOpPillEl();
+    if (!pillEl) return;
+    var geom = computeSideGeometry(historyRect, topEl, botEl, dir);
+    var anchor = computeLabelAnchor(geom, dir);
+
+    pillEl.classList.toggle('arrow-label-left', dir < 0);
+    pillEl.classList.toggle('arrow-label-right', dir >= 0);
+    pillEl.classList.toggle('arrow-label-warning', !!warn);
+    var warnEl = App.MathKeypad.getLiveOpWarnEl();
+    if (warnLatex) {
+      warnEl.hidden = false;
+      window.katex.render(warnLatex, warnEl, { throwOnError: false, trust: true, strict: false });
+    } else {
+      warnEl.hidden = true;
+    }
+    pillEl.hidden = false;
+
+    var historyScroll = document.getElementById('historyScroll');
+    var hsRect = historyScroll ? historyScroll.getBoundingClientRect() : historyRect;
+    var scrollLeft = historyScroll ? historyScroll.scrollLeft : 0;
+    var scrollTop = historyScroll ? historyScroll.scrollTop : 0;
+    var viewportX = historyRect.left + anchor.extremeX;
+    var viewportY = historyRect.top + anchor.midY;
+    pillEl.style.left = (viewportX - hsRect.left + scrollLeft) + 'px';
+    pillEl.style.top = (viewportY - hsRect.top + scrollTop) + 'px';
+
+    // Débordement/collision : même logique que drawSide, appliquée au pavé "live".
+    var margin = 6;
+    var rect = pillEl.getBoundingClientRect();
+    var boundLeft = constrainLabels ? historyRect.left : 0;
+    var boundRight = constrainLabels ? historyRect.right : window.innerWidth;
+    if (rect.left < boundLeft + margin) {
+      pillEl.style.left = (parseFloat(pillEl.style.left) + (boundLeft + margin - rect.left)) + 'px';
+    } else if (rect.right > boundRight - margin) {
+      pillEl.style.left = (parseFloat(pillEl.style.left) - (rect.right - (boundRight - margin))) + 'px';
+    }
+    avoidLabelCollisions(pillEl, placedLabels, equationRects);
   }
 
   // Cubique en forme de S : tangente de départ VERTICALE (premier point de contrôle
@@ -287,15 +348,30 @@
         // shouldShowLivePreview) — elle ne doit alors PAS hériter du traitement "toujours
         // les deux flèches" réservé à la vraie ligne fantôme.
         var isPendingArrow = !!rows[i].pending;
+        // opts.live (voir computeLiveOpInfo dans render.js) : SEULE la ligne "pending" peut
+        // héberger le pavé "live" (le <math-field> partagé), jamais une étape déjà
+        // confirmée — sur CE côté, le pill statique habituel (drawSide) est remplacé par
+        // le champ éditable lui-même plutôt que dupliqué à côté de lui.
+        var liveSide = (isPendingArrow && opts.live) ? opts.live.side : null;
         var topLeft = topRow.querySelector('.side[data-side="left"]');
         var topRight = topRow.querySelector('.side[data-side="right"]');
         var botLeft = botRow.querySelector('.side[data-side="left"]');
         var botRight = botRow.querySelector('.side[data-side="right"]');
         if (topLeft && botLeft && (isPendingArrow || rows[i].opLeft)) {
-          drawSide(svg, history, historyRect, topLeft, botLeft, rows[i].opLeft, rows[i].opLeftWarn, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
+          if (liveSide === 'left') {
+            drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
+            positionLiveField(historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects);
+          } else {
+            drawSide(svg, history, historyRect, topLeft, botLeft, rows[i].opLeft, rows[i].opLeftWarn, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
+          }
         }
         if (topRight && botRight && (isPendingArrow || rows[i].opRight)) {
-          drawSide(svg, history, historyRect, topRight, botRight, rows[i].opRight, rows[i].opRightWarn, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
+          if (liveSide === 'right') {
+            drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
+            positionLiveField(historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects);
+          } else {
+            drawSide(svg, history, historyRect, topRight, botRight, rows[i].opRight, rows[i].opRightWarn, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
+          }
         }
       }
     }

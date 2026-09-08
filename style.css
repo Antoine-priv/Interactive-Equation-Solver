@@ -188,6 +188,11 @@ button {
      larges côte à côte. Sans effet sur le cas normal (une équation centrée ne dépasse
      jamais la largeur de #historyScroll, voir .eq-row { overflow-x: auto }). */
   overflow-x: auto;
+  /* Ancre le pavé "live" de l'opération/facteur en cours de saisie (voir #liveOpPill dans
+     mathKeypad.js) : un enfant direct de #historyScroll (jamais #history, entièrement
+     reconstruit à chaque frappe, voir renderAll dans render.js) en position:absolute, pour
+     défiler naturellement AVEC le contenu sans le moindre code de synchronisation JS. */
+  position: relative;
 }
 
 #history {
@@ -565,6 +570,54 @@ button {
 /* "produit nul" (voir drawFork dans arrows.js) : centrée horizontalement sous le "="
    d'origine, pas à côté d'une flèche précise (il y en a deux, une par facteur). */
 .arrow-label-fork { transform: translate(-50%, 0); }
+
+/* Pavé "live" (voir #liveOpPill dans mathKeypad.js) : remplace le pill statique de la
+   ligne "pending" par le <math-field> partagé lui-même quand pending.opType vaut 'expr'
+   ou 'factor' (facteur commun) — l'élève tape directement dedans, curseur inclus, au lieu
+   d'un second champ séparé ailleurs à l'écran (voir bindLiveOpField dans mathKeypad.js).
+   Reprend la même apparence que .arrow-label (voir plus haut) SANS partager sa classe :
+   cet élément existe en permanence dans le DOM (juste masqué via `hidden` quand inactif,
+   jamais retiré) et plusieurs tests Playwright comptent les ".arrow-label" réellement
+   affichés à un instant donné — partager la classe fausserait ce compte même masqué.
+   position:absolute (pas fixed) car c'est un enfant PERSISTANT de #historyScroll, jamais
+   de #history : défile avec le contenu sans code JS dédié. pointer-events réactivé
+   (contrairement à .arrow-label, purement décoratif) pour rester cliquable. */
+.arrow-label-live {
+  position: absolute;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  white-space: nowrap;
+  z-index: 4;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 14px;
+}
+.arrow-label-live[hidden] { display: none; }
+.arrow-label-live .math-keypad-field {
+  display: inline-block;
+  width: auto;
+  min-width: 1.4em;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.05rem;
+  font-weight: 700;
+  --caret-color: var(--accent);
+  --selection-background-color: var(--accent-soft);
+}
+.arrow-label-live.arrow-label-warning .math-keypad-field { --caret-color: var(--warning); }
+/* Réserve ("valide si ... ≠ 0", voir liveWarnLatex dans render.js) : sous-légende figée,
+   jamais dans le <math-field> lui-même (qui reste éditable) — même info que celle déjà
+   embarquée dans le pill statique du membre non-live, voir formatOpLabel. */
+.arrow-label-live-warn { font-size: 0.78rem; font-weight: 600; opacity: 0.9; }
+.arrow-label-live-warn[hidden] { display: none; }
 
 /* ---- Boutons d'opération flottants, en bas à gauche ---- */
 #opButtons {
@@ -945,11 +998,6 @@ button {
   --selection-background-color: rgba(255, 255, 255, 0.35);
 }
 
-/* Étape 2, cas facteur commun : le <math-field> partagé occupe toute la largeur du
-   panneau (voir bindFactorKeypad dans toolbar.js). */
-.factor-field-slot {
-  width: 100%;
-}
 
 /* ---- Modale nouvelle équation ---- */
 .modal-overlay {

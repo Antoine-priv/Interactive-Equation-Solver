@@ -114,19 +114,16 @@
     return wrap;
   }
 
-  // Étape 2 (cas facteur commun, factorMode === 'common') : un unique champ mathématique
-  // (le <math-field> partagé — voir bindFactorKeypad, qui le lie APRÈS que ce wrapper soit
-  // attaché au document, sinon focusField() ciblerait un noeud détaché). L'élève tape
-  // directement la valeur ("6", "-3", "2x", ...) ; le facteur tapé est déjà visible en
-  // direct sur l'étiquette de la flèche (voir computePreview/formatOpLabel) — pas de
-  // retour redondant dans le pavé lui-même.
+  // Étape 2 (cas facteur commun, factorMode === 'common') : le <math-field> partagé vit
+  // désormais dans le pavé "live" de la ligne "pending" (voir bindLiveOpField dans
+  // mathKeypad.js/bindFactorKeypad ci-dessous), pas ici — #controlPanel n'a donc plus
+  // qu'un simple bouton "retour" pendant cette saisie. L'élève tape directement la valeur
+  // ("6", "-3", "2x", ...) et la voit apparaître, curseur inclus, à même l'étiquette de la
+  // flèche (voir positionLiveField dans arrows.js).
   function buildCommonFactorKeypad() {
     var wrap = document.createElement('div');
     wrap.className = 'keypad';
     wrap.appendChild(buildFactorBackRow());
-    var slot = document.createElement('div');
-    slot.className = 'factor-field-slot';
-    wrap.appendChild(slot);
     return wrap;
   }
 
@@ -344,7 +341,12 @@
   function bindMathKeypad(pending) {
     if (pending.opType === 'expr') {
       if (!mathKeypadBound) {
-        App.MathKeypad.setActiveField(null, {
+        // Le champ vit désormais directement dans le pavé "live" de la ligne "pending"
+        // (voir bindLiveOpField dans mathKeypad.js), à même la flèche/l'équation, plutôt
+        // que dans un emplacement séparé du pavé ancré — plus de contenu affiché deux
+        // fois à l'écran (voir positionLiveField dans arrows.js pour son positionnement,
+        // recalculé à chaque rendu).
+        App.MathKeypad.bindLiveOpField({
           onEnter: confirmExprOrSqrt,
           onEscape: function () { App.History.cancelOp(); },
           onInput: function (latex) { App.History.setExprChainText(latex); },
@@ -426,7 +428,11 @@
     if (sig === 'common') {
       var wrapC = buildCommonFactorKeypad();
       panel.appendChild(wrapC);
-      App.MathKeypad.setActiveField(wrapC.querySelector('.factor-field-slot'), {
+      // Comme pour 'expr' (voir bindMathKeypad) : le champ vit désormais dans le pavé
+      // "live" de la ligne "pending", pas dans #controlPanel — le facteur tapé apparaît
+      // directement, curseur inclus, sur l'étiquette de la flèche (voir
+      // positionLiveField dans arrows.js).
+      App.MathKeypad.bindLiveOpField({
         onEnter: function () { App.History.confirm(); },
         onEscape: function () { App.History.cancelOp(); },
         onInput: function (latex) { App.History.setFactorTermLatex(latex); }
@@ -620,13 +626,16 @@
       var panel = document.getElementById('controlPanel');
       var opBtnsEl = document.getElementById('opButtons');
       var onEquation = e.target.closest && e.target.closest('.eq-row');
-      // Mode 'expr' (voir bindMathKeypad) : sa saisie vit dans le pavé ancré de
-      // mathKeypad.js, pas #controlPanel — un clic dessus (champ, touches, replier/déplier)
-      // ne doit pas non plus fermer le mode en cours.
+      // Mode 'expr'/'factor' commun (voir bindMathKeypad/bindFactorKeypad) : sa saisie vit
+      // dans le pavé "live" de la ligne "pending" (voir bindLiveOpField dans
+      // mathKeypad.js), un enfant de #historyScroll distinct de #mathKeypadPanel — un
+      // clic dessus (champ, réserve "valide si...") ne doit pas non plus fermer le mode.
       var mathKeypadEl = document.getElementById('mathKeypadPanel');
       var mathKeypadPeek = document.getElementById('mathKeypadPeekTab');
+      var liveOpPillEl = document.getElementById('liveOpPill');
       var onMathKeypad = (mathKeypadEl && mathKeypadEl.contains(e.target)) ||
-        (mathKeypadPeek && mathKeypadPeek.contains(e.target));
+        (mathKeypadPeek && mathKeypadPeek.contains(e.target)) ||
+        (liveOpPillEl && liveOpPillEl.contains(e.target));
       if (panel.contains(e.target) || opBtnsEl.contains(e.target) || onEquation || onMathKeypad) return;
       App.History.cancelOp();
     }, true);

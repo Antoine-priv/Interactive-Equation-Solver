@@ -28,23 +28,31 @@ function ok(label, cond) {
   const displayGone = await page.$('.operand-display');
   ok('no "facteur commun : ..." panel is rendered in the common-factor keypad', displayGone === null);
 
-  // Type "2" and check the live arrow label already shows "factoriser par 2".
+  // Type "2" and check the live pill (the shared <math-field> itself, moved next to the
+  // arrow, see bindLiveOpField in mathKeypad.js) already shows it, cursor included — no
+  // more separate field elsewhere on screen duplicating the same value.
   await page.click('[data-key="2"]');
   await page.waitForTimeout(80);
 
   const displayStillGone = await page.$('.operand-display');
   ok('still no operand-display panel after typing a digit', displayStillGone === null);
 
-  // Le pavé (voir js/mathKeypad.js) affiche déjà "2" EN DIRECT avec le curseur : pas
-  // besoin d'une étiquette statique redondante à côté de la flèche pendant la saisie
-  // (voir renderChain/liveFieldActive dans render.js) — elle ne réapparaît qu'une fois
-  // confirmé, ci-dessous.
-  const label = await page.evaluate(() => {
-    var el = document.querySelector('.arrow-label annotation');
-    return el ? el.textContent : null;
+  const pillInfo = await page.evaluate(() => {
+    var pill = document.getElementById('liveOpPill');
+    var field = pill && pill.querySelector('math-field');
+    return {
+      visible: !!pill && !pill.hidden,
+      onLeftOrRight: !!pill && (pill.classList.contains('arrow-label-left') || pill.classList.contains('arrow-label-right')),
+      latex: window.App.MathKeypad.getLatex(),
+      fieldIsFocused: field ? document.activeElement === field : false
+    };
   });
-  console.log('live label while typing common factor "2":', JSON.stringify(label));
-  ok('no redundant live arrow label while typing (already shown in the keypad field)', label === null);
+  console.log('live pill while typing common factor "2":', JSON.stringify(pillInfo));
+  ok('the live pill (shared math-field) is shown next to the arrow', pillInfo.visible && pillInfo.onLeftOrRight);
+  ok('it shows exactly what was typed ("2")', pillInfo.latex === '2');
+  ok('the field stays focused (real input, not a separate echo)', pillInfo.fieldIsFocused);
+  ok('no old-style "factoriser par 2" static pill duplicates it', !(await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.arrow-label:not(#liveOpPill)')).some((el) => /factoriser/.test(el.textContent)))));
 
   await page.screenshot({ path: `${SCRATCH}/common_factor_no_display.png` });
 
@@ -54,14 +62,6 @@ function ok(label, cond) {
   console.log('equation after facteur commun 2:', JSON.stringify(step.equation));
   ok('confirming still produces 2(x+3)=0', step.equation.left[0].factor.coeff === 2 &&
     JSON.stringify(step.equation.left[0].innerTerms) === JSON.stringify([{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }]));
-
-  const confirmedLabel = await page.evaluate(() => {
-    var el = document.querySelector('.arrow-label annotation');
-    return el ? el.textContent : null;
-  });
-  console.log('label once confirmed:', JSON.stringify(confirmedLabel));
-  ok('confirmed step still shows "factoriser par 2" on its arrow',
-    confirmedLabel && /factoriser/.test(confirmedLabel) && /2/.test(confirmedLabel));
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
