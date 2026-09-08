@@ -233,14 +233,13 @@
       (warn ? ' arrow-label-warning' : '');
     el.style.left = anchor.extremeX + 'px';
     el.style.top = anchor.midY + 'px';
-    // Phase de CAPTURE (pas bubble) : le <math-field> interne (MathLive) intercepte/stoppe
-    // la propagation de ses propres clics en phase bulle pour gérer son focus, ce qui
-    // empêcherait un simple listener bulle posé ici de jamais s'exécuter quand on clique
-    // pile sur le champ (le cas le plus courant, vu sa taille dans le pill). La capture,
-    // elle, se déclenche AVANT que l'évènement n'atteigne le champ, donc toujours fiable.
+    // Couvre aussi un clic sur le padding/la réserve ("valide si...") du pill, en dehors
+    // de la zone du champ lui-même (voir l'overlay dédié, plus fiable, posé sur CETTE
+    // zone-là juste en dessous) — un double appel (overlay ET bulle jusqu'ici) ne fait
+    // rien de plus la seconde fois, voir le repli anticipé dans switchExprLiveSide.
     el.addEventListener('click', function () {
       App.Toolbar.switchExprLiveSide(dir < 0 ? 'left' : 'right');
-    }, true);
+    });
     history.appendChild(el);
 
     var row = document.createElement('div');
@@ -257,6 +256,30 @@
     mf.setAttribute('read-only', '');
     row.appendChild(mf);
     mf.value = rawLatex || '';
+
+    // Overlay opaque aux évènements pointeur, au-dessus du champ (voir .arrow-label-
+    // mirror-overlay dans style.css) : MathLive écoute lui-même "pointerdown" DIRECTEMENT
+    // sur le champ (voir connectedCallback dans vendor/mathlive) pour gérer son propre
+    // focus/clavier virtuel — sans cet overlay, cliquer PILE sur le champ (le cas le plus
+    // courant, vu sa taille dans le pill) laisse MathLive intercepter/stopper l'évènement
+    // pour lui-même AVANT qu'il n'atteigne switchExprLiveSide de façon fiable. Un <div>
+    // tout bête, sans aucune logique MathLive, capte donc l'interaction à sa place — ce
+    // champ en lecture seule ne voit ainsi jamais la moindre interaction. (Séparément : un
+    // <math-field> qui vient d'être (re)focalisé a besoin d'un bref instant avant
+    // d'accepter la frappe — un trait de MathLive déjà présent partout ailleurs dans
+    // l'appli, ex. juste après avoir cliqué "Opération" pour la première fois, voir le
+    // délai systématique dans tests/expr_chain_typing.js — sans lien avec CET overlay.)
+    // d'un champ" lui fait alors reperdre le focus qu'on venait tout juste de donner au
+    // VRAI champ relocalisé, une fraction de seconde après. Un simple listener posé
+    // au-dessus (même en phase de capture) ne suffit donc pas : le champ en lecture
+    // seule ne doit tout simplement JAMAIS voir cet évènement. Cet overlay, un <div> tout
+    // bête sans aucune logique MathLive, capte donc l'interaction à sa place.
+    var overlay = document.createElement('div');
+    overlay.className = 'arrow-label-mirror-overlay';
+    overlay.addEventListener('click', function () {
+      App.Toolbar.switchExprLiveSide(dir < 0 ? 'left' : 'right');
+    });
+    row.appendChild(overlay);
 
     // Curseur factice (voir commentaire de la fonction) : une simple barre clignotante en
     // CSS, toujours en fin de texte (pas de vraie position à suivre, ce champ n'étant

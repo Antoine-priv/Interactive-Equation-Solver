@@ -85,6 +85,36 @@ function ok(label, cond) {
     right: [{ coeff: 5, pow: 0 }, { coeff: 3, pow: 0 }, { coeff: 4, pow: 0 }]
   }));
 
+  // --- Régression : un clic RÉEL (mousedown/mouseup séparés, comme un vrai utilisateur —
+  // pas le helper page.click()) doit suffire du PREMIER coup, sans avoir à cliquer une
+  // seconde fois pour pouvoir taper. Cliquer PILE sur le <math-field> en lecture seule
+  // (le cas le plus courant, vu sa taille dans le pill) laissait autrefois MathLive
+  // intercepter l'évènement pour lui-même avant qu'il n'atteigne switchExprLiveSide de
+  // façon fiable (voir l'overlay dédié dans drawMirrorField) — le clic ne bascule DONC
+  // rien du tout dans ce cas, obligeant à cliquer ailleurs sur le pill. Le délai avant de
+  // taper, lui, n'est PAS spécifique à ce mécanisme : un <math-field> qui vient d'être
+  // (re)focalisé a besoin d'un bref instant avant d'accepter la frappe, un trait de
+  // MathLive déjà présent partout ailleurs dans l'appli (voir le même délai après le tout
+  // premier clic sur "Opération" dans tests/expr_chain_typing.js). ---
+  await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x=5');
+  await page.click('button[data-op="expr"]');
+  await page.waitForTimeout(80);
+  await page.keyboard.type('+7');
+  await page.waitForTimeout(80);
+
+  const box = await page.locator('.arrow-label-mirror').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(120);
+  await page.keyboard.type('9');
+  await page.waitForTimeout(80);
+
+  state = await pendingState();
+  console.log('apres UN SEUL clic reel (mousedown/up) pile sur le champ:', JSON.stringify(state));
+  ok('a single real click directly on the field is enough — no need to click a second time',
+    state.exprLatex === '+79' && state.liveSide === 'right' && state.fieldFocused);
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;

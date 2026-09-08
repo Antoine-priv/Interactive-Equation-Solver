@@ -659,7 +659,15 @@ button {
   pointer-events: auto;
   cursor: text;
 }
-.arrow-label-mirror-row { display: flex; align-items: center; }
+.arrow-label-mirror-row { position: relative; display: flex; align-items: center; }
+/* Overlay opaque aux évènements pointeur, au-dessus du <math-field> en lecture seule
+   (voir drawMirrorField dans arrows.js pour le pourquoi détaillé) : un <div> tout bête,
+   sans aucune logique MathLive, qui capte le clic à SA place — sinon MathLive prendrait
+   lui-même le focus sur ce champ dès le "pointerdown" pour le reperdre juste après (son
+   propre nettoyage "clic en dehors" du clavier virtuel, déclenché sur le MÊME évènement,
+   voit une cible qui a entre-temps été retirée du DOM et conclut à tort à un clic
+   extérieur). Transparent (juste un curseur "text" pour rester un repère visuel). */
+.arrow-label-mirror-overlay { position: absolute; inset: 0; }
 /* Curseur FACTICE (voir drawMirrorField dans arrows.js) : un champ "read-only" ne peut
    jamais recevoir le focus ni afficher son propre curseur natif (un seul curseur RÉEL
    possible à la fois, côté "live") — cette barre clignotante en CSS donne au membre
