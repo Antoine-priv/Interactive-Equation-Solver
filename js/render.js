@@ -1102,17 +1102,18 @@
   // (ex. racine carrée armée, ou étape 1 du choix de méthode de factorisation).
   //
   // `mirror`+`rawLatex` : pour 'expr', l'opération porte TOUJOURS sur les deux membres à
-  // la fois — le côté "live" (`side`, convention arbitraire mais stable : le gauche) tape
-  // dans le vrai champ partagé, l'AUTRE affiche un second <math-field> "en lecture seule"
-  // (voir drawMirrorField dans arrows.js) qui recopie le même texte tapé, pour que les
-  // deux membres restent visuellement de vrais champs mathématiques identiques plutôt
-  // qu'un champ d'un côté et un simple pill KaTeX de l'autre. `prefixLatex` : légende
-  // figée avant le champ (ex. "factoriser par", voir formatOpLabel) — 'expr' n'en a pas
-  // besoin (l'opérateur +/-/×/÷ fait déjà partie du texte tapé lui-même).
+  // la fois — le côté "live" (`side`, voir App.Toolbar.getExprLiveSide/switchExprLiveSide :
+  // gauche par défaut, bascule en cliquant le miroir de l'AUTRE membre) tape dans le vrai
+  // champ partagé, l'AUTRE affiche un second <math-field> "en lecture seule" (voir
+  // drawMirrorField dans arrows.js) qui recopie le même texte tapé, pour que les deux
+  // membres restent visuellement de vrais champs mathématiques identiques plutôt qu'un
+  // champ d'un côté et un simple pill KaTeX de l'autre. `prefixLatex` : légende figée
+  // avant le champ (ex. "factoriser par", voir formatOpLabel) — 'expr' n'en a pas besoin
+  // (l'opérateur +/-/×/÷ fait déjà partie du texte tapé lui-même).
   function computeLiveOpInfo(pending, preview) {
     if (pending.opType === 'expr') {
       return {
-        side: 'left',
+        side: App.Toolbar.getExprLiveSide(),
         mirror: true,
         rawLatex: pending.exprLatex || '',
         prefixLatex: null,

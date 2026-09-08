@@ -218,6 +218,13 @@
   // visiblement "éteint". Rendu APRÈS le tracé du chemin (voir l'appel drawSide(..., null,
   // ...) juste avant, dans drawAll) pour la même raison que drawSide : la flèche existe
   // même quand rien n'est encore à afficher.
+  //
+  // Cliquable (voir .arrow-label-mirror { pointer-events: auto } dans style.css, qui
+  // réactive ce qu'un .arrow-label ordinaire désactive) : bascule le VRAI champ live vers
+  // CE membre (voir App.Toolbar.switchExprLiveSide/computeLiveOpInfo dans render.js), pour
+  // continuer à composer l'opération depuis n'importe quel membre plutôt que rester
+  // coincé sur celui de départ — plutôt qu'un champ figé qu'un clic annulerait à tort
+  // (voir aussi l'exclusion .arrow-label-mirror dans le clic-en-dehors de toolbar.js).
   function drawMirrorField(history, historyRect, topEl, botEl, dir, warn, rawLatex, warnLatex, constrainLabels, placedLabels, equationRects) {
     var anchor = computeLabelAnchor(computeSideGeometry(historyRect, topEl, botEl, dir), dir);
 
@@ -226,6 +233,14 @@
       (warn ? ' arrow-label-warning' : '');
     el.style.left = anchor.extremeX + 'px';
     el.style.top = anchor.midY + 'px';
+    // Phase de CAPTURE (pas bubble) : le <math-field> interne (MathLive) intercepte/stoppe
+    // la propagation de ses propres clics en phase bulle pour gérer son focus, ce qui
+    // empêcherait un simple listener bulle posé ici de jamais s'exécuter quand on clique
+    // pile sur le champ (le cas le plus courant, vu sa taille dans le pill). La capture,
+    // elle, se déclenche AVANT que l'évènement n'atteigne le champ, donc toujours fiable.
+    el.addEventListener('click', function () {
+      App.Toolbar.switchExprLiveSide(dir < 0 ? 'left' : 'right');
+    }, true);
     history.appendChild(el);
 
     var row = document.createElement('div');

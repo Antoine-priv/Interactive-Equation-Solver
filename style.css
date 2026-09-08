@@ -646,12 +646,18 @@ button {
 /* .arrow-label-mirror : un second <math-field>, recréé à chaque rendu comme un pill
    normal (voir drawMirrorField) — partage la mise en page verticale de .arrow-label-live
    (champ puis, le cas échéant, la réserve juste en dessous) mais PAS son display:flex de
-   base (déjà porté par .arrow-label, dont il hérite la classe, voir arrows.js). */
+   base (déjà porté par .arrow-label, dont il hérite la classe, voir arrows.js).
+   pointer-events réactivé (contrairement à .arrow-label, purement décoratif) : cliquer
+   dessus bascule le champ live vers ce membre (voir switchExprLiveSide dans toolbar.js),
+   pour continuer à composer l'opération depuis n'importe quel membre — curseur "text"
+   pour signaler que c'est bien un champ de saisie, pas juste un texte d'information. */
 .arrow-label-mirror {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  pointer-events: auto;
+  cursor: text;
 }
 .arrow-label-mirror-row { display: flex; align-items: center; }
 /* Curseur FACTICE (voir drawMirrorField dans arrows.js) : un champ "read-only" ne peut

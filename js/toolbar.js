@@ -14,6 +14,18 @@
   // 'expr' — jamais à chaque rendu, ce qui réinitialiserait le curseur/contenu du champ à
   // chaque frappe (voir renderToolbar).
   var mathKeypadBound = false;
+  // Côté (membre) qui héberge actuellement le VRAI champ live en mode 'expr' — l'autre
+  // affiche le miroir en lecture seule (voir computeLiveOpInfo dans render.js/
+  // drawMirrorField dans arrows.js). Cliquer sur le miroir (voir switchExprLiveSide plus
+  // bas) le fait basculer, pour continuer à composer l'opération depuis N'IMPORTE quel
+  // membre plutôt que d'être coincé sur celui de départ. Remis à 'left' à chaque VRAIE
+  // entrée dans le mode (voir bindMathKeypad), jamais conservé d'une session à l'autre.
+  var exprLiveSide = 'left';
+  // Côté pour lequel le champ a été réellement re-parenté la dernière fois (voir
+  // bindMathKeypad) — permet de détecter, en plus de la simple entrée dans le mode, un
+  // changement de exprLiveSide qui doit LUI AUSSI redéclencher un bindLiveOpField (sinon
+  // le champ resterait visuellement à son ancienne place malgré le changement d'état).
+  var mathKeypadBoundSide = null;
 
   // Mode 'factor' (facteur commun/identité) : même principe que mathKeypadBound, mais pour
   // le <math-field> partagé lié DANS #controlPanel (voir bindFactorKeypad) — signature de
@@ -340,7 +352,15 @@
   // ses touches vivent entièrement dans le pavé ancré de mathKeypad.js (voir CLAUDE.md).
   function bindMathKeypad(pending) {
     if (pending.opType === 'expr') {
-      if (!mathKeypadBound) {
+      // Entrée FRAÎCHE dans le mode (jamais un simple changement de côté) : repart
+      // toujours de la gauche, sans hériter du côté où une session précédente avait été
+      // laissée (voir exprLiveSide plus haut).
+      if (!mathKeypadBound) exprLiveSide = 'left';
+      // Re-parente le champ dès qu'il vient d'entrer dans le mode OU que exprLiveSide a
+      // changé depuis (voir switchExprLiveSide, déclenché en cliquant le miroir) — jamais
+      // à chaque rendu pendant une frappe normale, sous peine de réinitialiser le
+      // curseur/contenu à chaque caractère tapé.
+      if (!mathKeypadBound || mathKeypadBoundSide !== exprLiveSide) {
         // Le champ vit désormais directement dans le pavé "live" de la ligne "pending"
         // (voir bindLiveOpField dans mathKeypad.js), à même la flèche/l'équation, plutôt
         // que dans un emplacement séparé du pavé ancré — plus de contenu affiché deux
@@ -353,6 +373,7 @@
           onSqrt: function () { App.History.toggleSquareRootArmed(); }
         }, pending.exprLatex || '');
         mathKeypadBound = true;
+        mathKeypadBoundSide = exprLiveSide;
       }
       var errMsg = pending.error;
       if (!errMsg && pending.sqrtFailed) {
@@ -385,7 +406,21 @@
     } else if (mathKeypadBound) {
       App.MathKeypad.clearActiveField();
       mathKeypadBound = false;
+      mathKeypadBoundSide = null;
     }
+  }
+
+  // Bascule le champ live vers l'AUTRE membre (voir exprLiveSide) — appelé en cliquant
+  // sur le miroir en lecture seule (voir drawMirrorField dans arrows.js), pour continuer à
+  // composer l'opération depuis ce membre plutôt que de rester coincé sur celui de départ.
+  // Même principe que les aperçus au survol (hoveredOp ci-dessus) : un simple changement
+  // d'état UI local, pas une action de App.History, donc un re-rendu explicite est
+  // nécessaire (rien à "notifier" côté moteur de résolution).
+  function switchExprLiveSide(side) {
+    if (exprLiveSide === side) return;
+    exprLiveSide = side;
+    App.Render.renderAll();
+    renderToolbar();
   }
 
   // Lie/délie le <math-field> partagé au mode 'factor' (facteur commun/identité) — même
@@ -630,12 +665,17 @@
       // dans le pavé "live" de la ligne "pending" (voir bindLiveOpField dans
       // mathKeypad.js), un enfant de #historyScroll distinct de #mathKeypadPanel — un
       // clic dessus (champ, réserve "valide si...") ne doit pas non plus fermer le mode.
+      // Le miroir en lecture seule du membre opposé (voir drawMirrorField dans arrows.js,
+      // .arrow-label-mirror, recréé à chaque rendu donc sans id fixe) non plus : cliquer
+      // dessus bascule le champ live vers CE membre (voir switchExprLiveSide), une action
+      // délibérée sur la composition en cours, pas un clic "en dehors".
       var mathKeypadEl = document.getElementById('mathKeypadPanel');
       var mathKeypadPeek = document.getElementById('mathKeypadPeekTab');
       var liveOpPillEl = document.getElementById('liveOpPill');
       var onMathKeypad = (mathKeypadEl && mathKeypadEl.contains(e.target)) ||
         (mathKeypadPeek && mathKeypadPeek.contains(e.target)) ||
-        (liveOpPillEl && liveOpPillEl.contains(e.target));
+        (liveOpPillEl && liveOpPillEl.contains(e.target)) ||
+        (e.target.closest && e.target.closest('.arrow-label-mirror'));
       if (panel.contains(e.target) || opBtnsEl.contains(e.target) || onEquation || onMathKeypad) return;
       App.History.cancelOp();
     }, true);
@@ -645,6 +685,8 @@
     init: initToolbar,
     render: renderToolbar,
     computeSelectionInfo: computeSelectionInfo,
-    getHoveredOp: function () { return hoveredOp; }
+    getHoveredOp: function () { return hoveredOp; },
+    getExprLiveSide: function () { return exprLiveSide; },
+    switchExprLiveSide: switchExprLiveSide
   };
 })(window.App = window.App || {});
