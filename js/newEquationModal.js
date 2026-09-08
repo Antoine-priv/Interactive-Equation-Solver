@@ -36,7 +36,7 @@
     function open() {
       overlay.hidden = false;
       manualError.textContent = '';
-      App.MathKeypad.setActiveField(manualInputSlot, { onEnter: submitManual, onEscape: close }, '');
+      App.MathKeypad.setActiveField(manualInputSlot, { onEnter: submitManual, onEscape: close }, equationToLatex(App.History.lastEquation()));
     }
 
     function close() {
