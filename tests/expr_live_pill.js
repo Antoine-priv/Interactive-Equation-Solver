@@ -44,6 +44,7 @@ function ok(label, cond) {
       var el = document.querySelector('.arrow-label-mirror');
       var field = el && el.querySelector('math-field');
       var warn = el && el.querySelector('.arrow-label-live-warn');
+      var caret = el && el.querySelector('.arrow-label-mirror-caret');
       return {
         present: !!el,
         onRight: !!el && el.classList.contains('arrow-label-right'),
@@ -52,9 +53,25 @@ function ok(label, cond) {
         value: field ? field.getValue() : null,
         warnText: warn ? warn.textContent : null,
         bg: el ? getComputedStyle(el).backgroundColor : null,
-        focused: field ? document.activeElement === field : false
+        focused: field ? document.activeElement === field : false,
+        caretPresent: !!caret,
+        caretColor: caret ? getComputedStyle(caret).backgroundColor : null,
+        caretAnimated: caret ? getComputedStyle(caret).animationName !== 'none' : false
       };
     });
+  }
+
+  // Résout une custom property CSS (ex. "--accent") en une couleur "rgb(...)" comparable
+  // à getComputedStyle(...).backgroundColor/color, quel que soit le thème courant.
+  function themeColor(varName) {
+    return page.evaluate((name) => {
+      var probe = document.createElement('div');
+      document.body.appendChild(probe);
+      probe.style.background = 'var(' + name + ')';
+      var color = getComputedStyle(probe).backgroundColor;
+      probe.remove();
+      return color;
+    }, varName);
   }
 
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x=5');
@@ -85,6 +102,9 @@ function ok(label, cond) {
   ok('the mirror shows exactly the same latex as the live field ("+3")', mirror.value === '+3');
   ok('the mirror never steals focus', !mirror.focused);
   ok('no warning on the mirror either for a plain "+3"', !mirror.isWarning);
+  ok('a fake blinking cursor is drawn next to the mirror field (complete duplicate look)', mirror.caretPresent && mirror.caretAnimated);
+  const accentColor = await themeColor('--accent');
+  ok('the fake cursor uses the normal accent color when not warned', mirror.caretColor === accentColor);
 
   await page.screenshot({ path: `${SCRATCH}/expr_live_pill_plus3.png` });
 
@@ -100,32 +120,26 @@ function ok(label, cond) {
   ok('warning styling applied on the live pill for a zero-risk multiplier', info.isWarning);
   ok('the "valide si..." caption is shown (not baked into the editable field)', !info.warnHidden && /valide/.test(info.warnText) && /≠/.test(info.warnText));
 
-  const themeColors = await page.evaluate(() => {
-    var root = getComputedStyle(document.documentElement);
-    var probe = document.createElement('div');
-    document.body.appendChild(probe);
-    probe.style.background = 'var(--warning-soft)';
-    var warningSoftBg = getComputedStyle(probe).backgroundColor;
-    probe.style.background = 'var(--accent-soft)';
-    var accentSoftBg = getComputedStyle(probe).backgroundColor;
-    probe.remove();
-    // --warning elle-même (custom property brute, ex. "#b45309") : comparée telle quelle
-    // à --caret-color (posée via `--caret-color: var(--warning)`, voir style.css), pas
-    // via la propriété standard `color` (dont le format normalisé par le navigateur, ex.
-    // "rgb(...)", ne correspond pas forcément à celui, brut, d'une custom property).
-    return { warningRaw: root.getPropertyValue('--warning').trim(), warningSoftBg: warningSoftBg, accentSoftBg: accentSoftBg };
-  });
+  // --warning elle-même (custom property brute, ex. "#b45309") : comparée telle quelle à
+  // --caret-color (posée via `--caret-color: var(--warning)`, voir style.css), pas via la
+  // propriété standard `color` (dont le format normalisé par le navigateur, ex.
+  // "rgb(...)", ne correspond pas forcément à celui, brut, d'une custom property).
+  const warningRaw = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--warning').trim());
+  const warningSoftBg = await themeColor('--warning-soft');
+  const accentSoftBg = await themeColor('--accent-soft');
   ok('the live pill background actually turns to the same yellow/orange as before (--warning-soft)',
-    info.pillBg === themeColors.warningSoftBg);
+    info.pillBg === warningSoftBg);
   ok('the live pill background is no longer the default accent-soft once warned',
-    info.pillBg !== themeColors.accentSoftBg);
-  ok('the live field caret color switches to the warning color (--warning), not blue', info.caretColor === themeColors.warningRaw);
+    info.pillBg !== accentSoftBg);
+  ok('the live field caret color switches to the warning color (--warning), not blue', info.caretColor === warningRaw);
 
   mirror = await mirrorInfo();
   console.log('miroir apres ×(x+5):', JSON.stringify(mirror));
   ok('the mirror also gets the warning styling', mirror.isWarning);
   ok('the mirror shows its own "valide si..." caption too', mirror.warnText && /valide/.test(mirror.warnText));
   ok('the live pill and the mirror share the exact same warning background color', mirror.bg === info.pillBg);
+  const warningColorRgb = await themeColor('--warning');
+  ok('the mirror\'s fake cursor also turns to the warning color, in sync with the real one', mirror.caretColor === warningColorRgb);
 
   await page.screenshot({ path: `${SCRATCH}/expr_live_pill_warning.png` });
 

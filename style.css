@@ -653,6 +653,30 @@ button {
   align-items: center;
   gap: 2px;
 }
+.arrow-label-mirror-row { display: flex; align-items: center; }
+/* Curseur FACTICE (voir drawMirrorField dans arrows.js) : un champ "read-only" ne peut
+   jamais recevoir le focus ni afficher son propre curseur natif (un seul curseur RÉEL
+   possible à la fois, côté "live") — cette barre clignotante en CSS donne au membre
+   opposé la même apparence "en train d'être tapée" que le vrai champ, pour un duplicata
+   visuel complet plutôt qu'un champ actif à côté d'un champ visiblement figé. Toujours en
+   fin de texte (pas de vraie position de curseur à suivre, ce champ n'étant jamais
+   réellement édité). Même couleur que le vrai curseur (--caret-color, accent/warning). */
+.arrow-label-mirror-caret {
+  display: inline-block;
+  width: 1.5px;
+  height: 1.1em;
+  margin-left: 1px;
+  background: var(--accent);
+  animation: arrow-label-mirror-caret-blink 1.05s step-end infinite;
+}
+.arrow-label-mirror.arrow-label-warning .arrow-label-mirror-caret { background: var(--warning); }
+@keyframes arrow-label-mirror-caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arrow-label-mirror-caret { animation: none; }
+}
 
 /* ---- Boutons d'opération flottants, en bas à gauche ---- */
 #opButtons {

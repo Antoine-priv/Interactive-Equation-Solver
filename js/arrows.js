@@ -207,12 +207,17 @@
   // "Miroir" du pavé "live" (voir positionLiveField) pour le membre OPPOSÉ, uniquement en
   // mode 'expr' (voir computeLiveOpInfo dans render.js) : la même chaîne tapée s'applique
   // TOUJOURS aux deux membres à la fois, donc les deux affichent un <math-field> — mais un
-  // seul (positionLiveField) est le vrai champ partagé (curseur/saisie réels), CELUI-CI
-  // n'est qu'un second <math-field> "read-only" recopiant le même texte tapé, recréé à
-  // chaque rendu comme un pill statique ordinaire (aucun focus/curseur à y préserver,
-  // donc aucun besoin de le rendre persistant comme liveOpPill). Rendu APRÈS le tracé du
-  // chemin (voir l'appel drawSide(..., null, ...) juste avant, dans drawAll) pour la même
-  // raison que drawSide : la flèche existe même quand rien n'est encore à afficher.
+  // seul (positionLiveField) est le vrai champ partagé (saisie réelle), CELUI-CI n'est
+  // qu'un second <math-field> "read-only" recopiant le même texte tapé, recréé à chaque
+  // rendu comme un pill statique ordinaire (aucun focus à y préserver, donc aucun besoin
+  // de le rendre persistant comme liveOpPill). Un champ en lecture seule ne peut PAS
+  // recevoir le focus ni afficher son propre curseur natif (un seul curseur RÉEL possible
+  // à la fois, côté "live") : un curseur clignotant FACTICE (voir .arrow-label-mirror-
+  // caret) est donc dessiné juste après, pour que les deux membres se ressemblent
+  // vraiment comme un DUPLICATA complet plutôt qu'un champ "actif" à côté d'un champ
+  // visiblement "éteint". Rendu APRÈS le tracé du chemin (voir l'appel drawSide(..., null,
+  // ...) juste avant, dans drawAll) pour la même raison que drawSide : la flèche existe
+  // même quand rien n'est encore à afficher.
   function drawMirrorField(history, historyRect, topEl, botEl, dir, warn, rawLatex, warnLatex, constrainLabels, placedLabels, equationRects) {
     var anchor = computeLabelAnchor(computeSideGeometry(historyRect, topEl, botEl, dir), dir);
 
@@ -223,17 +228,27 @@
     el.style.top = anchor.midY + 'px';
     history.appendChild(el);
 
+    var row = document.createElement('div');
+    row.className = 'arrow-label-mirror-row';
+    el.appendChild(row);
+
     var mf = document.createElement('math-field');
     mf.className = 'math-keypad-field';
     mf.setAttribute('tabindex', '-1');
     // Posé en ATTRIBUT AVANT l'ajout au DOM (comme math-virtual-keyboard-policy dans
     // mathKeypad.js/init) plutôt qu'en propriété `.readOnly` après coup : cette dernière
     // retombe sur les options internes de MathLive, pas fiables tant que l'élément n'a
-    // pas fini son "upgrade" de custom element. Aucun curseur/interaction sur ce second
-    // champ : seul le pavé "live" (positionLiveField) est réellement saisissable.
+    // pas fini son "upgrade" de custom element.
     mf.setAttribute('read-only', '');
-    el.appendChild(mf);
+    row.appendChild(mf);
     mf.value = rawLatex || '';
+
+    // Curseur factice (voir commentaire de la fonction) : une simple barre clignotante en
+    // CSS, toujours en fin de texte (pas de vraie position à suivre, ce champ n'étant
+    // jamais réellement édité) — suffisant pour l'effet "duplicata" recherché.
+    var caret = document.createElement('span');
+    caret.className = 'arrow-label-mirror-caret';
+    row.appendChild(caret);
 
     if (warnLatex) {
       var warnEl = document.createElement('div');
