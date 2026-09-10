@@ -85,7 +85,7 @@ function ok(label, cond) {
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '(x-5)(x+2)=0');
   const canPN = await page.evaluate(() => window.App.History.canProduitNul());
   ok('"Produit nul" available immediately, no click/selection needed', canPN === true);
-  const produitNulBtnEnabled = await page.evaluate(() => !document.querySelector('button[data-op="produitnul"]').disabled);
+  const produitNulBtnEnabled = await page.evaluate(() => !document.querySelector('button[data-op="produitnul"]').closest('.op-row').hidden);
   ok('"Produit nul" button already enabled with no selection', produitNulBtnEnabled === true);
 
   // --- 6) A squared single-factor product ((x+3)^2) keeps the OLD whole-node behavior:

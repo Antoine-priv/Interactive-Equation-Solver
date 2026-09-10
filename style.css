@@ -692,20 +692,50 @@ button {
   .arrow-label-mirror-caret { animation: none; }
 }
 
-/* ---- Boutons d'opération flottants, en bas à gauche ---- */
+/* ---- Fenêtre flottante des boutons d'action, ancrée à gauche de l'équation active ----
+   Un enfant PERSISTANT de #historyScroll (jamais #history, entièrement reconstruit à
+   chaque rendu) en position:absolute, repositionné à chaque rendu par
+   App.Toolbar.positionPanel (voir toolbar.js) d'après la position réelle de l'équation
+   active — même principe que #liveOpPill (voir mathKeypad.js) : défile naturellement
+   AVEC le contenu, sans code de synchronisation JS dédié au scroll. */
 #opButtons {
-  position: fixed;
-  left: 22px;
-  bottom: 22px;
+  position: absolute;
+  top: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 14px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
   z-index: 41;
+}
+
+/* Petite pointe qui désigne l'équation ciblée par la fenêtre : un carré pivoté à 45°
+   dont seul le coin dépasse du bord droit — position verticale posée dynamiquement par
+   positionPanel (alignée sur le milieu de la ligne active, contrainte à rester dans la
+   hauteur de la fenêtre). */
+.op-buttons-arrow {
+  position: absolute;
+  right: -7px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  background: var(--surface);
+  transform: translateY(-50%) rotate(45deg);
+  border-radius: 3px;
+  pointer-events: none;
 }
 
 .op-row {
   position: relative; /* ancre la coche, positionnée en absolu (voir ci-dessous) */
 }
+/* Seuls les boutons réellement utilisables sont affichés (voir renderToolbar dans
+   toolbar.js) : plus de bouton grisé/désactivé pour une action indisponible, sa rangée
+   est simplement retirée du flux — la fenêtre grandit/rétrécit verticalement en
+   conséquence (gap ci-dessus s'ajuste tout seul, [hidden] retire l'élément du flex). */
+.op-row[hidden] { display: none; }
 
 /* Coche de validation : apparaît à côté du bouton de mode actif (voir renderToolbar
    dans toolbar.js), remplace l'ancien bouton "Valider" texte du panneau flottant.
@@ -755,29 +785,22 @@ button {
   font-size: 1.02rem;
   font-weight: 500;
   padding: 12px 22px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: none;
-  background: var(--surface);
+  /* Même fond que la ligne "current" (voir .eq-row.current .eq-line) : la fenêtre
+     rappelle ainsi visuellement l'équation à laquelle ses actions s'appliquent. */
+  background: var(--accent-soft);
   color: var(--text);
   cursor: pointer;
-  box-shadow: var(--shadow-md);
   text-align: left;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
-#opButtons button:hover { background: var(--accent-soft); color: var(--accent); }
+#opButtons button:hover { background: var(--accent); color: #fff; }
 #opButtons button.active {
   background: var(--accent);
   color: #fff;
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
 }
-/* Grisé plutôt que masqué (garde les 4 boutons à une position stable) quand la
-   sélection en cours ne permet pas cette action (voir computeSelectionInfo). */
-#opButtons button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-#opButtons button:disabled:hover { background: var(--surface); color: var(--text); }
 
 /* Infobulle d'explication : au survol prolongé d'un bouton de mode, plutôt que dans le
    pavé flottant lui-même. Délai avant apparition (transition-delay ci-dessous, sur la

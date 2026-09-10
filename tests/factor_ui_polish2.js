@@ -18,10 +18,10 @@ function ok(label, cond) {
   await page.goto(FILE);
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '6x-12+3=0');
   await page.click('.eq-row.current .side[data-side="left"] [data-index="0"]');
-  const disabledWith1 = await page.evaluate(() => document.querySelector('#opButtons button[data-op="factor"]').disabled);
+  const disabledWith1 = await page.evaluate(() => document.querySelector('#opButtons button[data-op="factor"]').closest('.op-row').hidden);
   ok('Factoriser disabled with only 1 term selected', disabledWith1 === true);
   await page.click('.eq-row.current .side[data-side="left"] [data-index="1"]');
-  const disabledWith2 = await page.evaluate(() => document.querySelector('#opButtons button[data-op="factor"]').disabled);
+  const disabledWith2 = await page.evaluate(() => document.querySelector('#opButtons button[data-op="factor"]').closest('.op-row').hidden);
   ok('Factoriser enabled with 2 terms selected', disabledWith2 === false);
 
   // --- Test 2 : plusieurs boutons d'identite restent grises independamment ---

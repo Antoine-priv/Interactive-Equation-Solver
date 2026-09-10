@@ -1335,6 +1335,17 @@
     return { rowsData: rowsData, framedRowEl: framedRowEl, liveInfo: liveInfo };
   }
 
+  // Ligne juste AU-DESSUS de `framedEl` (la ligne "current") dans `rowsData` — jamais la
+  // ligne "pending" elle-même si `renderChain` en a ajouté une en dernière position (voir
+  // showPendingRow ci-dessus) : cette dernière n'est pas "au-dessus" de `framedEl`, elle
+  // vient APRÈS. Sert de limite haute à App.Toolbar.positionPanel.
+  function findPrevRowEl(rowsData, framedEl) {
+    for (var i = 0; i < rowsData.length; i++) {
+      if (rowsData[i].el === framedEl) return i > 0 ? rowsData[i - 1].el : null;
+    }
+    return null;
+  }
+
   // Valeur de x une fois une branche résolue (voir Equation.isSolved : un membre "x",
   // l'autre une constante).
   function extractRoot(eq) {
@@ -1362,11 +1373,16 @@
     var scrollTarget = null;   // ligne à recentrer à l'écran
     var scrollIdentity = null; // objet comparé à lastCenteredStepByEngine.get(scrollEngine)
     var scrollEngine = Hist;   // moteur possédant scrollIdentity (clé du suivi par moteur)
+    // La fenêtre flottante des boutons d'action (voir App.Toolbar.positionPanel) cible
+    // toujours la même ligne que `scrollTarget` (la ligne "current") ; `opPrevRowEl`
+    // (celle juste au-dessus dans la MÊME chaîne, ou null) lui sert de limite haute dure.
+    var opPrevRowEl = null;
 
     if (!branches) {
       // Cas normal (pas de "produit nul" en cours) : une seule chaîne, comme avant.
       var res = renderChain(Hist, history, {});
       scrollTarget = res.framedRowEl;
+      opPrevRowEl = findPrevRowEl(res.rowsData, res.framedRowEl);
       var steps = Hist.getSteps();
       scrollIdentity = steps[steps.length - 1];
 
@@ -1594,6 +1610,7 @@
 
       scrollTarget = branchResults[focused].res.framedRowEl;
       scrollEngine = branchResults[focused].engine;
+      opPrevRowEl = findPrevRowEl(branchResults[focused].res.rowsData, scrollTarget);
       var focusedSteps = scrollEngine.getSteps();
       scrollIdentity = focusedSteps[focusedSteps.length - 1];
 
@@ -1613,6 +1630,16 @@
         history.appendChild(summaryEl);
       }
     }
+
+    // Repositionne la fenêtre flottante des boutons d'action à gauche de la ligne
+    // "current" (voir positionPanel dans toolbar.js) — dans un rAF comme App.Arrows.drawAll
+    // ci-dessus, pour mesurer une mise en page à jour. scrollTarget vaut toujours cette
+    // même ligne "current" dans les deux branches ci-dessus (chaîne simple ou branche
+    // focalisée), y compris pendant un "produit nul"/une "racine carrée" (la fenêtre peut
+    // alors chevaucher les colonnes non focalisées, voir CLAUDE.md).
+    requestAnimationFrame(function () {
+      App.Toolbar.positionPanel(scrollTarget, opPrevRowEl);
+    });
 
     // On restaure D'ABORD la position d'avant le rendu, SYSTÉMATIQUEMENT (annule un
     // clampage éventuel dû à la reconstruction, voir preservedScrollTop/

@@ -15,9 +15,14 @@ function ok(label, cond) {
 // à la largeur intrinsèque de .produit-nul-split, qui reste "flush" — chaque .eq-row de
 // la chaîne principale, centrée dans #history comme d'habitude, se retrouve alors
 // centrée sur EXACTEMENT le même point que le groupe de colonnes, sans marge négative ni
-// calcul de défilement hasardeux). Couvre aussi la conséquence directe rapportée : sans
-// cet alignement, une colonne pouvait finir décalée sous le pavé d'actions fixe
-// (#opButtons, en bas à gauche), rendant son contenu illisible (texte superposé).
+// calcul de défilement hasardeux).
+//
+// #opButtons est désormais une fenêtre flottante ANCRÉE à gauche de la ligne "current" de
+// la branche focalisée (voir App.Toolbar.positionPanel), plus un pavé fixe en bas à
+// gauche — elle PEUT donc légitimement chevaucher une colonne NON focalisée (voir
+// CLAUDE.md), ce n'est plus un bug à couvrir ici. Seule invariante encore vérifiée : elle
+// reste bien à gauche de la ligne "current" de la colonne FOCALISÉE elle-même (celle dont
+// elle affiche les actions), jamais par-dessus son propre texte.
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1366, height: 768 } });
@@ -39,14 +44,13 @@ function ok(label, cond) {
     var colsMinLeft = Math.min(...cols.map((c) => c.left));
     var colsMaxRight = Math.max(...cols.map((c) => c.right));
     var toolbar = document.getElementById('opButtons').getBoundingClientRect();
-    function intersects(a, b) {
-      return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
-    }
+    var focusedLine = document.querySelector('.produit-nul-branch.branch-focused .eq-row.current .eq-line');
+    var focusedRect = focusedLine ? focusedLine.getBoundingClientRect() : null;
     return {
       isWide: document.querySelector('.produit-nul-split-wide') !== null,
       primaryCenter: (primaryRect.left + primaryRect.right) / 2,
       colsCenter: (colsMinLeft + colsMaxRight) / 2,
-      anyColOverlapsToolbar: cols.some((c) => intersects(toolbar, c)),
+      toolbarLeftOfFocusedCurrent: !!focusedRect && toolbar.right <= focusedRect.left,
       colsFullyVisible: cols.filter((c) => c.left >= 0 && c.right <= window.innerWidth).length,
       totalCols: cols.length
     };
@@ -57,7 +61,8 @@ function ok(label, cond) {
   ok('not all columns fit at once (repro condition met)', state.colsFullyVisible < state.totalCols);
   ok('the primary equation chain and the column group share the exact same center (no trade-off)',
     Math.abs(state.primaryCenter - state.colsCenter) < 2);
-  ok('no column ends up overlapping the fixed toolbar', state.anyColOverlapsToolbar === false);
+  ok('the floating toolbar stays left of the focused branch\'s own current equation',
+    state.toolbarLeftOfFocusedCurrent === true);
 
   await page.screenshot({ path: `${SCRATCH}/produitnul_always_aligned.png` });
 

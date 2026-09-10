@@ -80,7 +80,17 @@ async function addOp(page, sign, num) {
   console.log('equation avant produit nul (attendu juste le ProductGroup a gauche):', JSON.stringify(eqBeforeSplit));
 
   await page.click('.eq-row.current .side[data-side="left"] .term[data-index="0"]');
-  await page.click('button[data-op="produitnul"]');
+  // Clic DOM direct (pas page.click) : le pave d'actions suit desormais l'equation active
+  // (voir App.Toolbar.positionPanel dans toolbar.js) au lieu de rester fixe en bas a
+  // gauche, donc sa position est recalculee a chaque rendu -- y compris pendant l'apercu
+  // au survol de ce meme bouton (hoveredOp dans toolbar.js), qui redeclenche un rendu.
+  // Le mouvement de souris REEL simule par Playwright pour atteindre ce bouton desormais
+  // mobile finit par franchir cet apercu une frame de trop tard par rapport a l'ancien
+  // bouton fixe, decalant le clic reel d'une frame par rapport au rendu qu'il doit
+  // declencher (sans consequence pour un vrai utilisateur, qui n'a pas cette simulation
+  // de trajectoire) -- sans effet ici sur ce que ce test verifie (le recentrage vertical
+  // une fois la scission produite), un clic DOM direct l'evite proprement.
+  await page.evaluate(() => document.querySelector('button[data-op="produitnul"]').click());
   await waitScrollSettled(page);
   await page.waitForTimeout(500);
 

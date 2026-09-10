@@ -47,8 +47,17 @@
 
   document.addEventListener('DOMContentLoaded', function () {
     App.History.subscribe(function () {
-      App.Render.renderAll();
+      // App.Toolbar.render() D'ABORD : il peut masquer/afficher des `.op-row` de
+      // #opButtons (voir renderToolbar dans toolbar.js), désormais un enfant PERSISTANT
+      // de #historyScroll — muter ça APRÈS le scroller.scrollTo(..., {behavior:'smooth'})
+      // synchrone d'App.Render.renderAll() (au lieu d'avant) annule silencieusement
+      // l'animation de défilement dans Chromium (une mutation DOM synchrone touchant un
+      // descendant du conteneur qui défile, dans le MÊME tour de boucle JS que l'appel à
+      // scrollTo, l'interrompt avant même la première frame). Aucune dépendance dans
+      // l'autre sens : App.Toolbar.render() ne lit jamais le DOM reconstruit par
+      // renderAll (seulement le modèle de données, voir computeSelectionInfo).
       App.Toolbar.render();
+      App.Render.renderAll();
     });
 
     App.Toolbar.init();

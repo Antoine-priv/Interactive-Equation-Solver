@@ -26,7 +26,7 @@ function ok(label, cond) {
   console.log('shape:', JSON.stringify(shape));
   ok('shape detects two opposite-sign squares', shape && !!shape.groupBaseA && !!shape.groupBaseB);
 
-  const factorBtnEnabled = await page.evaluate(() => !document.querySelector('button[data-op="factor"]').disabled);
+  const factorBtnEnabled = await page.evaluate(() => !document.querySelector('button[data-op="factor"]').closest('.op-row').hidden);
   ok('"Factoriser" button enabled', factorBtnEnabled);
 
   await page.click('button[data-op="factor"]');

@@ -26,7 +26,7 @@ function ok(label, cond) {
   await page.click('.eq-row.current .side[data-side="left"] .term[data-index="1"]');
   await page.waitForTimeout(80);
 
-  const factorBtnEnabled = await page.evaluate(() => !document.querySelector('button[data-op="factor"]').disabled);
+  const factorBtnEnabled = await page.evaluate(() => !document.querySelector('button[data-op="factor"]').closest('.op-row').hidden);
   ok('"Factoriser" button enabled', factorBtnEnabled);
 
   await page.click('button[data-op="factor"]');
@@ -75,7 +75,7 @@ function ok(label, cond) {
   await page.click('.eq-row.current .side[data-side="left"] .term[data-index="0"]');
   await page.click('.eq-row.current .side[data-side="left"] .term[data-index="1"]');
   await page.waitForTimeout(80);
-  const mixedFactorEnabled = await page.evaluate(() => !document.querySelector('button[data-op="factor"]').disabled);
+  const mixedFactorEnabled = await page.evaluate(() => !document.querySelector('button[data-op="factor"]').closest('.op-row').hidden);
   ok('mixed selection (grouped + plain) does NOT enable Factoriser', mixedFactorEnabled === false);
 
   console.log('--- erreurs JS ---');

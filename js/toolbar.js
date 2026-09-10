@@ -419,8 +419,13 @@
   function switchExprLiveSide(side) {
     if (exprLiveSide === side) return;
     exprLiveSide = side;
-    App.Render.renderAll();
+    // renderToolbar() D'ABORD, App.Render.renderAll() ENSUITE (voir main.js pour la
+    // même règle et pourquoi) : renderToolbar peut masquer/afficher des `.op-row` de
+    // #opButtons, désormais un enfant de #historyScroll — muter ça APRÈS le
+    // scroller.scrollTo(..., {behavior:'smooth'}) synchrone de renderAll (au lieu
+    // d'avant) annule silencieusement l'animation de défilement dans Chromium.
     renderToolbar();
+    App.Render.renderAll();
   }
 
   // Lie/délie le <math-field> partagé au mode 'factor' (facteur commun/identité) — même
@@ -533,18 +538,24 @@
 
       // Simplifier/Factoriser/Développer ne s'activent que si la sélection libre en
       // cours leur convient ("sélectionner d'abord, cliquer sur le bouton ensuite").
-      if (op === 'simplify') btn.disabled = !info.canSimplify;
+      var unusable;
+      if (op === 'simplify') unusable = !info.canSimplify;
       // Reste cliquable une fois engagé (pour pouvoir l'annuler en re-cliquant), sinon
-      // grisé sauf sélection valide — pas seulement à l'état idle : sans le "!== 'factor'"
-      // ci-dessous, le bouton restait à tort actif dès qu'un AUTRE mode (ex. "Opération")
-      // était engagé, puisque la condition ne testait alors jamais info.canFactor.
-      else if (op === 'factor') btn.disabled = pending.opType !== 'factor' && !info.canFactor;
-      else if (op === 'expand') btn.disabled = !info.canExpand;
-      else if (op === 'produitnul') btn.disabled = !info.canProduitNul;
-      else btn.disabled = false;
+      // indisponible sauf sélection valide — pas seulement à l'état idle : sans le
+      // "!== 'factor'" ci-dessous, le bouton restait à tort actif dès qu'un AUTRE mode
+      // (ex. "Opération") était engagé, puisque la condition ne testait alors jamais
+      // info.canFactor.
+      else if (op === 'factor') unusable = pending.opType !== 'factor' && !info.canFactor;
+      else if (op === 'expand') unusable = !info.canExpand;
+      else if (op === 'produitnul') unusable = !info.canProduitNul;
+      else unusable = false;
       // Pendant la saisie du facteur commun (mode 'factor' engagé), les 3 autres
       // boutons sont bloqués : il faut valider ou annuler avant de changer d'action.
-      if (pending.opType === 'factor' && op !== 'factor') btn.disabled = true;
+      if (pending.opType === 'factor' && op !== 'factor') unusable = true;
+      // Seuls les boutons réellement utilisables restent affichés (voir .op-row[hidden]
+      // dans style.css) : plus de bouton grisé pour une action indisponible, sa rangée
+      // est retirée du flux — la fenêtre flottante grandit/rétrécit en conséquence.
+      btn.parentElement.hidden = unusable;
 
       // Coche de validation à côté du bouton actif (mode 'expr'/'factor' seulement,
       // les seuls qui ont encore besoin d'une saisie à confirmer) : une seule et même
@@ -594,6 +605,56 @@
         err.textContent = pending.error;
         panel.appendChild(err);
       }
+    }
+  }
+
+  // Repositionne la fenêtre flottante des boutons d'action à gauche de `anchorRowEl`
+  // (la ligne "current" de la chaîne principale, ou celle de la branche focalisée — voir
+  // renderAll dans render.js, qui appelle ceci APRÈS mise en page, dans un rAF comme
+  // App.Arrows.drawAll). `prevRowEl` (la ligne juste au-dessus dans la même chaîne, ou
+  // null s'il n'y en a pas) sert de limite HAUTE dure : la fenêtre peut librement
+  // chevaucher l'étiquette de la flèche entrante (dans l'écart entre les deux lignes,
+  // voir CLAUDE.md/le cahier des charges), mais jamais la ligne précédente elle-même.
+  // Aucune limite haute dure symétrique côté bas : dépasser le bas de `anchorRowEl` est
+  // évité en priorité (limite MOLLE, voir maxBottom ci-dessous) mais cède si la fenêtre
+  // est trop haute pour tenir — un chevauchement occasionnel avec un aperçu en dessous
+  // reste préférable à recouvrir la ligne précédente.
+  function positionPanel(anchorRowEl, prevRowEl) {
+    var panelEl = document.getElementById('opButtons');
+    if (!panelEl || !anchorRowEl) return;
+    var historyScroll = document.getElementById('historyScroll');
+    if (!historyScroll) return;
+
+    var anchorLine = anchorRowEl.querySelector('.eq-line') || anchorRowEl;
+    var anchorRect = anchorLine.getBoundingClientRect();
+    var prevLine = prevRowEl ? (prevRowEl.querySelector('.eq-line') || prevRowEl) : null;
+    var prevRect = prevLine ? prevLine.getBoundingClientRect() : null;
+
+    var GAP = 26; // espace entre le bord droit de la fenêtre et le texte de l'équation
+    var height = panelEl.offsetHeight;
+    var centerY = anchorRect.top + anchorRect.height / 2;
+
+    var top = centerY - height / 2;
+    var maxBottom = anchorRect.bottom; // limite molle : ne pas déborder sous la ligne active
+    if (top + height > maxBottom) top = maxBottom - height;
+    var minTop = prevRect ? prevRect.bottom : -Infinity; // limite dure : jamais sur la ligne précédente
+    if (top < minTop) top = minTop;
+
+    var left = anchorRect.left - GAP - panelEl.offsetWidth;
+
+    var hsRect = historyScroll.getBoundingClientRect();
+    var scrollLeft = historyScroll.scrollLeft;
+    var scrollTop = historyScroll.scrollTop;
+    panelEl.style.left = (left - hsRect.left + scrollLeft) + 'px';
+    panelEl.style.top = (top - hsRect.top + scrollTop) + 'px';
+
+    var arrowEl = panelEl.querySelector('.op-buttons-arrow');
+    if (arrowEl) {
+      var margin = 14;
+      var arrowTop = centerY - top;
+      if (arrowTop < margin) arrowTop = margin;
+      if (arrowTop > height - margin) arrowTop = height - margin;
+      arrowEl.style.top = arrowTop + 'px';
     }
   }
 
@@ -684,6 +745,7 @@
   App.Toolbar = {
     init: initToolbar,
     render: renderToolbar,
+    positionPanel: positionPanel,
     computeSelectionInfo: computeSelectionInfo,
     getHoveredOp: function () { return hoveredOp; },
     getExprLiveSide: function () { return exprLiveSide; },

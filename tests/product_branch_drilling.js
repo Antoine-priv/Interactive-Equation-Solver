@@ -41,7 +41,7 @@ function ok(label, cond) {
   await (await page.$('.eq-row.current .side[data-side="left"] [data-inner-index="2"]')).click();
   await page.waitForTimeout(50);
 
-  const canSimplifyBtn = await page.evaluate(() => !document.querySelector('button[data-op="simplify"]').disabled);
+  const canSimplifyBtn = await page.evaluate(() => !document.querySelector('button[data-op="simplify"]').closest('.op-row').hidden);
   ok('"Simplifier" button enabled with 2 inner terms selected', canSimplifyBtn);
 
   await page.click('button[data-op="simplify"]');
