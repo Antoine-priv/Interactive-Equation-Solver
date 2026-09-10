@@ -449,20 +449,21 @@
       for (var i = 1; i < rows.length; i++) {
         var topRow = rows[i - 1].el;
         var botRow = rows[i].el;
-        // La ligne "pending" (aperçu, voir rows[].pending posé dans render.js) garde ses
-        // deux flèches même sans opération ; entre deux étapes déjà validées, pas
-        // d'opération sur un membre (ex. factoriser/développer un seul côté) => pas de
-        // flèche du tout pour ce membre. Se fier à `pending` plutôt qu'à la simple
-        // position (dernière ligne) : une étape déjà confirmée peut très bien être la
-        // dernière ligne affichée quand il n'y a rien à prévisualiser en plus (voir
-        // shouldShowLivePreview) — elle ne doit alors PAS hériter du traitement "toujours
-        // les deux flèches" réservé à la vraie ligne fantôme.
-        var isPendingArrow = !!rows[i].pending;
+        // La ligne "pending" (aperçu, voir rows[].pending posé dans render.js) garde une
+        // flèche par côté même sans étiquette, mais SEULEMENT sur le(s) côté(s) que
+        // rows[i].pendingForceLeft/pendingForceRight désignent (voir renderChain : les
+        // deux pour 'expr', toujours symétrique y compris chaîne encore vide ; seulement
+        // le côté qui change réellement pour tout le reste — notamment "factoriser", qui
+        // ne porte jamais que sur un seul membre à la fois, voir factorTarget dans
+        // history.js). Entre deux étapes déjà validées, pas d'opération sur un membre =>
+        // pas de flèche du tout pour ce membre.
+        var isPendingLeftArrow = !!rows[i].pending && !!rows[i].pendingForceLeft;
+        var isPendingRightArrow = !!rows[i].pending && !!rows[i].pendingForceRight;
         // opts.live (voir computeLiveOpInfo dans render.js) : SEULE la ligne "pending" peut
         // héberger le pavé "live" (le <math-field> partagé), jamais une étape déjà
         // confirmée — sur CE côté, le pill statique habituel (drawSide) est remplacé par
         // le champ éditable lui-même plutôt que dupliqué à côté de lui.
-        var liveSide = (isPendingArrow && opts.live) ? opts.live.side : null;
+        var liveSide = (rows[i].pending && opts.live) ? opts.live.side : null;
         // opts.live.mirror (voir computeLiveOpInfo) : 'expr' porte TOUJOURS sur les deux
         // membres — le membre qui n'héberge pas le vrai champ affiche un second
         // <math-field> "en lecture seule" (voir drawMirrorField) plutôt qu'un pill KaTeX.
@@ -471,7 +472,7 @@
         var topRight = topRow.querySelector('.side[data-side="right"]');
         var botLeft = botRow.querySelector('.side[data-side="left"]');
         var botRight = botRow.querySelector('.side[data-side="right"]');
-        if (topLeft && botLeft && (isPendingArrow || rows[i].opLeft)) {
+        if (topLeft && botLeft && (isPendingLeftArrow || rows[i].opLeft)) {
           if (liveSide === 'left') {
             drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
             positionLiveField(historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.warnLatex, opts.live.prefixLatex, opts.constrainLabels, placedLabels, equationRects);
@@ -482,7 +483,7 @@
             drawSide(svg, history, historyRect, topLeft, botLeft, rows[i].opLeft, rows[i].opLeftWarn, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
           }
         }
-        if (topRight && botRight && (isPendingArrow || rows[i].opRight)) {
+        if (topRight && botRight && (isPendingRightArrow || rows[i].opRight)) {
           if (liveSide === 'right') {
             drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
             positionLiveField(historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.warnLatex, opts.live.prefixLatex, opts.constrainLabels, placedLabels, equationRects);

@@ -1308,13 +1308,26 @@
       var pendingRow = createRow(preview.equation, { pending: true, solved: false });
       container.appendChild(pendingRow);
       autoFitRowFont(pendingRow);
+      // Quel(s) côté(s) doi(ven)t recevoir une flèche même sans étiquette (voir
+      // isPendingLeftArrow/isPendingRightArrow dans arrows.js) : toujours les deux pour
+      // 'expr' (opération TOUJOURS symétrique, y compris chaîne encore vide — voir
+      // computeLiveOpInfo) ; pour tout le reste (factoriser, ou aperçu libre au survol de
+      // Simplifier/Développer), seulement le(s) côté(s) où l'équation prévisualisée
+      // diffère réellement de la dernière équation confirmée — sinon "factoriser"
+      // (toujours un seul membre à la fois, voir factorTarget dans history.js) affichait
+      // à tort une flèche des deux côtés pendant l'aperçu, corrigée seulement une fois
+      // validé.
+      var pendingLeftChanged = JSON.stringify(preview.equation.left) !== JSON.stringify(lastEq.left);
+      var pendingRightChanged = JSON.stringify(preview.equation.right) !== JSON.stringify(lastEq.right);
       rowsData.push({
         el: pendingRow,
         opLeft: formatOpLabel(preview.opLeft),
         opRight: formatOpLabel(preview.opRight),
         opLeftWarn: descHasZeroRisk(preview.opLeft),
         opRightWarn: descHasZeroRisk(preview.opRight),
-        pending: true
+        pending: true,
+        pendingForceLeft: pending.opType === 'expr' || pendingLeftChanged,
+        pendingForceRight: pending.opType === 'expr' || pendingRightChanged
       });
       liveInfo = computeLiveOpInfo(pending, preview);
     }

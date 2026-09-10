@@ -24,6 +24,15 @@ function ok(label, cond) {
   await page.click('button[data-op="factor"]');
   await page.click('button.factor-choice-btn[data-factor-choice="common"]');
   await page.click('[data-key="2"]');
+
+  // Avant meme de valider : l'apercu (ligne "pending") ne doit deja montrer qu'une seule
+  // fleche, sur le membre gauche (celui reellement factorise) -- pas une deuxieme fleche
+  // fantome a droite (voir pendingForceLeft/pendingForceRight dans render.js).
+  await page.waitForTimeout(200);
+  const arrowCountDuringPreview = await page.evaluate(() => document.querySelectorAll('svg.arrows-overlay path.arrow-path').length);
+  console.log('arrow-path count pendant l\'apercu de factorisation (attendu 1, pas 2):', arrowCountDuringPreview);
+  ok('exactly one arrow shown in the factor preview row (no phantom arrow on the untouched side)', arrowCountDuringPreview === 1);
+
   await page.click('.op-confirm-btn');
 
   // Laisse le temps au requestAnimationFrame de arrows.js de dessiner.
