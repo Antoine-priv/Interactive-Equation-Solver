@@ -40,6 +40,20 @@
   // "Opération", ou sélectionner un terme) annulait à tort ce panorama.
   var wasWideSplit = false;
 
+  // Liseré de focus des colonnes "Produit nul"/"Racine carrée" (.branch-focused, voir
+  // style.css) : purement visuel, INDÉPENDANT de `focusedBranch` dans history.js (qui
+  // continue, lui, de router clavier/pavé/sélection exactement comme avant — cliquer en
+  // dehors ne change JAMAIS quelle colonne est réellement active, seulement si son liseré
+  // est affiché). Cliquer une colonne, à n'importe quelle profondeur d'imbrication
+  // (toutes partagent la classe .produit-nul-branch, voir initBranchOutlineDismissal plus
+  // bas), le fait aussitôt réapparaître.
+  var branchOutlineVisible = true;
+  // Vrai si le dernier rendu avait des branches — sert uniquement à détecter une VRAIE
+  // nouvelle scission (transition null -> branches) pour réafficher le liseré par défaut
+  // (voir renderAll) : sans ça, une scission ultérieure après un premier clic "en dehors"
+  // apparaîtrait à tort sans son liseré initial.
+  var hadBranches = false;
+
   // Incrémenté à CHAQUE appel de renderAll (voir son tout début) : les callbacks
   // différés via requestAnimationFrame plus bas capturent la valeur courante et se
   // désactivent d'eux-mêmes (voir isStaleRender) si un rendu PLUS RÉCENT a eu lieu entre
@@ -1455,6 +1469,10 @@
     history.innerHTML = '';
 
     var branches = Hist.getBranches();
+    // Nouvelle scission (aucune branche juste avant) : réaffiche le liseré par défaut,
+    // voir hadBranches/branchOutlineVisible tout en haut.
+    if (branches && !hadBranches) branchOutlineVisible = true;
+    hadBranches = !!branches;
     history.classList.toggle('produit-nul-active', !!branches);
     var scrollTarget = null;   // ligne à recentrer à l'écran
     var scrollIdentity = null; // objet comparé à lastCenteredStepByEngine.get(scrollEngine)
@@ -1572,7 +1590,9 @@
         // nouveau rendu (ex. survol du bouton "Opération" plus bas dans l'arbre). La classe
         // ci-dessous est connue et posée AVANT la moindre insertion DOM : aucune fenêtre
         // d'état intermédiaire n'est jamais observable.
-        col.className = 'produit-nul-branch' + (childFocused ? ' branch-focused' : '') +
+        // `&& branchOutlineVisible` : voir tout en haut du fichier — un clic en dehors de
+        // toute colonne masque le liseré sans toucher `childFocused`/le focus réel.
+        col.className = 'produit-nul-branch' + ((childFocused && branchOutlineVisible) ? ' branch-focused' : '') +
           (child.getBranches() ? ' produit-nul-branch-resplit' : '');
         col.addEventListener('click', function () { engine.setFocusedBranch(idx); });
         var chainEl = document.createElement('div');
@@ -1755,7 +1775,8 @@
         // Voir le commentaire jumeau dans renderBranchNode (nodeBranches.forEach) : même
         // classe posée avant toute insertion DOM, pour la même raison (évite le
         // clignotement du liseré via ":has()" pris en flagrant délit d'état intermédiaire).
-        col.className = 'produit-nul-branch' + (focused === idx ? ' branch-focused' : '') +
+        // `&& branchOutlineVisible` : voir tout en haut du fichier.
+        col.className = 'produit-nul-branch' + ((focused === idx && branchOutlineVisible) ? ' branch-focused' : '') +
           (engine.getBranches() ? ' produit-nul-branch-resplit' : '');
         col.addEventListener('click', function () { Hist.setFocusedBranch(idx); });
         var chainEl = document.createElement('div');
@@ -2018,8 +2039,37 @@
     }
   }
 
+  // Clic n'importe où EN DEHORS de toute colonne "Produit nul"/"Racine carrée" (à
+  // n'importe quelle profondeur d'imbrication, toutes partagent .produit-nul-branch) ET
+  // en dehors de tout ce qui sert à AGIR sur la colonne focalisée (fenêtre d'actions,
+  // pavé "Opération", boutons de zoom — même exclusion que le gestionnaire "en dehors"
+  // jumeau de initToolbar, pour la même raison : ce ne sont pas des clics "en dehors" au
+  // sens de l'utilisateur, juste l'UI flottante de la colonne elle-même) : masque le
+  // liseré de focus (voir branchOutlineVisible tout en haut) sans jamais toucher
+  // `focusedBranch` lui-même (history.js) — cliquer DANS une colonne (ou sur cette UI
+  // flottante) le fait aussitôt réapparaître. Capture, comme tous les autres
+  // gestionnaires de clic "en dehors" du projet (voir panJustEnded/initDrillDismissal
+  // dans main.js, le gestionnaire "en dehors" de initToolbar) — même raison : évaluer la
+  // cible AVANT qu'un re-rendu déclenché par CE MÊME clic ne la détache du DOM. Ignore
+  // les clics tant qu'aucune colonne n'existe (rien à masquer/révéler) pour ne jamais
+  // imposer de re-rendu superflu au fil normal de l'utilisation (avant toute
+  // "Produit nul").
+  var BRANCH_OUTLINE_KEEP_SELECTOR = '.produit-nul-branch, #controlPanel, #opButtons, ' +
+    '#mathKeypadPanel, #mathKeypadPeekTab, #liveOpPill, .arrow-label-mirror, ' +
+    '#zoomInBtn, #zoomOutBtn';
+  function initBranchOutlineDismissal() {
+    document.addEventListener('click', function (e) {
+      if (!document.querySelector('.produit-nul-branch')) return;
+      var keep = !!(e.target.closest && e.target.closest(BRANCH_OUTLINE_KEEP_SELECTOR));
+      if (keep === branchOutlineVisible) return;
+      branchOutlineVisible = keep;
+      renderAll();
+    }, true);
+  }
+
   App.Render = {
     renderAll: renderAll,
-    formatOpLabel: formatOpLabel
+    formatOpLabel: formatOpLabel,
+    init: initBranchOutlineDismissal
   };
 })(window.App = window.App || {});

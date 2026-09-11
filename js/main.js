@@ -175,6 +175,7 @@
     App.Keyboard.init();
     App.Modal.init();
     App.Theme.init();
+    App.Render.init();
     initUndoButton();
     initDrillDismissal();
     initCanvasPan();
