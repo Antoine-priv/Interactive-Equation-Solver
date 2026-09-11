@@ -26,6 +26,13 @@
   // de taper directement un FactorGroup déjà factorisé (voir plus bas dans parseSide),
   // plutôt que de ne reconnaître QUE l'équation développée.
   var FACTOR_COEFF_RE = new RegExp('^(' + NUM + ')\\(');
+  // "x(" devant une parenthèse ouvrante, ex. "x(x-5)" dans "x(x-5)=0" : même idée que
+  // FACTOR_COEFF_RE ci-dessus mais avec x lui-même (coeff 1, pow 1) comme facteur plutôt
+  // qu'une constante — un FactorGroup.factor n'est pas forcément une constante (voir
+  // expression.js et detectProduitNul dans history.js, qui traite déjà ce cas produit par
+  // "Factoriser par x"). Seulement "x(", jamais "2x(" : ambigu avec un produit de deux
+  // facteurs distincts "2x" et "(...)", non pris en charge par cette notation manuelle.
+  var VAR_FACTOR_RE = /^x\(/;
 
   // Notation "/" (ex. "1/2", "-3/4", "x/2") -> "\frac{...}{...}" LaTeX, appliquée avant
   // toute analyse : la saisie reste "1/2x+3=58-6x" plutôt que d'exiger "\frac{1}{2}x...".
@@ -131,6 +138,33 @@
         }
         nodes.push({ sign: sign, factors: App.Expr.canonicalizeFactors(factorsF) });
         pos = curPosF;
+        continue;
+      }
+
+      if (VAR_FACTOR_RE.test(s.slice(afterSign))) {
+        var openIdxV = afterSign + 1; // longueur de "x"
+        var firstParenV = readParenFactor(s, openIdxV);
+        if (firstParenV.exponent === 1 && s[firstParenV.nextPos] !== '(') {
+          nodes.push({
+            sign: sign,
+            factor: { coeff: 1, pow: 1 },
+            innerTerms: firstParenV.terms
+          });
+          pos = firstParenV.nextPos;
+          continue;
+        }
+        var factorsV = [
+          { terms: [{ coeff: 1, pow: 1 }], exponent: 1 },
+          { terms: firstParenV.terms, exponent: firstParenV.exponent }
+        ];
+        var curPosV = firstParenV.nextPos;
+        while (s[curPosV] === '(') {
+          var nfV = readParenFactor(s, curPosV);
+          factorsV.push({ terms: nfV.terms, exponent: nfV.exponent });
+          curPosV = nfV.nextPos;
+        }
+        nodes.push({ sign: sign, factors: App.Expr.canonicalizeFactors(factorsV) });
+        pos = curPosV;
         continue;
       }
 

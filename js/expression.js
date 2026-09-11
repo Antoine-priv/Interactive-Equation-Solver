@@ -11,8 +11,10 @@
                    isDivision?: boolean, factorTerms?: Node[] }
    isDivision distingue "k(...)"  (multiplication, défaut) de "(...)/k" (division, affichée
    en fraction) : même structure, juste un mode de rendu et de calcul différent. `factor`
-   reste un simple nombre (pow 0) en pratique — c'est le facteur commun/diviseur, jamais un
-   terme en x — SAUF quand `isDivision` ET `factorTerms` sont tous deux présents : le
+   est le plus souvent un simple nombre (pow 0), mais peut aussi être un coefficient de x
+   (pow 1, ex. "x(x-5)" — voir "Facteur commun" dans history.js/Expr.factorNodes, qui
+   accepte un terme en x, et "x(" en saisie manuelle directe dans parser.js) — jamais pow 2,
+   ni au-delà. `isDivision` ET `factorTerms` tous deux présents est un cas à part : le
    dénominateur est alors une expression quelconque (ex. "(...)/(x+5)", voir
    wrapSideInQuotient et isExpressionQuotient), `factorTerms` remplaçant entièrement
    `factor` (les deux sont mutuellement exclusifs, jamais renseignés ensemble). Ce cas ne

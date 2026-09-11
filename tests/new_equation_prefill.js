@@ -37,6 +37,24 @@ function ok(label, cond) {
 
   await page.screenshot({ path: `${SCRATCH}/new_equation_prefill.png` });
 
+  // 3) Manual entry of "x(x+a)=b" (a FactorGroup whose factor is x itself, coeff 1/pow 1
+  // — not just a numeric coefficient, see App.Expr.factorNodes/"Facteur commun" already
+  // producing this shape) must be accepted directly through the modal's submit path, not
+  // only via the internal API — see VAR_FACTOR_RE in parser.js. Modal is already open
+  // from step 2 above (never closed) : reuse it rather than reopening.
+  await page.evaluate(() => window.App.MathKeypad.setLatex('x(x-5)=12'));
+  await page.waitForTimeout(80);
+  await page.click('#manualSubmit');
+  await page.waitForTimeout(80);
+  const eqAfterVarFactor = await page.evaluate(() => window.App.History.lastEquation());
+  console.log('equation after submitting "x(x-5)=12":', JSON.stringify(eqAfterVarFactor));
+  ok('modal accepts "x(x-5)=12" and builds a FactorGroup with x as the factor', JSON.stringify(eqAfterVarFactor) === JSON.stringify({
+    left: [{ sign: 1, factor: { coeff: 1, pow: 1 }, innerTerms: [{ coeff: 1, pow: 1 }, { coeff: -5, pow: 0 }] }],
+    right: [{ coeff: 12, pow: 0 }]
+  }));
+  const modalClosedAfterSubmit = await page.evaluate(() => document.getElementById('modalOverlay').hidden);
+  ok('modal closes after a successful "x(x-5)=12" submit (no parse error)', modalClosedAfterSubmit === true);
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   ok('aucune erreur JS', errs.length === 0);
