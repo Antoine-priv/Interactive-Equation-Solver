@@ -23,6 +23,25 @@
   // vraiment les colonnes à l'écran", les laissant décalées jusqu'à la prochaine étape.
   var lastCenteredWidth = null;
 
+  // Incrémenté à CHAQUE appel de renderAll (voir son tout début) : les callbacks
+  // différés via requestAnimationFrame plus bas capturent la valeur courante et se
+  // désactivent d'eux-mêmes (voir isStaleRender) si un rendu PLUS RÉCENT a eu lieu entre
+  // leur planification et leur exécution — sinon un rAF "périmé" peut s'exécuter APRÈS
+  // celui d'un rendu plus récent (les deux dans la même frame, ordre d'enregistrement)
+  // et appliquer un état obsolète par-dessus le résultat correct. Concrètement observé
+  // sur #liveOpPill (voir positionLiveField dans arrows.js) : contrairement aux flèches/
+  // étiquettes (qui se nettoient elles-mêmes à CHAQUE appel de drawAll, donc résistent
+  // déjà à ce genre de course), masquer le pavé live est un appel SYNCHRONE côté
+  // renderAll (hideLiveOpPill, si le rendu n'a rien de "live" cette fois-ci) alors que
+  // l'afficher/le repositionner est DIFFÉRÉ (dans ce même rAF) — un rAF périmé encore
+  // "live" peut donc réafficher le pavé juste après qu'un rendu plus récent (ex. une
+  // confirmation) l'ait masqué, avec son ANCIEN contenu. Reproductible via Playwright
+  // (survol resté "coincé" sur "Opération" faute de mouvement de souris réel entre deux
+  // clics, voir tests/expr_live_pill.js) — improbable en usage réel (un vrai déplacement
+  // de souris laisse toujours au moins une frame entre les deux), mais un vrai bug de
+  // logique, pas qu'un artefact de test.
+  var renderSeq = 0;
+
   // Etiquette d'opération en LaTeX (comme les équations) : mêmes x, mêmes signes,
   // même police, plutôt que la police système du texte brut.
   var OP_SYMBOL_LATEX = { '+': '+', '-': '-', '×': '\\times\\,', '÷': '\\div\\,' };
@@ -1110,6 +1129,21 @@
   // champ d'un côté et un simple pill KaTeX de l'autre. `prefixLatex` : légende figée
   // avant le champ (ex. "factoriser par", voir formatOpLabel) — 'expr' n'en a pas besoin
   // (l'opérateur +/-/×/÷ fait déjà partie du texte tapé lui-même).
+  // Vrai en mode 'expr' réellement engagé, OU au survol du bouton "Opération" alors
+  // qu'aucun mode n'est engagé (voir l'ajout de 'expr' aux boutons à aperçu dans
+  // initToolbar) : sert à décider si la ligne "pending" et ses flèches apparaissent —
+  // PAS si le <math-field> partagé (singleton, voir computeLiveOpInfo ci-dessous, qui
+  // reste volontairement limité au vrai engagement) doit être montré. Au survol, sans
+  // clic, on affiche juste la ligne vide et ses flèches (via drawSide, sans étiquette —
+  // voir opLeft/opRight null plus bas), jamais le pavé "live" lui-même : le réutiliser
+  // ici afficherait potentiellement un contenu tapé lors d'une session précédente restée
+  // dans son conteneur (le champ partagé n'est jamais vidé tant qu'il n'est pas RÉELLEMENT
+  // relié, voir bindLiveOpField dans mathKeypad.js).
+  function isExprLikeActive(pending) {
+    return pending.opType === 'expr' ||
+      (pending.opType === null && App.Toolbar.getHoveredOp() === 'expr');
+  }
+
   function computeLiveOpInfo(pending, preview) {
     if (pending.opType === 'expr') {
       return {
@@ -1144,6 +1178,7 @@
     if (pending.opType !== null) return false;
     var hovered = App.Toolbar.getHoveredOp();
     if (!hovered) return false;
+    if (hovered === 'expr') return true;
     var info = App.Toolbar.computeSelectionInfo();
     if (hovered === 'expand') return info.canExpand;
     if (hovered === 'simplify') return info.canSimplify;
@@ -1304,7 +1339,16 @@
     var liveInfo = null;
 
     if (showPendingRow) {
-      var preview = engine.computePreview();
+      // Survol de "Opération" SANS l'avoir cliqué (voir isExprLikeActive) : ne PAS
+      // passer par engine.computePreview() ici — son repli `!p.opType` prévisualise la
+      // sélection libre en cours (Simplifier/Développer), une sélection qui peut très
+      // bien traîner d'un survol précédent et n'a RIEN à voir avec "Opération". Un clic
+      // sur "Opération" repart toujours d'une sélection vidée (voir selectOp dans
+      // history.js) — l'aperçu au survol doit fidèlement montrer CE résultat-là (rien de
+      // changé, chaîne vide), pas l'aperçu Simplifier/Développer de la sélection en cours.
+      var preview = (pending.opType === null && App.Toolbar.getHoveredOp() === 'expr')
+        ? { equation: lastEq, opLeft: null, opRight: null }
+        : engine.computePreview();
       var pendingRow = createRow(preview.equation, { pending: true, solved: false });
       container.appendChild(pendingRow);
       autoFitRowFont(pendingRow);
@@ -1326,8 +1370,8 @@
         opLeftWarn: descHasZeroRisk(preview.opLeft),
         opRightWarn: descHasZeroRisk(preview.opRight),
         pending: true,
-        pendingForceLeft: pending.opType === 'expr' || pendingLeftChanged,
-        pendingForceRight: pending.opType === 'expr' || pendingRightChanged
+        pendingForceLeft: isExprLikeActive(pending) || pendingLeftChanged,
+        pendingForceRight: isExprLikeActive(pending) || pendingRightChanged
       });
       liveInfo = computeLiveOpInfo(pending, preview);
     }
@@ -1358,6 +1402,11 @@
     var history = document.getElementById('history');
     var scroller = document.getElementById('historyScroll');
     if (!history) return;
+    // Voir renderSeq tout en haut du fichier : capturé ici, comparé dans chaque rAF
+    // planifié plus bas pour ignorer un callback devenu périmé.
+    renderSeq += 1;
+    var mySeq = renderSeq;
+    function isStaleRender() { return mySeq !== renderSeq; }
     // Vider #history puis le reconstruire rend son contenu momentanément plus court/
     // étroit le temps de tout ré-ajouter ; si une mesure de layout (autoFitRowFont) se
     // produit entre-temps, le navigateur peut "clamper" scrollTop/scrollLeft à cette
@@ -1445,6 +1494,7 @@
       }
 
       requestAnimationFrame(function () {
+        if (isStaleRender()) return;
         var drawOpts = {};
         if (previewCols) {
           var lastEqSign = res.rowsData.length
@@ -1534,6 +1584,7 @@
         // montrera/positionnera si besoin).
         if (!branchRes.liveInfo) App.MathKeypad.hideLiveOpPill();
         requestAnimationFrame(function () {
+          if (isStaleRender()) return;
           // constrainLabels : les étiquettes d'opération restent DANS cette colonne,
           // jamais à cheval sur la colonne voisine (juxtaposées, séparées de 56px seulement).
           var branchDrawOpts = { constrainLabels: true };
@@ -1605,6 +1656,7 @@
       var forkTargets = branchResults.map(function (b) { return b.col; });
       var forkLabel = Hist.getBranchSplitLabel();
       requestAnimationFrame(function () {
+        if (isStaleRender()) return;
         App.Arrows.drawAll(history, primaryRowsData, { fork: { from: lastPrimaryEqSign, to: forkTargets, label: forkLabel } });
       });
 
@@ -1638,6 +1690,7 @@
     // focalisée), y compris pendant un "produit nul"/une "racine carrée" (la fenêtre peut
     // alors chevaucher les colonnes non focalisées, voir CLAUDE.md).
     requestAnimationFrame(function () {
+      if (isStaleRender()) return;
       App.Toolbar.positionPanel(scrollTarget, opPrevRowEl);
     });
 

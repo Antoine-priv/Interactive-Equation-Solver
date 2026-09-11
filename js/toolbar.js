@@ -560,6 +560,10 @@
       // Coche de validation à côté du bouton actif (mode 'expr'/'factor' seulement,
       // les seuls qui ont encore besoin d'une saisie à confirmer) : une seule et même
       // façon de valider, plutôt que l'ancien bouton "Valider" texte du panneau flottant.
+      // La ligne elle-même bascule en scindée (voir .op-row-split dans style.css) : le
+      // bouton se réduit à sa portion "étiquette", la coche occupe le reste en carré —
+      // jamais de coche qui déborderait de la fenêtre. Redevient un bouton pleine largeur
+      // dès que le mode n'est plus engagé (coche retirée, classe enlevée).
       var row = btn.parentElement;
       var existingConfirm = row.querySelector('.op-confirm-btn');
       if (isActive && !existingConfirm) {
@@ -570,8 +574,10 @@
         confirmBtn.title = 'Valider';
         confirmBtn.addEventListener('click', confirmExprOrSqrt);
         row.appendChild(confirmBtn);
+        row.classList.add('op-row-split');
       } else if (!isActive && existingConfirm) {
         row.removeChild(existingConfirm);
+        row.classList.remove('op-row-split');
       }
     });
 
@@ -663,10 +669,13 @@
     Array.prototype.forEach.call(opButtons.querySelectorAll('button[data-op]'), function (btn) {
       var op = btn.getAttribute('data-op');
       if (MESSAGES[op]) btn.setAttribute('data-tooltip', MESSAGES[op]);
-      // Survol : condition de l'aperçu en direct d'une sélection libre (voir
-      // shouldShowLivePreview dans render.js) — "Opération" n'en a pas besoin, il a son
-      // propre mode "engagé" qui affiche déjà l'aperçu sans survol.
-      if (op === 'simplify' || op === 'factor' || op === 'expand' || op === 'produitnul') {
+      // Survol : condition de l'aperçu en direct (voir shouldShowLivePreview dans
+      // render.js) — pour "Opération" (aucune sélection requise), l'aperçu se limite à
+      // une ligne "pending" (équation inchangée) avec ses flèches, SANS le pavé "live"
+      // lui-même (voir isExprLikeActive dans render.js : volontairement pas réutilisé
+      // pour le <math-field> partagé, pour ne jamais risquer d'afficher un contenu tapé
+      // lors d'une session précédente avant même d'avoir cliqué).
+      if (op === 'simplify' || op === 'factor' || op === 'expand' || op === 'produitnul' || op === 'expr') {
         btn.addEventListener('mouseenter', function () {
           hoveredOp = op;
           App.Render.renderAll();

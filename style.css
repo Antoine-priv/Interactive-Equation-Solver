@@ -704,8 +704,8 @@ button {
   left: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px;
+  gap: 10px;
+  padding: 20px;
   background: var(--surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
@@ -718,18 +718,18 @@ button {
    hauteur de la fenêtre). */
 .op-buttons-arrow {
   position: absolute;
-  right: -7px;
+  right: -8px;
   top: 50%;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   background: var(--surface);
   transform: translateY(-50%) rotate(45deg);
-  border-radius: 3px;
+  border-radius: 4px;
   pointer-events: none;
 }
 
 .op-row {
-  position: relative; /* ancre la coche, positionnée en absolu (voir ci-dessous) */
+  position: relative; /* ancre l'infobulle (voir [data-tooltip]::after plus bas) */
 }
 /* Seuls les boutons réellement utilisables sont affichés (voir renderToolbar dans
    toolbar.js) : plus de bouton grisé/désactivé pour une action indisponible, sa rangée
@@ -737,27 +737,55 @@ button {
    conséquence (gap ci-dessus s'ajuste tout seul, [hidden] retire l'élément du flex). */
 .op-row[hidden] { display: none; }
 
-/* Coche de validation : apparaît à côté du bouton de mode actif (voir renderToolbar
-   dans toolbar.js), remplace l'ancien bouton "Valider" texte du panneau flottant.
-   Positionnée en absolu (hors flux) plutôt qu'en sibling flex normal : sinon sa largeur
-   s'ajouterait à celle de la ligne active, et #opButtons (colonne flex qui s'étire à la
-   largeur de son enfant le plus large) grandirait dès qu'un mode est sélectionné. */
-/* #opButtons .op-confirm-btn (pas juste .op-confirm-btn) : il faut au moins autant de
+/* Ligne du mode engagé ('expr'/'factor', voir renderToolbar) : le bouton se scinde en
+   deux plutôt que de faire déborder une coche à côté (voir CLAUDE.md) — l'étiquette
+   (flex:1 1 auto, prend sa largeur de contenu naturelle : voir #opButtons .op-row-split
+   button[data-op] plus bas) à gauche, la coche "Valider" en carré de taille fixe (voir
+   #opButtons .op-confirm-btn plus bas) à droite. La ligne scindée est la SEULE rangée
+   visible tant qu'un mode est engagé (les autres sont masquées, voir .op-row[hidden]),
+   donc sa largeur — et celle de la fenêtre — s'ajuste librement à son propre contenu,
+   sans avoir à correspondre à celle des boutons non scindés. */
+.op-row-split {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+/* #opButtons .op-row-split button[data-op] (pas juste .op-row-split button[data-op]) :
+   il faut battre la spécificité de "#opButtons button" ci-dessous (un sélecteur #id, plus
+   fort que deux classes) — sans ce préfixe, "width:212px" l'emportait malgré l'ordre
+   d'écriture et empêchait toute réduction, avec des effets de bord en cascade sur
+   aspect-ratio de la coche voisine (toutes deux finissaient à 212×212). */
+#opButtons .op-row-split button[data-op] {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0; /* autorise ce flex-item à rétrécir sous la largeur fixe habituelle */
+  /* Padding droit réduit (plus besoin d'autant d'air côté coche, juste accolée) : rend
+     un peu de place à l'étiquette, voir le commentaire de .op-row-split plus haut. */
+  padding-right: 14px;
+}
+
+/* Coche de validation : un sibling flex de l'étiquette dans la ligne scindée (voir
+   .op-row-split ci-dessus) — plus un cercle en absolu débordant du bouton, mais un carré
+   arrondi (même langage que les autres boutons de l'appli), de la même hauteur que la
+   ligne (padding vertical 16px + hauteur de ligne du texte 1.15rem ≈ 54px). Une taille
+   FIXE plutôt que "aspect-ratio:1 + align-self:stretch" (essayé d'abord) : la largeur
+   dérivée de la hauteur étirée s'est avérée peu fiable ici (interaction flexbox/
+   aspect-ratio sur l'axe principal), une valeur explicite est autrement plus simple et
+   fiable — toutes les lignes partageant la même police/le même padding, cette hauteur
+   est constante d'un bouton à l'autre.
+   #opButtons .op-confirm-btn (pas juste .op-confirm-btn) : il faut au moins autant de
    spécificité que la règle générique "#opButtons button" (background/color) ci-dessus,
    sinon celle-ci l'emporte malgré l'ordre d'écriture (un sélecteur #id bat une classe). */
 #opButtons .op-confirm-btn {
-  position: absolute;
-  left: calc(100% + 8px);
-  top: 50%;
-  transform: translateY(-50%);
-  width: 40px;
-  height: 40px;
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
   padding: 0;
-  border-radius: 50%;
+  border-radius: var(--radius-sm);
   border: none;
   background: var(--accent);
   color: #fff;
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   font-weight: 700;
   line-height: 1;
   text-align: center;
@@ -768,23 +796,22 @@ button {
   justify-content: center;
   transition: background 0.15s ease, transform 0.1s ease;
 }
-/* Sur :hover, la règle générique "#opButtons button:hover" (color: var(--accent)) est
-   plus spécifique que le simple ".op-confirm-btn" de base pour la couleur (un pseudo-
-   classe de plus au même niveau) : sans ce rappel explicite, la coche redevient bleue
-   sur un fond bleu et disparaît. Pas de mouvement vertical non plus (translateY(-50%)
-   inchangé, sert uniquement au centrage) : juste un assombrissement du fond. */
-#opButtons .op-confirm-btn:hover { background: var(--accent-hover); color: #fff; }
+/* Sur :hover, la règle générique "#opButtons button:hover" est plus spécifique que le
+   simple ".op-confirm-btn" de base pour le fond (un pseudo-classe de plus au même
+   niveau) : sans ce rappel explicite, la coche perdrait son fond plein au survol. */
+#opButtons .op-confirm-btn:hover { background: var(--accent-hover); color: #fff; box-shadow: var(--shadow-md); }
 #opButtons .op-confirm-btn:active { background: var(--accent-hover); color: #fff; }
 
 #opButtons button {
   position: relative; /* ancre l'infobulle (voir [data-tooltip]::after ci-dessous) */
   /* Largeur identique pour tous les boutons, quelle que soit la longueur de leur texte
-     ("Opération" vs "Développer" etc.) : ~2px au-dessus de la plus longue étiquette
-     ("Développer", ~127px avec son padding). */
-  width: 130px;
-  font-size: 1.02rem;
+     ("Opération" vs "Développer" etc.) — assez généreuse pour qu'une fois partagée avec
+     la coche "Valider" (voir .op-row-split ci-dessus), l'étiquette la plus longue
+     ("Développer") reste toujours entièrement lisible, jamais tronquée. */
+  width: 212px;
+  font-size: 1.15rem;
   font-weight: 500;
-  padding: 12px 22px;
+  padding: 16px 24px;
   border-radius: var(--radius-sm);
   border: none;
   /* Même fond que la ligne "current" (voir .eq-row.current .eq-line) : la fenêtre
@@ -793,14 +820,19 @@ button {
   color: var(--text);
   cursor: pointer;
   text-align: left;
+  white-space: nowrap;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
-#opButtons button:hover { background: var(--accent); color: #fff; }
+/* Contour bleu au survol (jamais un remplissage plein, réservé à la sélection ci-dessous
+   — voir CLAUDE.md) : box-shadow "inset" plutôt que border, pour ne pas décaler la mise
+   en page d'1-2px comme le ferait un vrai border. */
+#opButtons button:hover { box-shadow: inset 0 0 0 2px var(--accent); }
 #opButtons button.active {
   background: var(--accent);
   color: #fff;
   box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
 }
+#opButtons button.active:hover { background: var(--accent-hover); box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3); }
 
 /* Infobulle d'explication : au survol prolongé d'un bouton de mode, plutôt que dans le
    pavé flottant lui-même. Délai avant apparition (transition-delay ci-dessous, sur la
