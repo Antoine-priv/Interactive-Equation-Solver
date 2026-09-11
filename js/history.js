@@ -206,6 +206,26 @@
       resetPending();
     }
 
+    // Sort du mode 'factor' EN GARDANT la sélection de termes/facteurs déjà faite (re-clic
+    // sur le bouton "Factoriser" lui-même pour annuler CE mode, pas toute la sélection —
+    // contrairement à cancelOp ci-dessus, utilisé pour Échap/clic en dehors de la fenêtre,
+    // qui efface tout via resetPending). Ne réinitialise que les champs propres au mode
+    // 'factor' (voir emptyPending), jamais selectedLeft/Right/selectedFactors/drilled.
+    function exitFactorKeepSelection() {
+      if (pending.opType !== 'factor') return;
+      pending.opType = null;
+      pending.factorMode = null;
+      pending.factorLatex = '';
+      pending.idALatex = '';
+      pending.idBLatex = '';
+      pending.idFocus = 'a';
+      pending.idGroupBase = null;
+      pending.idGroupBaseB = null;
+      pending.factorChoiceFailed = [];
+      pending.error = null;
+      notify();
+    }
+
     // Sélection d'un terme de premier niveau (Term ou groupe factorisé) sur la ligne
     // courante. Utilisable librement (opType null : c'est la sélection qui décide ensuite
     // quel bouton — Simplifier/Factoriser/Développer — s'active, voir computeSelectionInfo
@@ -1697,6 +1717,7 @@
       pushStep: pushStep,
       selectOp: selectOp,
       cancelOp: cancelOp,
+      exitFactorKeepSelection: exitFactorKeepSelection,
       toggleTermSelection: toggleTermSelection,
       toggleInnerSelection: toggleInnerSelection,
       drillIntoGroup: drillIntoGroup,
@@ -1990,6 +2011,7 @@
     lastEquation: function () { return active().lastEquation(); },
     selectOp: function (t) { active().selectOp(t); },
     cancelOp: function () { active().cancelOp(); },
+    exitFactorKeepSelection: function () { active().exitFactorKeepSelection(); },
     toggleTermSelection: function (side, idx, branchHint, isDenPart) { active().toggleTermSelection(side, idx, branchHint, isDenPart); },
     toggleInnerSelection: function (idx) { active().toggleInnerSelection(idx); },
     drillIntoGroup: function (side, idx) { active().drillIntoGroup(side, idx); },

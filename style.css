@@ -706,6 +706,13 @@ button {
   flex-direction: column;
   gap: 10px;
   padding: 20px;
+  /* Plancher = largeur d'un bouton normal (212px, voir #opButtons button plus bas) + le
+     padding ci-dessus (40px) : sans ça, quand la SEULE rangée visible est la ligne scindée
+     du mode engagé (voir .op-row-split plus bas — son étiquette peut légitimement
+     rétrécir sous son propre contenu), la fenêtre entière rétrécissait avec elle au moment
+     du clic. La fenêtre doit rester totalement statique (largeur ET hauteur) pendant qu'on
+     compose une opération, quel que soit le nombre d'autres rangées encore affichées. */
+  min-width: 252px;
   background: var(--surface);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
@@ -731,20 +738,17 @@ button {
 .op-row {
   position: relative; /* ancre l'infobulle (voir [data-tooltip]::after plus bas) */
 }
-/* Seuls les boutons réellement utilisables sont affichés (voir renderToolbar dans
-   toolbar.js) : plus de bouton grisé/désactivé pour une action indisponible, sa rangée
-   est simplement retirée du flux — la fenêtre grandit/rétrécit verticalement en
-   conséquence (gap ci-dessus s'ajuste tout seul, [hidden] retire l'élément du flex). */
-.op-row[hidden] { display: none; }
 
 /* Ligne du mode engagé ('expr'/'factor', voir renderToolbar) : le bouton se scinde en
    deux plutôt que de faire déborder une coche à côté (voir CLAUDE.md) — l'étiquette
    (flex:1 1 auto, prend sa largeur de contenu naturelle : voir #opButtons .op-row-split
    button[data-op] plus bas) à gauche, la coche "Valider" en carré de taille fixe (voir
-   #opButtons .op-confirm-btn plus bas) à droite. La ligne scindée est la SEULE rangée
-   visible tant qu'un mode est engagé (les autres sont masquées, voir .op-row[hidden]),
-   donc sa largeur — et celle de la fenêtre — s'ajuste librement à son propre contenu,
-   sans avoir à correspondre à celle des boutons non scindés. */
+   #opButtons .op-confirm-btn plus bas) à droite. Les AUTRES rangées, elles, gardent
+   exactement la visibilité qu'elles avaient juste avant le clic qui a engagé ce mode
+   (unusable ne dépend que de la sélection, jamais de pending.opType — voir renderToolbar
+   dans toolbar.js) : la fenêtre ne doit jamais bouger au moment du clic. La ligne scindée
+   peut librement rétrécir sous son propre contenu sans jamais faire varier la largeur du
+   panneau, grâce au plancher min-width posé sur #opButtons ci-dessus. */
 .op-row-split {
   display: flex;
   align-items: stretch;
@@ -835,14 +839,17 @@ button {
 #opButtons button.active:hover { background: var(--accent-hover); box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3); }
 
 /* Infobulle d'explication : au survol prolongé d'un bouton de mode, plutôt que dans le
-   pavé flottant lui-même. Délai avant apparition (transition-delay ci-dessous, sur la
-   règle :hover uniquement) pour ne pas clignoter au simple passage de la souris. */
+   pavé flottant lui-même. Affichée AU-DESSUS du bouton (jamais à droite) : la fenêtre vit
+   déjà collée au bord gauche de l'équation active (voir positionPanel plus haut), une
+   infobulle vers la droite recouvrirait donc l'équation elle-même. Délai avant apparition
+   (transition-delay ci-dessous, sur la règle :hover uniquement) pour ne pas clignoter au
+   simple passage de la souris. */
 #opButtons button[data-tooltip]::after {
   content: attr(data-tooltip);
   position: absolute;
-  left: calc(100% + 12px);
-  top: 50%;
-  transform: translateY(-50%);
+  left: 50%;
+  bottom: calc(100% + 12px);
+  transform: translateX(-50%);
   width: max-content;
   max-width: 260px;
   background: var(--tooltip-bg);

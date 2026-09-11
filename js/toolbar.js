@@ -420,8 +420,8 @@
     if (exprLiveSide === side) return;
     exprLiveSide = side;
     // renderToolbar() D'ABORD, App.Render.renderAll() ENSUITE (voir main.js pour la
-    // même règle et pourquoi) : renderToolbar peut masquer/afficher des `.op-row` de
-    // #opButtons, désormais un enfant de #historyScroll — muter ça APRÈS le
+    // même règle et pourquoi) : renderToolbar peut faire varier la hauteur de #opButtons
+    // (ligne scindée/coche de validation), désormais un enfant de #historyScroll — muter ça APRÈS le
     // scroller.scrollTo(..., {behavior:'smooth'}) synchrone de renderAll (au lieu
     // d'avant) annule silencieusement l'animation de défilement dans Chromium.
     renderToolbar();
@@ -549,12 +549,14 @@
       else if (op === 'expand') unusable = !info.canExpand;
       else if (op === 'produitnul') unusable = !info.canProduitNul;
       else unusable = false;
-      // Pendant la saisie du facteur commun (mode 'factor' engagé), les 3 autres
-      // boutons sont bloqués : il faut valider ou annuler avant de changer d'action.
-      if (pending.opType === 'factor' && op !== 'factor') unusable = true;
-      // Seuls les boutons réellement utilisables restent affichés (voir .op-row[hidden]
-      // dans style.css) : plus de bouton grisé pour une action indisponible, sa rangée
-      // est retirée du flux — la fenêtre flottante grandit/rétrécit en conséquence.
+      // Délibérément PAS de "si un autre mode est engagé, cache/grise ce bouton" ici :
+      // unusable ne dépend que de la sélection courante (info.canX), jamais de
+      // pending.opType — un clic sur un bouton ('Opération'/'Factoriser') qui engage un
+      // mode ne change ni la sélection ni donc unusable pour les 4 AUTRES boutons, qui
+      // gardent donc EXACTEMENT la même visibilité qu'avant le clic (fenêtre et rangées
+      // totalement statiques, seul le bouton cliqué passe en "active" ci-dessus). La
+      // protection contre un clic sur un AUTRE bouton pendant qu'un mode est déjà engagé
+      // se fait au niveau du gestionnaire de clic (voir initToolbar plus bas), pas ici.
       btn.parentElement.hidden = unusable;
 
       // Coche de validation à côté du bouton actif (mode 'expr'/'factor' seulement,
@@ -689,6 +691,12 @@
       }
       btn.addEventListener('click', function () {
         var pending = App.History.getPending();
+        // Un mode ('expr'/'factor') déjà engagé bloque tout AUTRE bouton (il faut
+        // valider/annuler ce mode d'abord) — géré ICI plutôt qu'en masquant/grisant les
+        // autres boutons (voir renderToolbar) : ceux-ci doivent rester visuellement
+        // identiques à ce qu'ils étaient juste avant le clic, la fenêtre ne devant jamais
+        // bouger au moment même où on clique.
+        if (pending.opType && pending.opType !== op) return;
         if (op === 'expr') {
           // Seul mode qui fonctionne encore par "entrer dans le mode puis composer" :
           // il n'y a pas de sélection de termes à faire au préalable pour "Opération".
@@ -699,8 +707,11 @@
           App.History.confirmSimplifySelection();
         } else if (op === 'factor') {
           // Encore besoin d'un nombre (le facteur commun) : passe en mode 'factor' sans
-          // perdre la sélection, pour afficher son clavier. Re-cliquer annule.
-          if (pending.opType === 'factor') App.History.cancelOp();
+          // perdre la sélection, pour afficher son clavier. Re-cliquer sur CE bouton
+          // n'annule que le mode (exitFactorKeepSelection, garde la sélection de termes/
+          // facteurs) — contrairement à un clic en dehors de la fenêtre, qui efface tout
+          // via cancelOp (voir le gestionnaire "click en dehors" plus bas).
+          if (pending.opType === 'factor') App.History.exitFactorKeepSelection();
           else App.History.enterFactorWithSelection();
         } else if (op === 'expand') {
           // Développe entièrement l'unique groupe factorisé sélectionné, immédiatement.
