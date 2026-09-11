@@ -51,7 +51,7 @@
   // une contrainte dure (rectangle complet), `placedLabels` une contrainte souple évaluée
   // sur une hitbox réduite (voir shrinkRect) : un léger chevauchement de fond entre deux
   // étiquettes est toléré, pas un chevauchement de texte.
-  function avoidLabelCollisions(el, placedLabels, equationRects) {
+  function avoidLabelCollisions(el, placedLabels, equationRects, ownTopRect, ownBotRect) {
     var margin = 4;
     var guard;
     for (guard = 0; guard < 12; guard++) {
@@ -75,6 +75,31 @@
       var eqCollision2 = findCollision(rect2, equationRects, margin);
       if (!eqCollision2) break;
       el.style.top = (parseFloat(el.style.top) + (eqCollision2.bottom + margin - rect2.top)) + 'px';
+    }
+    // Dernier recours : les deux boucles ci-dessus ne poussent QUE vers le bas (jamais
+    // vers le haut), donc rien ne les empêche de faire déborder le libellé sous
+    // l'équation du BAS elle-même — celle avec laquelle il forme pourtant sa propre
+    // paire (`ownBotRect`, l'équation qui suit directement, voir drawAll) — surtout
+    // quand un autre libellé (ex. le membre opposé) ou une équation plus lointaine ont
+    // déclenché ces poussées en cascade. On force donc ici le libellé à rester DANS
+    // l'écart qui sépare ses deux équations propres : repoussé sous `ownTopRect` s'il
+    // empiète encore dessus, puis (priorité, car c'est le bug reporté) ramené AU-DESSUS
+    // de `ownBotRect` même si ça réintroduit un léger chevauchement avec `ownTopRect` —
+    // mieux vaut recouvrir un peu l'équation du dessus que finir sous celle du dessous,
+    // qui donnerait l'impression que le libellé appartient à l'étape suivante.
+    if (ownTopRect || ownBotRect) {
+      if (ownTopRect) {
+        var rTop = el.getBoundingClientRect();
+        if (rTop.top < ownTopRect.bottom + margin) {
+          el.style.top = (parseFloat(el.style.top) + (ownTopRect.bottom + margin - rTop.top)) + 'px';
+        }
+      }
+      if (ownBotRect) {
+        var rBot = el.getBoundingClientRect();
+        if (rBot.bottom > ownBotRect.top - margin) {
+          el.style.top = (parseFloat(el.style.top) - (rBot.bottom - (ownBotRect.top - margin))) + 'px';
+        }
+      }
     }
     var finalRect = el.getBoundingClientRect();
     placedLabels.push({ full: finalRect, hitbox: shrinkRect(finalRect, LABEL_HITBOX_INSET_X, LABEL_HITBOX_INSET_Y) });
@@ -114,7 +139,7 @@
   // constrainLabels : recale l'étiquette pour rester DANS `historyRect` plutôt que dans
   // la fenêtre entière — nécessaire dans une colonne "produit nul" (étroite, à côté
   // d'une autre équation) pour ne jamais empiéter sur la colonne voisine.
-  function drawSide(svg, history, historyRect, topEl, botEl, label, warn, dir, markerId, constrainLabels, placedLabels, equationRects) {
+  function drawSide(svg, history, historyRect, topEl, botEl, label, warn, dir, markerId, constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect) {
     var geom = computeSideGeometry(historyRect, topEl, botEl, dir);
 
     var path = document.createElementNS(SVG_NS, 'path');
@@ -147,7 +172,7 @@
     } else if (rect.right > boundRight - margin) {
       el.style.left = (anchor.extremeX - (rect.right - (boundRight - margin))) + 'px';
     }
-    avoidLabelCollisions(el, placedLabels, equationRects);
+    avoidLabelCollisions(el, placedLabels, equationRects, ownTopRect, ownBotRect);
   }
 
   // Positionne le pavé "live" partagé (le <math-field> lui-même, voir bindLiveOpField
@@ -157,7 +182,7 @@
   // PERSISTANT de #historyScroll (jamais de `history`, reconstruit à chaque frappe, voir
   // renderAll dans render.js), positionné en absolute pour défiler avec le contenu SANS
   // le moindre code de synchronisation JS dédié au scroll.
-  function positionLiveField(historyRect, topEl, botEl, dir, warn, warnLatex, prefixLatex, constrainLabels, placedLabels, equationRects) {
+  function positionLiveField(historyRect, topEl, botEl, dir, warn, warnLatex, prefixLatex, constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect) {
     var pillEl = App.MathKeypad.getLiveOpPillEl();
     if (!pillEl) return;
     var geom = computeSideGeometry(historyRect, topEl, botEl, dir);
@@ -201,7 +226,7 @@
     } else if (rect.right > boundRight - margin) {
       pillEl.style.left = (parseFloat(pillEl.style.left) - (rect.right - (boundRight - margin))) + 'px';
     }
-    avoidLabelCollisions(pillEl, placedLabels, equationRects);
+    avoidLabelCollisions(pillEl, placedLabels, equationRects, ownTopRect, ownBotRect);
   }
 
   // "Miroir" du pavé "live" (voir positionLiveField) pour le membre OPPOSÉ, uniquement en
@@ -225,7 +250,7 @@
   // continuer à composer l'opération depuis n'importe quel membre plutôt que rester
   // coincé sur celui de départ — plutôt qu'un champ figé qu'un clic annulerait à tort
   // (voir aussi l'exclusion .arrow-label-mirror dans le clic-en-dehors de toolbar.js).
-  function drawMirrorField(history, historyRect, topEl, botEl, dir, warn, rawLatex, warnLatex, constrainLabels, placedLabels, equationRects) {
+  function drawMirrorField(history, historyRect, topEl, botEl, dir, warn, rawLatex, warnLatex, constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect) {
     var anchor = computeLabelAnchor(computeSideGeometry(historyRect, topEl, botEl, dir), dir);
 
     var el = document.createElement('div');
@@ -304,7 +329,7 @@
     } else if (rect.right > boundRight - margin) {
       el.style.left = (anchor.extremeX - (rect.right - (boundRight - margin))) + 'px';
     }
-    avoidLabelCollisions(el, placedLabels, equationRects);
+    avoidLabelCollisions(el, placedLabels, equationRects, ownTopRect, ownBotRect);
   }
 
   // Cubique en forme de S : tangente de départ VERTICALE (premier point de contrôle
@@ -472,26 +497,33 @@
         var topRight = topRow.querySelector('.side[data-side="right"]');
         var botLeft = botRow.querySelector('.side[data-side="left"]');
         var botRight = botRow.querySelector('.side[data-side="right"]');
+        // Bornes dures propres à CETTE paire de lignes (voir le dernier recours dans
+        // avoidLabelCollisions) : l'étiquette qui relie topRow à botRow ne doit jamais
+        // finir ni sur topRow, ni — priorité — sous botRow, quel que soit ce qui l'a
+        // poussée entre-temps (collision avec une équation plus lointaine ou un autre
+        // libellé).
+        var ownTopRect = equationRects[i - 1];
+        var ownBotRect = equationRects[i];
         if (topLeft && botLeft && (isPendingLeftArrow || rows[i].opLeft)) {
           if (liveSide === 'left') {
-            drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
-            positionLiveField(historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.warnLatex, opts.live.prefixLatex, opts.constrainLabels, placedLabels, equationRects);
+            drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
+            positionLiveField(historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.warnLatex, opts.live.prefixLatex, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
           } else if (mirrorSide === 'left') {
-            drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
-            drawMirrorField(history, historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.rawLatex, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects);
+            drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
+            drawMirrorField(history, historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.rawLatex, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
           } else {
-            drawSide(svg, history, historyRect, topLeft, botLeft, rows[i].opLeft, rows[i].opLeftWarn, -1, markerId, opts.constrainLabels, placedLabels, equationRects);
+            drawSide(svg, history, historyRect, topLeft, botLeft, rows[i].opLeft, rows[i].opLeftWarn, -1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
           }
         }
         if (topRight && botRight && (isPendingRightArrow || rows[i].opRight)) {
           if (liveSide === 'right') {
-            drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
-            positionLiveField(historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.warnLatex, opts.live.prefixLatex, opts.constrainLabels, placedLabels, equationRects);
+            drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
+            positionLiveField(historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.warnLatex, opts.live.prefixLatex, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
           } else if (mirrorSide === 'right') {
-            drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
-            drawMirrorField(history, historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.rawLatex, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects);
+            drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
+            drawMirrorField(history, historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.rawLatex, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
           } else {
-            drawSide(svg, history, historyRect, topRight, botRight, rows[i].opRight, rows[i].opRightWarn, 1, markerId, opts.constrainLabels, placedLabels, equationRects);
+            drawSide(svg, history, historyRect, topRight, botRight, rows[i].opRight, rows[i].opRightWarn, 1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
           }
         }
       }
