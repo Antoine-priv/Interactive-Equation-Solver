@@ -45,6 +45,38 @@
     });
   }
 
+  // Un glisser qui a effectivement panorâmé la toile (voir initCanvasPan plus bas) laisse
+  // le curseur au-dessus de TOUT AUTRE CHOSE qu'au départ (le contenu, lui, a défilé sous
+  // un curseur resté fixe à l'écran) — le navigateur émet quand même un 'click' natif
+  // juste après le mouseup qui termine le geste, ciblant QUOI QUE CE SOIT qui se trouve
+  // maintenant sous le curseur. Sans repli, ce clic "fantôme" déclenche bel et bien la
+  // logique de CE qu'il touche : un terme de colonne "Produit nul"/"Racine carrée" (non
+  // glissable là, voir CLAUDE.md, donc (dé)sélectionné par ce même 'click' natif,
+  // contrairement au premier niveau normal qui n'en dépend jamais, voir attachPointerDrag
+  // dans render.js) ou, plus vicieux encore, le fond LUI-MÊME — "clic en dehors de
+  // l'équation efface la sélection en cours" (voir toolbar.js, initToolbar) est un
+  // comportement VOULU pour un vrai clic, mais s'applique alors à tort à la fin d'un
+  // panorama qui n'avait rien d'une désélection volontaire.
+  //
+  // `panJustEnded` (mis à true par initCanvasPan juste avant ce 'click' fantôme) et CE
+  // gestionnaire doivent être : (a) posés sur `document`, comme tous les gestionnaires de
+  // clic "en dehors" qu'ils doivent devancer (toolbar.js/initDrillDismissal) ; (b) en
+  // phase de capture, comme eux ; (c) enregistrés AVANT eux (App.Toolbar.init() etc., plus
+  // bas) — deux gestionnaires de capture sur la MÊME cible s'exécutent dans leur ordre
+  // D'ENREGISTREMENT, jamais celui, dynamique, des gestes utilisateur. Sans ce tout premier
+  // rang, un swallowClick ajouté seulement au moment du mouseup (essayé d'abord) arrive
+  // TROP TARD : les gestionnaires "en dehors", déjà enregistrés depuis le chargement de la
+  // page, s'exécutent avant lui et ont déjà agi. stopImmediatePropagation (pas seulement
+  // stopPropagation) : bloque aussi tout AUTRE gestionnaire de capture ultérieur sur
+  // `document` lui-même, pas seulement la suite de la remontée vers des ancêtres.
+  var panJustEnded = false;
+  document.addEventListener('click', function (e) {
+    if (!panJustEnded) return;
+    panJustEnded = false;
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }, true);
+
   // Toile "infinie" : cliquer-glisser le FOND de #historyScroll fait "panorâmer" le
   // tableau (voir App.Canvas dans canvas.js, qui porte l'offset — SANS AUCUNE BORNE,
   // contrairement à un défilement natif) — mousedown/mousemove/mouseup plutôt que du
@@ -79,6 +111,9 @@
         document.removeEventListener('mousemove', onMove);
         document.removeEventListener('mouseup', onUp);
         scroller.classList.remove('panning');
+        // Voir le tout premier gestionnaire de clic du fichier (panJustEnded) : avale le
+        // 'click' fantôme que le navigateur est sur le point d'émettre suite à ce mouseup.
+        if (moved) panJustEnded = true;
       }
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);

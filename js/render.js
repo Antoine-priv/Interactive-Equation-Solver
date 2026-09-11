@@ -22,6 +22,15 @@
   // ouverture des DevTools...) désynchronise silencieusement scrollLeft de "où sont
   // vraiment les colonnes à l'écran", les laissant décalées jusqu'à la prochaine étape.
   var lastCenteredWidth = null;
+  // Vrai si le dernier rendu était en mise en page "large" (voir isWideSplit plus bas) —
+  // sert UNIQUEMENT à détecter une VRAIE transition large -> tient (voir splitNoLongerWide
+  // plus bas), jamais un simple état courant : depuis le passage à la toile "infinie"
+  // (App.Canvas dans canvas.js, dont l'offset horizontal n'est plus jamais borné à 0),
+  // "pas large ET un panorama horizontal non nul" est aussi, et même bien plus souvent,
+  // le signe d'un panorama VOLONTAIRE de l'utilisateur qu'un résidu de redimensionnement —
+  // sans cette distinction, N'IMPORTE QUEL rendu (ex. simplement survoler un bouton
+  // "Opération", ou sélectionner un terme) annulait à tort ce panorama.
+  var wasWideSplit = false;
 
   // Incrémenté à CHAQUE appel de renderAll (voir son tout début) : les callbacks
   // différés via requestAnimationFrame plus bas capturent la valeur courante et se
@@ -1917,17 +1926,22 @@
     var isNewStep = scrollTarget && scrollIdentity !== lastCenteredStepByEngine.get(scrollEngine);
     var widthChangedDuringSplit = !!branches && isWideSplit && scroller && lastCenteredWidth !== null && scroller.clientWidth !== lastCenteredWidth;
     // Redimensionnement (ex. zoom du navigateur) qui fait REPASSER une scission de "large"
-    // (scrollLeft explicite posé plus bas pour centrer le groupe de colonnes, voir
+    // (offset horizontal explicite posé plus bas pour centrer le groupe de colonnes, voir
     // isWideSplit) à "tient dans la largeur disponible" : le centrage bascule alors sur le
-    // margin-left CSS (voir plus haut), qui suppose un scrollLeft à 0 — sans repli explicite
-    // ici, le scrollLeft non nul laissé par le PRÉCÉDENT affichage "large" persiste (rien ne
-    // le réinitialise autrement, voir preservedScrollLeft plus haut qui le restaure au
-    // contraire à chaque rendu) et décale alors TOUT le contenu (chaîne principale ET
-    // colonnes, ensemble) du même montant — silencieusement, jusqu'à ce que quelque chose
-    // d'autre force un nouveau recentrage. C'est précisément le bug "colonnes décalées à
-    // droite selon le zoom" : reproductible en rétrécissant puis ré-élargissant la fenêtre
-    // pendant qu'une scission large est affichée.
-    var splitNoLongerWide = !!branches && !isWideSplit && scroller && App.Canvas.getX() !== 0;
+    // margin-left CSS (voir plus haut), qui suppose un offset à 0 — sans repli explicite
+    // ici, l'offset non nul laissé par le PRÉCÉDENT affichage "large" persiste et décale
+    // alors TOUT le contenu (chaîne principale ET colonnes, ensemble) du même montant —
+    // silencieusement, jusqu'à ce que quelque chose d'autre force un nouveau recentrage.
+    // C'était précisément le bug "colonnes décalées à droite selon le zoom" (reproductible
+    // en rétrécissant puis ré-élargissant la fenêtre pendant qu'une scission large est
+    // affichée). `wasWideSplit` (voir sa déclaration tout en haut du fichier) restreint
+    // ceci à une VRAIE transition large -> tient : depuis la toile "infinie" (App.Canvas,
+    // offset horizontal jamais borné à 0 par défaut), un simple "pas large actuellement ET
+    // offset non nul" est bien plus souvent un panorama VOLONTAIRE de l'utilisateur qu'un
+    // résidu de redimensionnement — sans cette distinction, N'IMPORTE QUEL rendu (survoler
+    // un bouton, sélectionner un terme...) annulait à tort ce panorama.
+    var splitNoLongerWide = !!branches && !isWideSplit && wasWideSplit && scroller && App.Canvas.getX() !== 0;
+    wasWideSplit = !!branches && isWideSplit;
     if (scroller && (isNewStep || widthChangedDuringSplit || splitNoLongerWide)) {
       lastCenteredStepByEngine.set(scrollEngine, scrollIdentity);
       lastCenteredWidth = scroller.clientWidth;
