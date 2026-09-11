@@ -45,6 +45,46 @@
     });
   }
 
+  // Toile "infinie" : cliquer-glisser le FOND de #historyScroll le fait défiler (donc
+  // panorama sur l'ensemble du tableau), comme un canvas — mousedown/mousemove/mouseup
+  // plutôt que du natif, même schéma que attachPointerDrag dans render.js (seuil de
+  // quelques pixels avant d'engager le geste, pour ne jamais gêner un simple clic).
+  // Aucun code de repositionnement dédié requis ailleurs (flèches, pavé live, fenêtre
+  // d'actions...) : tout défile déjà naturellement avec #historyScroll, voir son
+  // commentaire dans style.css.
+  var CANVAS_PAN_EXCLUDE = '.term, .factor-slot, .draggable-term, .drilled-exit, ' +
+    '.produit-nul-branch, .solution-set, .arrow-label-live, .arrow-label-mirror, ' +
+    'button, a, input, textarea, select, math-field, ' +
+    '#controlPanel, #opButtons, #mathKeypadPanel, #mathKeypadPeekTab, #liveOpPill';
+  function initCanvasPan() {
+    var scroller = document.getElementById('historyScroll');
+    if (!scroller) return;
+    scroller.addEventListener('mousedown', function (e) {
+      if (e.button !== 0) return; // clic gauche uniquement
+      if (e.target.closest(CANVAS_PAN_EXCLUDE)) return;
+      e.preventDefault(); // évite la sélection de texte pendant le glisser
+      var startX = e.clientX, startY = e.clientY;
+      var startScrollLeft = scroller.scrollLeft, startScrollTop = scroller.scrollTop;
+      var moved = false;
+      function onMove(e2) {
+        if (!moved) {
+          if (Math.abs(e2.clientX - startX) < 4 && Math.abs(e2.clientY - startY) < 4) return;
+          moved = true;
+          scroller.classList.add('panning');
+        }
+        scroller.scrollLeft = startScrollLeft - (e2.clientX - startX);
+        scroller.scrollTop = startScrollTop - (e2.clientY - startY);
+      }
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        scroller.classList.remove('panning');
+      }
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
     App.History.subscribe(function () {
       // App.Toolbar.render() D'ABORD : il peut masquer/afficher des `.op-row` de
@@ -67,6 +107,7 @@
     App.Theme.init();
     initUndoButton();
     initDrillDismissal();
+    initCanvasPan();
 
     App.History.init(App.Generator.generateEquation());
 

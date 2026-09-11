@@ -193,6 +193,15 @@ button {
      reconstruit à chaque frappe, voir renderAll dans render.js) en position:absolute, pour
      défiler naturellement AVEC le contenu sans le moindre code de synchronisation JS. */
   position: relative;
+  /* Toile "infinie" : le fond se saisit et se fait glisser pour naviguer, comme un
+     canvas (voir initCanvasPan dans main.js, qui pilote scrollLeft/scrollTop au
+     mousemove). "grab"/"grabbing" ne s'affichent que sur le fond lui-même — chaque
+     élément interactif (terme, bouton, panneau...) porte déjà son propre curseur
+     explicite, qui l'emporte naturellement sur celui-ci vu sa spécificité. */
+  cursor: grab;
+}
+#historyScroll.panning {
+  cursor: grabbing;
 }
 
 #history {
