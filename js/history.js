@@ -1,9 +1,10 @@
 /* Etat de l'historique des étapes + de la ligne "en attente" (opération en cours de
    construction). createEngine() fabrique un moteur de résolution indépendant pour UNE
-   équation (steps + pending) ; App.History est un chef d'orchestre autour d'un moteur
-   `primary`, qui peut se scinder en N moteurs `branches[0..N-1]` indépendants au clic
-   sur "Produit nul" ou "Racine carrée" (voir plus bas), affichés côte à côte et
-   travaillables séparément par l'élève. */
+   équation (steps + pending) ; createBranchable() (plus bas) l'enrobe pour lui donner la
+   capacité de se scinder en N enfants — RÉCURSIVEMENT, chaque enfant étant lui-même un
+   createBranchable() complet — au clic sur "Produit nul" ou "Racine carrée", affichés côte
+   à côte et travaillables séparément par l'élève. App.History EST l'un de ces noeuds (la
+   racine de l'arbre) ; voir le commentaire au-dessus de createBranchable pour le détail. */
 (function (App) {
   'use strict';
   var Expr = App.Expr;
@@ -1747,301 +1748,314 @@
     };
   }
 
-  // ---- Chef d'orchestre : un moteur `primary`, qui peut se scinder en N moteurs
-  // indépendants `branches[0..N-1]` au clic sur "Produit nul" (une équation factorisée
-  // en (A)(B)...=0 se résout en scindant en N équations A=0/B=0/..., un produit est nul
-  // si et seulement si l'un de ses facteurs l'est — voir Expr.flattenProductFactors, qui
-  // extrait directement les N facteurs du ProductGroup, voir expression.js)
-  // ou "Racine carrée" (1 ou 2 branches selon que la constante vaut 0 ou non). Les
-  // branches s'affichent côte à côte (voir render.js) et se travaillent indépendamment —
-  // les actions du clavier/pavé s'appliquent à la branche "active" (celle sur laquelle
-  // l'élève a cliqué en dernier, voir setFocusedBranch). ----
+  // ---- createBranchable() : enrobe un moteur "feuille" (createEngine()) avec la
+  // capacité de se scinder en N enfants indépendants au clic sur "Produit nul" (une
+  // équation factorisée en (A)(B)...=0 se résout en scindant en N équations
+  // A=0/B=0/..., un produit est nul si et seulement si l'un de ses facteurs l'est — voir
+  // Expr.flattenProductFactors, qui extrait directement les N facteurs du ProductGroup,
+  // voir expression.js) ou "Racine carrée" (1 ou 2 enfants selon que la constante vaut 0
+  // ou non). RÉCURSIF : chaque enfant est lui-même un createBranchable() complet, donc
+  // capable de se scinder À NOUVEAU — ex. un facteur "x²+18x+81=0" réécrit par une
+  // identité remarquable en "(9+x)²=0" À L'INTÉRIEUR d'une colonne "Produit nul" reste
+  // résoluble par "Racine carrée" dans CETTE colonne, plutôt que de rester bloqué comme
+  // si seule l'équation de tout premier niveau pouvait jamais s'y prêter. App.History
+  // EST un de ces noeuds (la racine de l'arbre) ; chaque colonne affichée (voir
+  // render.js, Hist.getBranches()) en est un autre, avec exactement la même API.
+  //
+  // Toute méthode "active" (qui agit sur/lit la chaîne EN COURS DE TRAVAIL, listée dans
+  // DELEGATED_METHODS plus bas) se contente de déléguer, SI ce noeud a des enfants, à
+  // l'enfant focalisé — qui, étant lui-même un createBranchable(), refait exactement le
+  // même test avant d'agir : la récursion à profondeur arbitraire se fait donc via la
+  // pile d'appels JS normale, sans boucle de descente explicite ici. `leaf.<method>`
+  // n'est appelé QUE quand ce noeud n'a PAS d'enfants (cas terminal — un enfant qui n'a
+  // jamais lui-même été scindé davantage).
+  function createBranchable() {
+    var leaf = createEngine();
+    var branches = null;        // null, ou [branchable, branchable, ...] (au moins 1) — récursif
+    var focusedBranch = 0;      // index dans `branches` — quel enfant reçoit clavier/pavé/sélection
+    var branchSplitLabel = '';  // LaTeX affiché sur la flèche fourchue (voir drawFork dans arrows.js) — du texte ("\text{...}") ou un symbole mathématique brut, selon l'action
+    var listeners = [];
 
-  var primary = null;
-  var branches = null;        // null, ou [engine, engine, ...] (au moins 1)
-  var focusedBranch = 0;      // index dans `branches` — quelle branche reçoit clavier/pavé/sélection
-  var branchSplitLabel = '';  // LaTeX affiché sur la flèche fourchue (voir drawFork dans arrows.js) — du texte ("\text{...}") ou un symbole mathématique brut, selon l'action
-  var listeners = [];
+    function notify() {
+      listeners.forEach(function (fn) { fn(); });
+    }
+    // Toute mutation de `leaf` (à ce niveau OU, par ricochet, dans n'importe quel enfant
+    // plus bas — chaque enfant s'abonne de même à SON PROPRE parent, voir
+    // splitIntoBranches) remonte ainsi jusqu'à la racine : render.js ne s'abonne qu'une
+    // fois, à App.History (voir main.js).
+    leaf.subscribe(notify);
 
-  function notify() {
-    listeners.forEach(function (fn) { fn(); });
-  }
+    function focusedChild() { return branches[focusedBranch]; }
 
-  // Moteur qui reçoit les actions de l'utilisateur en ce moment : la branche focalisée
-  // une fois une scission déclenchée, sinon le moteur principal.
-  function active() {
-    return branches ? branches[focusedBranch] : primary;
-  }
-
-  // Toujours possible dès qu'il y a quoi que ce soit à annuler : soit une étape dans le
-  // moteur actif (primary ou la branche focalisée), soit — à défaut — la scission
-  // elle-même (voir undo ci-dessous).
-  function canUndo() {
-    if (branches) return true;
-    return primary.getSteps().length > 1;
-  }
-
-  // Annule la dernière étape du moteur ACTIF (primary, ou la branche focalisée). Si
-  // cette branche est déjà à son tout premier step (juste après la scission, rien à
-  // annuler EN SON SEIN), annule directement la scission elle-même plutôt que de ne rien
-  // faire : retour à `primary`, qui n'a jamais été modifié par la scission (elle ne fait
-  // que créer de NOUVEAUX moteurs à partir de sa dernière équation), donc rien d'autre à
-  // restaurer. Peu importe l'avancement des AUTRES branches à ce moment : annuler la
-  // scission les annule toutes ensemble, symétriquement à la façon dont elle les a
-  // toutes créées ensemble.
-  function undo() {
-    if (branches) {
-      var focusedEngine = branches[focusedBranch];
-      if (focusedEngine.getSteps().length > 1) {
-        return focusedEngine.undo();
-      }
+    function init(equation) {
       branches = null;
       focusedBranch = 0;
       branchSplitLabel = '';
+      leaf.init(equation);
+    }
+
+    function setFocusedBranch(index) {
+      if (!branches || index < 0 || index >= branches.length || focusedBranch === index) return;
+      focusedBranch = index;
       notify();
-      return true;
     }
-    return primary.undo();
-  }
 
-  function init(equation) {
-    branches = null;
-    focusedBranch = 0;
-    primary = createEngine();
-    primary.subscribe(notify);
-    primary.init(equation);
-  }
-
-  function startNewEquation(equation) {
-    init(equation);
-  }
-
-  function setFocusedBranch(index) {
-    if (!branches || index < 0 || index >= branches.length || focusedBranch === index) return;
-    focusedBranch = index;
-    notify();
-  }
-
-  // Variante silencieuse (pas de notify) : utilisée juste avant de déléguer une action
-  // à cette branche (ex. un clic sur un terme), pour que active() la cible déjà
-  // correctement — l'action elle-même déclenchera son propre (unique) rendu.
-  function focusBranch(index) {
-    if (branches && index >= 0 && index < branches.length) focusedBranch = index;
-  }
-
-  // Scinde `primary` en N moteurs indépendants, un par élément de `sides` (chacun
-  // l'équation "side = 0", ou une valeur explicite via `rightOverride`), les affecte à
-  // `branches`, et notifie une seule fois à la fin. Commun à "Produit nul" et
-  // "Racine carrée" (voir confirmProduitNul/confirmSquareRoot ci-dessous). `labelLatex`
-  // est du LaTeX déjà prêt à l'affichage (pas juste du texte brut à envelopper) — voir
-  // drawFork dans arrows.js : "\text{produit nul}" pour l'un, un symbole mathématique
-  // brut pour l'autre.
-  function splitIntoBranches(equations, labelLatex) {
-    var engines = equations.map(function (eq) {
-      var eng = createEngine();
-      // init() déclenche son propre notify() interne : s'y abonner AVANT l'appel
-      // provoquerait un rendu prématuré (branches pas encore affecté ci-dessous), dont
-      // les éléments DOM seraient aussitôt détachés par le rendu suivant — laissant des
-      // étiquettes de flèche fantômes bloquées en (0,0) (position d'un élément détaché).
-      eng.init(eq);
-      eng.subscribe(notify);
-      return eng;
-    });
-    branches = engines;
-    focusedBranch = 0;
-    branchSplitLabel = labelLatex;
-    notify();
-  }
-
-  // Détecte si `eq` est de la forme (A)(B)...=0 ou 0=(A)(B)... (un ProductGroup seul
-  // d'un côté, potentiellement imbriqué à volonté — voir Expr.flattenProductFactors,
-  // ex. "(a+b)(c+d)²" — la constante 0 seule de l'autre) ; renvoie { factors: Side[] },
-  // les facteurs DISTINCTS après déduplication structurelle (voir Expr.sidesEquivalent —
-  // ex. "(a+bx)²=0" ne donne qu'UN facteur, une seule colonne ; "(a+b)(c+d)²=0" en donne
-  // deux), ou null sinon. Le signe (à n'importe quel niveau d'imbrication) est
-  // indifférent : un produit nul reste nul quel que soit son signe global.
-  function detectProduitNul(eq) {
-    function trySide(prodSide, zeroSide) {
-      var pSide = eq[prodSide], zSide = eq[zeroSide];
-      if (pSide.length !== 1 || !Expr.isProductGroup(pSide[0])) return null;
-      if (zSide.length !== 1 || Expr.isGroup(zSide[0]) || zSide[0].pow !== 0 || Expr.roundClean(zSide[0].coeff) !== 0) return null;
-      var allFactors = Expr.flattenProductFactors(pSide[0]);
-      var distinct = [];
-      allFactors.forEach(function (f) {
-        if (!distinct.some(function (d) { return Expr.sidesEquivalent(d, f); })) distinct.push(f);
-      });
-      return { factors: distinct };
+    // Variante silencieuse (pas de notify) : utilisée juste avant de déléguer une action
+    // à cet enfant (ex. un clic sur un terme), pour que la délégation le cible déjà
+    // correctement — l'action elle-même déclenchera son propre (unique) rendu.
+    function focusBranch(index) {
+      if (branches && index >= 0 && index < branches.length) focusedBranch = index;
     }
-    return trySide('left', 'right') || trySide('right', 'left');
-  }
 
-  // Comme "Racine carrée" (voir canSquareRoot/detectSquareRoot plus bas), pas de
-  // sélection préalable à faire : "Produit nul" ne distingue de toute façon jamais QUELS
-  // facteurs on a cliqués, seulement la FORME de l'équation entière ((...)( ...)...=0) —
-  // exiger un clic n'ajoutait qu'une étape artificielle. Pas de scission imbriquée d'une
-  // branche déjà scindée (aucun facteur généré par cette appli n'est lui-même un produit,
-  // ce cas ne se présente donc pas en pratique).
-  function canProduitNul() {
-    return !branches && !!detectProduitNul(primary.lastEquation());
-  }
+    // Toujours possible dès qu'il y a quoi que ce soit à annuler : soit une étape dans
+    // l'enfant focalisé (à N'IMPORTE quelle profondeur, via la récursion sur canUndo
+    // elle-même), soit — à défaut — la scission de CE noeud (voir undo ci-dessous).
+    function canUndo() {
+      if (branches) return true;
+      return leaf.getSteps().length > 1;
+    }
 
-  // Aperçu en lecture seule pour le survol du bouton "Produit nul" (voir
-  // shouldShowLivePreview dans render.js) : mêmes équations que confirmProduitNul
-  // produirait, mais SANS RIEN modifier (aucune branche créée, aucun notify) — juste les
-  // données nécessaires pour dessiner un aperçu statique des colonnes qui SERAIENT
-  // créées si l'élève cliquait vraiment.
-  function previewProduitNul() {
-    if (!canProduitNul()) return null;
-    var detected = detectProduitNul(primary.lastEquation());
-    return detected.factors.map(function (side) {
-      return { left: Expr.cloneSide(side), right: [{ coeff: 0, pow: 0 }] };
-    });
-  }
-
-  function confirmProduitNul() {
-    if (branches) return false;
-    var detected = detectProduitNul(primary.lastEquation());
-    if (!detected) return false;
-    var equations = detected.factors.map(function (side) {
-      return { left: Expr.cloneSide(side), right: [{ coeff: 0, pow: 0 }] };
-    });
-    splitIntoBranches(equations, '\\text{produit nul}');
-    return true;
-  }
-
-  // Détecte si `eq` est de la forme (expr)² = c ou c = (expr)² (un carré parfait d'un
-  // côté — soit un ProductGroup.isSquare "(a+bx)²", soit un simple "x²" nu de
-  // coefficient 1 — une constante numérique de l'autre) ; renvoie { base: Side, constant:
-  // number } ou null sinon. `base` est l'expression dont il faudra prendre la racine
-  // (ex. "a+bx", ou "x").
-  function detectSquareRoot(eq) {
-    function trySide(sqSide, constSide) {
-      var sSide = eq[sqSide], cSide = eq[constSide];
-      if (cSide.length !== 1 || Expr.isGroup(cSide[0]) || cSide[0].pow !== 0) return null;
-      if (sSide.length !== 1) return null;
-      var node = sSide[0];
-      var base;
-      if (Expr.isSquareFactorGroup(node)) {
-        base = node.factors[0].terms;
-      } else if (!Expr.isGroup(node) && node.pow === 2 && Expr.roundClean(node.coeff) === 1) {
-        base = [{ coeff: 1, pow: 1 }];
-      } else {
-        return null;
+    // Annule la dernière étape du noeud ACTIF (celui atteint en suivant la chaîne des
+    // enfants focalisés). Si cet enfant n'a plus RIEN à annuler EN SON SEIN (ni étape
+    // propre, ni sa propre scission plus bas), annule directement CETTE scission-ci
+    // plutôt que de ne rien faire : retour à `leaf`, qui n'a jamais été modifié par la
+    // scission (elle ne fait que créer de NOUVEAUX enfants à partir de sa dernière
+    // équation), donc rien d'autre à restaurer. Peu importe l'avancement des AUTRES
+    // enfants à ce moment : annuler la scission les annule tous ensemble, symétriquement
+    // à la façon dont elle les a tous créés ensemble.
+    function undo() {
+      if (branches) {
+        if (focusedChild().canUndo()) return focusedChild().undo();
+        branches = null;
+        focusedBranch = 0;
+        branchSplitLabel = '';
+        notify();
+        return true;
       }
-      return { base: base, constant: Expr.roundClean(cSide[0].coeff) };
+      return leaf.undo();
     }
-    return trySide('left', 'right') || trySide('right', 'left');
-  }
 
-  // Contrairement à "Produit nul", pas de sélection préalable à faire : "Racine carrée"
-  // est une touche du pavé "Opération" (voir mathKeypad.js/bindMathKeypad dans
-  // toolbar.js), au même
-  // titre que +/-/×/÷ qui, eux non plus, n'exigent aucune sélection — juste une forme
-  // d'équation valide (voir detectSquareRoot). Comme "Produit nul", pas de scission
-  // imbriquée d'une branche déjà scindée : ne s'applique qu'à l'équation principale.
-  function canSquareRoot() {
-    return !branches && !!detectSquareRoot(primary.lastEquation());
-  }
-
-  // Aperçu en lecture seule pour "Racine carrée" (voir previewProduitNul ci-dessus pour
-  // le même principe côté "Produit nul") : les mêmes équations que confirmSquareRoot
-  // produirait, sans rien modifier. Contrairement à confirmSquareRoot, ne montre RIEN
-  // (renvoie null) quand la constante est négative — l'aperçu n'a pas vocation à montrer
-  // un message d'erreur, seulement une scission valide.
-  function previewSquareRoot() {
-    if (!canSquareRoot()) return null;
-    var detected = detectSquareRoot(primary.lastEquation());
-    if (detected.constant < 0) return null;
-    var rootVal = Expr.roundClean(Math.sqrt(detected.constant));
-    var equations = [{ left: Expr.cloneSide(detected.base), right: [{ coeff: rootVal, pow: 0 }] }];
-    if (rootVal !== 0) {
-      equations.push({ left: Expr.cloneSide(detected.base), right: [{ coeff: -rootVal, pow: 0 }] });
-    }
-    return equations;
-  }
-
-  function confirmSquareRoot() {
-    if (branches) return false;
-    var detected = detectSquareRoot(primary.lastEquation());
-    if (!detected) return false;
-    if (detected.constant < 0) {
-      // Pas de scission : juste un message d'erreur, comme un choix d'identité
-      // remarquable qui ne correspond pas (voir chooseFactorMode) — le panneau flottant
-      // l'affiche dès que pending.error est posé, même sans opType engagé (voir
-      // needsPanel dans toolbar.js). sqrtFailed (persistant, voir emptyPending) grise
-      // durablement la touche "√" tant que cette équation reste ainsi — même principe
-      // que pending.factorChoiceFailed pour les identités remarquables.
-      var pFail = primary.getPending();
-      pFail.error = 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.';
-      pFail.sqrtFailed = true;
+    // Scinde CE noeud en N enfants indépendants, un par élément de `equations`, les
+    // affecte à `branches`, et notifie une seule fois à la fin. Commun à "Produit nul"
+    // et "Racine carrée" (voir confirmProduitNul/confirmSquareRoot ci-dessous).
+    // `labelLatex` est du LaTeX déjà prêt à l'affichage (pas juste du texte brut à
+    // envelopper) — voir drawFork dans arrows.js : "\text{produit nul}" pour l'un, un
+    // symbole mathématique brut pour l'autre.
+    function splitIntoBranches(equations, labelLatex) {
+      var engines = equations.map(function (eq) {
+        var eng = createBranchable();
+        // init() déclenche son propre notify() interne : s'y abonner AVANT l'appel
+        // provoquerait un rendu prématuré (branches pas encore affecté ci-dessous), dont
+        // les éléments DOM seraient aussitôt détachés par le rendu suivant — laissant des
+        // étiquettes de flèche fantômes bloquées en (0,0) (position d'un élément détaché).
+        eng.init(eq);
+        eng.subscribe(notify);
+        return eng;
+      });
+      branches = engines;
+      focusedBranch = 0;
+      branchSplitLabel = labelLatex;
       notify();
-      return false;
     }
-    var rootVal = Expr.roundClean(Math.sqrt(detected.constant));
-    var soleEquation = { left: Expr.cloneSide(detected.base), right: [{ coeff: rootVal, pow: 0 }] };
-    // Racine de 0 : +0 et -0 donneraient deux colonnes strictement identiques (même
-    // principe que la déduplication de Produit nul) — un SEUL résultat, donc jamais une
-    // "fourche" à une seule branche (flèche double + colonnes prévues pour plusieurs cas,
-    // voir splitIntoBranches) : reste une étape normale de la chaîne principale, à deux
-    // flèches identiques (gauche ET droite, comme pour "÷2" ou toute autre opération
-    // portant sur les deux membres à la fois) — voir pushStep plus bas dans createEngine.
-    if (rootVal === 0) {
-      primary.pushStep(soleEquation, { type: 'sqrt' });
+
+    // Détecte si `eq` est de la forme (A)(B)...=0 ou 0=(A)(B)... (un ProductGroup seul
+    // d'un côté, potentiellement imbriqué à volonté — voir Expr.flattenProductFactors,
+    // ex. "(a+b)(c+d)²" — la constante 0 seule de l'autre) ; renvoie { factors: Side[] },
+    // les facteurs DISTINCTS après déduplication structurelle (voir Expr.sidesEquivalent —
+    // ex. "(a+bx)²=0" ne donne qu'UN facteur, une seule colonne ; "(a+b)(c+d)²=0" en donne
+    // deux), ou null sinon. Le signe (à n'importe quel niveau d'imbrication) est
+    // indifférent : un produit nul reste nul quel que soit son signe global.
+    function detectProduitNul(eq) {
+      function trySide(prodSide, zeroSide) {
+        var pSide = eq[prodSide], zSide = eq[zeroSide];
+        if (pSide.length !== 1 || !Expr.isProductGroup(pSide[0])) return null;
+        if (zSide.length !== 1 || Expr.isGroup(zSide[0]) || zSide[0].pow !== 0 || Expr.roundClean(zSide[0].coeff) !== 0) return null;
+        var allFactors = Expr.flattenProductFactors(pSide[0]);
+        var distinct = [];
+        allFactors.forEach(function (f) {
+          if (!distinct.some(function (d) { return Expr.sidesEquivalent(d, f); })) distinct.push(f);
+        });
+        return { factors: distinct };
+      }
+      return trySide('left', 'right') || trySide('right', 'left');
+    }
+
+    // Comme "Racine carrée" (voir canSquareRoot/detectSquareRoot plus bas), pas de
+    // sélection préalable à faire : "Produit nul" ne distingue de toute façon jamais QUELS
+    // facteurs on a cliqués, seulement la FORME de l'équation entière ((...)( ...)...=0) —
+    // exiger un clic n'ajoutait qu'une étape artificielle. Scission imbriquée d'un enfant
+    // déjà scindé : déléguée à l'enfant focalisé, à profondeur arbitraire (voir le
+    // commentaire au-dessus de createBranchable) plutôt qu'interdite.
+    function canProduitNul() {
+      if (branches) return focusedChild().canProduitNul();
+      return !!detectProduitNul(leaf.lastEquation());
+    }
+
+    // Aperçu en lecture seule pour le survol du bouton "Produit nul" (voir
+    // shouldShowLivePreview dans render.js) : mêmes équations que confirmProduitNul
+    // produirait, mais SANS RIEN modifier (aucun enfant créé, aucun notify) — juste les
+    // données nécessaires pour dessiner un aperçu statique des colonnes qui SERAIENT
+    // créées si l'élève cliquait vraiment.
+    function previewProduitNul() {
+      if (branches) return focusedChild().previewProduitNul();
+      if (!canProduitNul()) return null;
+      var detected = detectProduitNul(leaf.lastEquation());
+      return detected.factors.map(function (side) {
+        return { left: Expr.cloneSide(side), right: [{ coeff: 0, pow: 0 }] };
+      });
+    }
+
+    function confirmProduitNul() {
+      if (branches) return focusedChild().confirmProduitNul();
+      var detected = detectProduitNul(leaf.lastEquation());
+      if (!detected) return false;
+      var equations = detected.factors.map(function (side) {
+        return { left: Expr.cloneSide(side), right: [{ coeff: 0, pow: 0 }] };
+      });
+      splitIntoBranches(equations, '\\text{produit nul}');
       return true;
     }
-    var equations = [soleEquation, { left: Expr.cloneSide(detected.base), right: [{ coeff: -rootVal, pow: 0 }] }];
-    splitIntoBranches(equations, '\\sqrt{\\phantom{x}}');
-    return true;
+
+    // Détecte si `eq` est de la forme (expr)² = c ou c = (expr)² (un carré parfait d'un
+    // côté — soit un ProductGroup.isSquare "(a+bx)²", soit un simple "x²" nu de
+    // coefficient 1 — une constante numérique de l'autre) ; renvoie { base: Side, constant:
+    // number } ou null sinon. `base` est l'expression dont il faudra prendre la racine
+    // (ex. "a+bx", ou "x").
+    function detectSquareRoot(eq) {
+      function trySide(sqSide, constSide) {
+        var sSide = eq[sqSide], cSide = eq[constSide];
+        if (cSide.length !== 1 || Expr.isGroup(cSide[0]) || cSide[0].pow !== 0) return null;
+        if (sSide.length !== 1) return null;
+        var node = sSide[0];
+        var base;
+        if (Expr.isSquareFactorGroup(node)) {
+          base = node.factors[0].terms;
+        } else if (!Expr.isGroup(node) && node.pow === 2 && Expr.roundClean(node.coeff) === 1) {
+          base = [{ coeff: 1, pow: 1 }];
+        } else {
+          return null;
+        }
+        return { base: base, constant: Expr.roundClean(cSide[0].coeff) };
+      }
+      return trySide('left', 'right') || trySide('right', 'left');
+    }
+
+    // Contrairement à "Produit nul", pas de sélection préalable à faire : "Racine carrée"
+    // est une touche du pavé "Opération" (voir mathKeypad.js/bindMathKeypad dans
+    // toolbar.js), au même titre que +/-/×/÷ qui, eux non plus, n'exigent aucune
+    // sélection — juste une forme d'équation valide (voir detectSquareRoot). Comme
+    // "Produit nul", scission imbriquée déléguée à l'enfant focalisé (profondeur
+    // arbitraire), jamais interdite.
+    function canSquareRoot() {
+      if (branches) return focusedChild().canSquareRoot();
+      return !!detectSquareRoot(leaf.lastEquation());
+    }
+
+    // Aperçu en lecture seule pour "Racine carrée" (voir previewProduitNul ci-dessus pour
+    // le même principe côté "Produit nul") : les mêmes équations que confirmSquareRoot
+    // produirait, sans rien modifier. Contrairement à confirmSquareRoot, ne montre RIEN
+    // (renvoie null) quand la constante est négative — l'aperçu n'a pas vocation à montrer
+    // un message d'erreur, seulement une scission valide.
+    function previewSquareRoot() {
+      if (branches) return focusedChild().previewSquareRoot();
+      if (!canSquareRoot()) return null;
+      var detected = detectSquareRoot(leaf.lastEquation());
+      if (detected.constant < 0) return null;
+      var rootVal = Expr.roundClean(Math.sqrt(detected.constant));
+      var equations = [{ left: Expr.cloneSide(detected.base), right: [{ coeff: rootVal, pow: 0 }] }];
+      if (rootVal !== 0) {
+        equations.push({ left: Expr.cloneSide(detected.base), right: [{ coeff: -rootVal, pow: 0 }] });
+      }
+      return equations;
+    }
+
+    function confirmSquareRoot() {
+      if (branches) return focusedChild().confirmSquareRoot();
+      var detected = detectSquareRoot(leaf.lastEquation());
+      if (!detected) return false;
+      if (detected.constant < 0) {
+        // Pas de scission : juste un message d'erreur, comme un choix d'identité
+        // remarquable qui ne correspond pas (voir chooseFactorMode) — le panneau flottant
+        // l'affiche dès que pending.error est posé, même sans opType engagé (voir
+        // needsPanel dans toolbar.js). sqrtFailed (persistant, voir emptyPending) grise
+        // durablement la touche "√" tant que cette équation reste ainsi — même principe
+        // que pending.factorChoiceFailed pour les identités remarquables.
+        var pFail = leaf.getPending();
+        pFail.error = 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.';
+        pFail.sqrtFailed = true;
+        notify();
+        return false;
+      }
+      var rootVal = Expr.roundClean(Math.sqrt(detected.constant));
+      var soleEquation = { left: Expr.cloneSide(detected.base), right: [{ coeff: rootVal, pow: 0 }] };
+      // Racine de 0 : +0 et -0 donneraient deux colonnes strictement identiques (même
+      // principe que la déduplication de Produit nul) — un SEUL résultat, donc jamais une
+      // "fourche" à une seule branche (flèche double + colonnes prévues pour plusieurs cas,
+      // voir splitIntoBranches) : reste une étape normale de la chaîne de CE noeud, à deux
+      // flèches identiques (gauche ET droite, comme pour "÷2" ou toute autre opération
+      // portant sur les deux membres à la fois) — voir pushStep plus haut dans createEngine.
+      if (rootVal === 0) {
+        leaf.pushStep(soleEquation, { type: 'sqrt' });
+        return true;
+      }
+      var equations = [soleEquation, { left: Expr.cloneSide(detected.base), right: [{ coeff: -rootVal, pow: 0 }] }];
+      splitIntoBranches(equations, '\\sqrt{\\phantom{x}}');
+      return true;
+    }
+
+    // Toute autre méthode "active" de l'API : déléguée à l'enfant focalisé s'il y en a
+    // un, sinon exécutée directement sur `leaf`. Chaque nom ci-dessous existe à
+    // l'identique sur `leaf` (voir la fin de createEngine plus haut) ET, une fois généré
+    // ci-dessous, sur l'objet renvoyé par createBranchable lui-même — la récursion à
+    // profondeur arbitraire se fait via la pile d'appels JS normale (appeler la méthode
+    // de l'enfant refait le même test un niveau plus bas), sans avoir à la dérouler ici.
+    var DELEGATED_METHODS = [
+      'getSteps', 'getPending', 'lastEquation', 'selectOp', 'cancelOp',
+      'exitFactorKeepSelection', 'toggleTermSelection', 'toggleInnerSelection',
+      'drillIntoGroup', 'drillIntoProductBranch', 'drillIntoInnerGroup', 'exitDrill',
+      'confirmSimplifySelection', 'enterFactorWithSelection', 'getFactorTargetShape',
+      'chooseFactorMode', 'goBackToFactorChoice', 'setIdentityFocus',
+      'confirmExpandFullSelection', 'toggleSquareRootArmed', 'setExprChainText',
+      'setFactorTermLatex', 'setIdentityFieldLatex', 'parseOperandTerm', 'confirm',
+      'computePreview', 'setSideOrder', 'setInnerOrder', 'setDrilledFactorOrder',
+      'clickNestedFactor', 'setFactorOrder'
+    ];
+
+    var api = {
+      subscribe: function (fn) { listeners.push(fn); },
+      init: init,
+      // Chaîne PROPRE à ce noeud, AVANT toute scission éventuelle en son sein (jamais
+      // déléguée) : les pas "gelés" affichés au-dessus des colonnes une fois ce noeud
+      // scindé — voir renderNode dans render.js. Hors scission, identique à getSteps().
+      getOwnSteps: function () { return leaf.getSteps(); },
+      // Arbre PROPRE à ce noeud (un seul niveau, jamais délégué) : null, ou les enfants
+      // directs — chacun potentiellement scindé à nouveau plus bas (voir render.js, qui
+      // parcourt cet arbre récursivement).
+      getBranches: function () { return branches; },
+      getFocusedBranch: function () { return focusedBranch; },
+      getBranchSplitLabel: function () { return branchSplitLabel; },
+      setFocusedBranch: setFocusedBranch,
+      focusBranch: focusBranch,
+      canUndo: canUndo,
+      undo: undo,
+      canProduitNul: canProduitNul,
+      previewProduitNul: previewProduitNul,
+      confirmProduitNul: confirmProduitNul,
+      canSquareRoot: canSquareRoot,
+      previewSquareRoot: previewSquareRoot,
+      confirmSquareRoot: confirmSquareRoot
+    };
+    DELEGATED_METHODS.forEach(function (name) {
+      api[name] = function () {
+        var target = branches ? focusedChild() : leaf;
+        return target[name].apply(target, arguments);
+      };
+    });
+    return api;
   }
 
-  App.History = {
-    subscribe: function (fn) { listeners.push(fn); },
-    init: init,
-    startNewEquation: startNewEquation,
-    getPrimarySteps: function () { return primary.getSteps(); },
-    getBranches: function () { return branches; },
-    getFocusedBranch: function () { return focusedBranch; },
-    getBranchSplitLabel: function () { return branchSplitLabel; },
-    setFocusedBranch: setFocusedBranch,
-    focusBranch: focusBranch,
-    canUndo: canUndo,
-    undo: undo,
-    getSteps: function () { return active().getSteps(); },
-    getPending: function () { return active().getPending(); },
-    lastEquation: function () { return active().lastEquation(); },
-    selectOp: function (t) { active().selectOp(t); },
-    cancelOp: function () { active().cancelOp(); },
-    exitFactorKeepSelection: function () { active().exitFactorKeepSelection(); },
-    toggleTermSelection: function (side, idx, branchHint, isDenPart) { active().toggleTermSelection(side, idx, branchHint, isDenPart); },
-    toggleInnerSelection: function (idx) { active().toggleInnerSelection(idx); },
-    drillIntoGroup: function (side, idx) { active().drillIntoGroup(side, idx); },
-    drillIntoProductBranch: function (side, idx, branch) { active().drillIntoProductBranch(side, idx, branch); },
-    drillIntoInnerGroup: function (idx) { active().drillIntoInnerGroup(idx); },
-    exitDrill: function () { active().exitDrill(); },
-    confirmSimplifySelection: function () { return active().confirmSimplifySelection(); },
-    enterFactorWithSelection: function () { return active().enterFactorWithSelection(); },
-    getFactorTargetShape: function () { return active().getFactorTargetShape(); },
-    chooseFactorMode: function (mode) { active().chooseFactorMode(mode); },
-    goBackToFactorChoice: function () { active().goBackToFactorChoice(); },
-    setIdentityFocus: function (which) { active().setIdentityFocus(which); },
-    confirmExpandFullSelection: function () { return active().confirmExpandFullSelection(); },
-    canProduitNul: canProduitNul,
-    previewProduitNul: previewProduitNul,
-    previewSquareRoot: previewSquareRoot,
-    confirmProduitNul: confirmProduitNul,
-    canSquareRoot: canSquareRoot,
-    confirmSquareRoot: confirmSquareRoot,
-    toggleSquareRootArmed: function () { active().toggleSquareRootArmed(); },
-    setExprChainText: function (latex) { active().setExprChainText(latex); },
-    setFactorTermLatex: function (latex) { active().setFactorTermLatex(latex); },
-    setIdentityFieldLatex: function (latex) { active().setIdentityFieldLatex(latex); },
-    parseOperandTerm: function () { return active().parseOperandTerm(); },
-    confirm: function () { return active().confirm(); },
-    computePreview: function () { return active().computePreview(); },
-    setSideOrder: function (side, order) { active().setSideOrder(side, order); },
-    setInnerOrder: function (order) { active().setInnerOrder(order); },
-    setDrilledFactorOrder: function (innerIndex, order) { active().setDrilledFactorOrder(innerIndex, order); },
-    clickNestedFactor: function (innerIndex, branch) { active().clickNestedFactor(innerIndex, branch); },
-    setFactorOrder: function (side, groupIndex, order) { active().setFactorOrder(side, groupIndex, order); }
-  };
+  var root = createBranchable();
+  App.History = root;
+  // Alias historique : (re)part d'une équation entièrement neuve (identique à init).
+  App.History.startNewEquation = root.init;
 })(window.App = window.App || {});

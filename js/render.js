@@ -1432,6 +1432,150 @@
     // plutôt que de rester affichée avec ses boutons pour la plupart grisés.
     var scrollTargetSolved = false;
 
+    // Rend un noeud de l'arbre de scission ("Produit nul"/"Racine carrée") dans
+    // `container` : soit une feuille (renderChain, comme avant la scission récursive),
+    // soit — si `engine` a lui-même été scindé À NOUVEAU (ex. une identité remarquable
+    // produisant un carré parfait à l'intérieur d'une colonne "Produit nul", résolu
+    // ensuite par "Racine carrée" DANS cette colonne) — ses propres pas gelés suivis
+    // d'une scission imbriquée, plus sobre que celle du tout premier niveau (voir
+    // .produit-nul-split-nested dans style.css : pas de padding 50vw ni de
+    // centrage/défilement dédié, l'espace disponible est déjà celui, réduit, de la
+    // colonne parente). Entièrement autonome (dessine ses propres flèches, y compris la
+    // fourche vers ses enfants) — le premier niveau (ci-dessous) et les niveaux plus
+    // profonds (récursion) l'utilisent de façon identique. `opts` : mêmes clés que pour
+    // renderChain (onBeforeAction/focused/noDrag). Renvoie { rowsData, framedRowEl,
+    // framedSolved, liveInfo } du noeud FEUILLE réellement focalisé (bulle à travers
+    // toute la récursion, quelle que soit la profondeur), PLUS `scrollEngine` (ce même
+    // noeud feuille, pour le suivi de recentrage par moteur) et `leafEngines` (TOUTES les
+    // feuilles de ce sous-arbre, focalisées ou non — pour le pré-marquage "déjà vu" des
+    // branches non actives et pour le résumé final une fois tout résolu, voir plus bas).
+    function renderBranchNode(engine, container, opts) {
+      opts = opts || {};
+      var nodeBranches = engine.getBranches();
+
+      if (!nodeBranches) {
+        var leafRes = renderChain(engine, container, opts);
+        if (!leafRes.liveInfo) App.MathKeypad.hideLiveOpPill();
+        // Neutralise le margin-bottom (46px, voir .eq-row) de la DERNIÈRE ligne : sans
+        // ça, il s'ajoute au padding bas de .produit-nul-branch et l'espace en bas de la
+        // colonne devient nettement plus grand qu'en haut. Fait en JS (pas en CSS
+        // :last-child/:last-of-type) car drawAll (arrows.js) ajoute ensuite le calque SVG
+        // ET des .arrow-label (des <div>, comme .eq-row) comme frères APRÈS les lignes
+        // dans ce même conteneur — aucun sélecteur structurel ne cible alors plus la
+        // bonne ligne une fois les flèches dessinées. Fait ICI (juste après renderChain,
+        // avant tout ajout de flèche) pour cibler la dernière ligne de façon fiable. Sans
+        // risque de viser la mauvaise ligne malgré `container.querySelectorAll` (pas
+        // `:scope >`) : renderChain ne remplit ce conteneur que de vraies `.eq-row`
+        // (jamais de sous-arbre imbriqué, réservé au cas `nodeBranches` ci-dessous).
+        var leafRows = container.querySelectorAll('.eq-row');
+        if (leafRows.length > 0) leafRows[leafRows.length - 1].classList.add('eq-row-flush-bottom');
+        requestAnimationFrame(function () {
+          if (isStaleRender()) return;
+          // constrainLabels : les étiquettes d'opération restent DANS cette colonne,
+          // jamais à cheval sur la colonne voisine (juxtaposées, séparées de 56px seulement).
+          var leafDrawOpts = { constrainLabels: true };
+          if (leafRes.liveInfo) leafDrawOpts.live = leafRes.liveInfo;
+          App.Arrows.drawAll(container, leafRes.rowsData, leafDrawOpts);
+        });
+        return {
+          rowsData: leafRes.rowsData,
+          framedRowEl: leafRes.framedRowEl,
+          framedSolved: leafRes.framedSolved,
+          liveInfo: leafRes.liveInfo,
+          scrollEngine: engine,
+          leafEngines: [engine]
+        };
+      }
+
+      var ownSteps = engine.getOwnSteps();
+      var ownRowsData = [];
+      ownSteps.forEach(function (step) {
+        // Jamais "current" (encadré bleu) : une fois ce noeud scindé, ce n'est plus la
+        // ligne active — ce sont ses enfants ci-dessous, chacun avec son propre cadre.
+        var row = createRow(step.equation, { pending: false, solved: false, current: false });
+        container.appendChild(row);
+        autoFitRowFont(row);
+        ownRowsData.push({
+          el: row,
+          opLeft: formatOpLabel(step.opLeft),
+          opRight: formatOpLabel(step.opRight),
+          opLeftWarn: descHasZeroRisk(step.opLeft),
+          opRightWarn: descHasZeroRisk(step.opRight),
+          pending: false
+        });
+      });
+
+      var nestedWrap = document.createElement('div');
+      nestedWrap.className = 'produit-nul-split produit-nul-split-nested';
+      container.appendChild(nestedWrap);
+
+      var focusedIdx = engine.getFocusedBranch();
+      var leafEngines = [];
+      var colEls = [];
+      var focusedChildRes = null;
+      nodeBranches.forEach(function (child, idx) {
+        var col = document.createElement('div');
+        col.className = 'produit-nul-branch' + (focusedIdx === idx ? ' branch-focused' : '');
+        col.addEventListener('click', function () { engine.setFocusedBranch(idx); });
+        var chainEl = document.createElement('div');
+        chainEl.className = 'produit-nul-chain';
+        col.appendChild(chainEl);
+        nestedWrap.appendChild(col);
+        colEls.push(col);
+
+        // Colonne pas sur le chemin réellement focalisé (soit un autre enfant ICI, soit
+        // ce noeud lui-même déjà hors chemin — `opts.focused === false`) : jamais
+        // d'aperçu en direct plus bas (voir shouldShowLivePreview dans renderChain).
+        var childFocused = opts.focused !== false && focusedIdx === idx;
+        var childRes = renderBranchNode(child, chainEl, {
+          noDrag: true, // simplifie le focus multi-branches (voir la tâche associée)
+          onBeforeAction: function () {
+            if (opts.onBeforeAction) opts.onBeforeAction();
+            engine.focusBranch(idx);
+          },
+          focused: childFocused
+        });
+        if (idx === focusedIdx) {
+          focusedChildRes = childRes;
+        } else {
+          // Pré-marque les feuilles de CET enfant comme "déjà vues" (voir
+          // lastCenteredStepByEngine tout en haut) : sans ça, cliquer pour focaliser une
+          // colonne DÉJÀ affichée à l'écran (juste pas encore "vue" du point de vue du
+          // suivi par moteur) déclencherait à tort un recentrage la première fois — comme
+          // si elle venait d'apparaître. Sans danger de masquer une VRAIE nouvelle étape :
+          // interagir avec une branche la focalise TOUJOURS d'abord (voir onBeforeAction
+          // ci-dessus), donc une branche non focalisée ne peut jamais gagner de nouvelle
+          // étape pendant qu'elle ne l'est pas. La branche focalisée, elle, n'est PAS
+          // pré-marquée ici : c'est le contrôle dédié en fin de renderAll qui décide pour
+          // elle, en comparant à la dernière valeur réellement enregistrée.
+          childRes.leafEngines.forEach(function (leafEng) {
+            var leafSteps = leafEng.getSteps();
+            lastCenteredStepByEngine.set(leafEng, leafSteps[leafSteps.length - 1]);
+          });
+        }
+        leafEngines = leafEngines.concat(childRes.leafEngines);
+      });
+
+      requestAnimationFrame(function () {
+        if (isStaleRender()) return;
+        var lastOwnEqSign = ownRowsData.length
+          ? ownRowsData[ownRowsData.length - 1].el.querySelector('.eq-sign') : null;
+        App.Arrows.drawAll(container, ownRowsData, {
+          constrainLabels: true,
+          fork: { from: lastOwnEqSign, to: colEls, label: engine.getBranchSplitLabel() }
+        });
+      });
+
+      return {
+        rowsData: focusedChildRes.rowsData,
+        framedRowEl: focusedChildRes.framedRowEl,
+        framedSolved: focusedChildRes.framedSolved,
+        liveInfo: focusedChildRes.liveInfo,
+        scrollEngine: focusedChildRes.scrollEngine,
+        leafEngines: leafEngines
+      };
+    }
+
     if (!branches) {
       // Cas normal (pas de "produit nul" en cours) : une seule chaîne, comme avant.
       var res = renderChain(Hist, history, {});
@@ -1520,7 +1664,7 @@
       // dupliqués fusionnés en une seule colonne, ex. "(a+bx)²=0" -> 1 colonne,
       // "(a+b)(c+d)²=0" -> 2), et confirmSquareRoot dans history.js pour "Racine carrée"
       // (1 colonne si la constante vaut 0, 2 sinon).
-      var primarySteps = Hist.getPrimarySteps();
+      var primarySteps = Hist.getOwnSteps();
       var primaryRowsData = [];
       primarySteps.forEach(function (step) {
         // Jamais "current" (encadré bleu) : une fois scindée, ce n'est plus la ligne
@@ -1552,15 +1696,16 @@
         col.appendChild(chainEl);
         splitWrap.appendChild(col);
 
-        var branchRes = renderChain(engine, chainEl, {
+        var branchRes = renderBranchNode(engine, chainEl, {
           noDrag: true, // simplifie le focus multi-branches (voir la tâche associée)
           onBeforeAction: function () { Hist.focusBranch(idx); },
           // Colonne pas active : jamais d'aperçu en direct (voir shouldShowLivePreview),
           // même si une sélection ou un survol y correspondrait par ailleurs.
           focused: focused === idx
         });
-        // Pré-marque les branches PAS focalisées comme "déjà vues" (voir
-        // lastCenteredStepByEngine tout en haut) : sans ça, cliquer pour focaliser une
+        // Pré-marque les feuilles des branches PAS focalisées comme "déjà vues" (voir
+        // lastCenteredStepByEngine tout en haut, et le même principe pour les niveaux
+        // plus profonds dans renderBranchNode) : sans ça, cliquer pour focaliser une
         // colonne DÉJÀ affichée à l'écran (juste pas encore "vue" du point de vue du
         // suivi par moteur) déclencherait à tort un recentrage la première fois — comme
         // si elle venait d'apparaître. Sans danger de masquer une VRAIE nouvelle étape :
@@ -1570,34 +1715,12 @@
         // pré-marquée ici : c'est le contrôle dédié en fin de fonction qui décide pour
         // elle, en comparant à la dernière valeur réellement enregistrée.
         if (idx !== focused) {
-          var otherSteps = engine.getSteps();
-          lastCenteredStepByEngine.set(engine, otherSteps[otherSteps.length - 1]);
+          branchRes.leafEngines.forEach(function (leafEng) {
+            var leafSteps = leafEng.getSteps();
+            lastCenteredStepByEngine.set(leafEng, leafSteps[leafSteps.length - 1]);
+          });
         }
-        // Neutralise le margin-bottom (46px, voir .eq-row) de la DERNIÈRE ligne : sans ça,
-        // il s'ajoute au padding bas de .produit-nul-branch et l'espace en bas de la
-        // colonne devient nettement plus grand qu'en haut. Fait en JS (pas en CSS
-        // :last-child/:last-of-type) car drawAll (arrows.js) ajoute ensuite le calque SVG
-        // ET des .arrow-label (des <div>, comme .eq-row) comme frères APRÈS les lignes
-        // dans ce même conteneur — aucun sélecteur structurel ne cible alors plus la
-        // bonne ligne une fois les flèches dessinées. Fait ICI (juste après renderChain,
-        // avant tout ajout de flèche) pour cibler la dernière ligne de façon fiable.
-        var chainRows = chainEl.querySelectorAll('.eq-row');
-        if (chainRows.length > 0) chainRows[chainRows.length - 1].classList.add('eq-row-flush-bottom');
-        // Décision de visibilité du pavé "live" (voir computeLiveOpInfo) : SYNCHRONE, comme
-        // dans le cas sans branches — seule la branche focalisée peut jamais être "live"
-        // (focused:false ci-dessus interdit toute ligne "pending" ailleurs), donc masquer
-        // ici pour les autres est sans danger pour elle (son propre rAF, plus bas, la
-        // montrera/positionnera si besoin).
-        if (!branchRes.liveInfo) App.MathKeypad.hideLiveOpPill();
-        requestAnimationFrame(function () {
-          if (isStaleRender()) return;
-          // constrainLabels : les étiquettes d'opération restent DANS cette colonne,
-          // jamais à cheval sur la colonne voisine (juxtaposées, séparées de 56px seulement).
-          var branchDrawOpts = { constrainLabels: true };
-          if (branchRes.liveInfo) branchDrawOpts.live = branchRes.liveInfo;
-          App.Arrows.drawAll(chainEl, branchRes.rowsData, branchDrawOpts);
-        });
-        return { container: chainEl, col: col, res: branchRes, engine: engine };
+        return { container: chainEl, col: col, res: branchRes };
       });
 
       // .produit-nul-split a TOUJOURS une largeur intrinsèque + un padding de 50vw de
@@ -1668,16 +1791,19 @@
 
       scrollTarget = branchResults[focused].res.framedRowEl;
       scrollTargetSolved = branchResults[focused].res.framedSolved;
-      scrollEngine = branchResults[focused].engine;
+      scrollEngine = branchResults[focused].res.scrollEngine;
       opPrevRowEl = findPrevRowEl(branchResults[focused].res.rowsData, scrollTarget);
       var focusedSteps = scrollEngine.getSteps();
       scrollIdentity = focusedSteps[focusedSteps.length - 1];
 
-      // Résumé final une fois TOUTES les branches résolues : "S = {...}", fusionnant les
-      // racines identiques (ex. racine double "(x+3)²=0", ou deux facteurs par ailleurs
-      // distincts qui finissent par la même solution).
-      if (branchResults.every(function (b) { return App.Equation.isSolved(b.engine.lastEquation()); })) {
-        var roots = branchResults.map(function (b) { return extractRoot(b.engine.lastEquation()); })
+      // Résumé final une fois TOUTES les feuilles (à N'IMPORTE quelle profondeur —
+      // voir leafEngines dans renderBranchNode, pas seulement le premier niveau)
+      // résolues : "S = {...}", fusionnant les racines identiques (ex. racine double
+      // "(x+3)²=0", ou deux facteurs par ailleurs distincts qui finissent par la même
+      // solution).
+      var allLeafEngines = branchResults.reduce(function (acc, b) { return acc.concat(b.res.leafEngines); }, []);
+      if (allLeafEngines.every(function (le) { return App.Equation.isSolved(le.lastEquation()); })) {
+        var roots = allLeafEngines.map(function (le) { return extractRoot(le.lastEquation()); })
           .filter(function (v, i, arr) { return arr.indexOf(v) === i; })
           .sort(function (a, b) { return a - b; });
         var rootsLatex = roots.map(function (v) {

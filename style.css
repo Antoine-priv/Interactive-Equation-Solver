@@ -360,6 +360,35 @@ button {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+/* Une colonne peut elle-même se scinder À NOUVEAU (ex. une identité remarquable qui
+   produit un carré parfait à l'intérieur d'une colonne "Produit nul", résolu ensuite par
+   "Racine carrée" DANS cette colonne, voir renderBranchNode dans render.js) : la largeur
+   fixe de .produit-nul-branch (pensée pour UNE équation) ne suffit alors plus à héberger
+   plusieurs sous-colonnes côte à côte. */
+.produit-nul-branch:has(.produit-nul-split-nested) {
+  max-width: none;
+}
+
+/* Scission imbriquée (profondeur ≥ 2) : mise en page simple et indépendante de
+   .produit-nul-split au tout premier niveau (pas de padding de 50vw ni de calcul de
+   largeur/défilement dédié en JS, voir renderAll — l'espace disponible est déjà celui,
+   réduit, de la colonne parente ; un débordement éventuel est pris en charge par le
+   défilement horizontal de #historyScroll, comme pour n'importe quel contenu large). */
+.produit-nul-split-nested {
+  padding-left: 0;
+  padding-right: 0;
+  gap: 40px;
+  margin: 36px 0 6px;
+}
+
+/* Sous-colonnes plus étroites que celles du premier niveau : la colonne parente qui les
+   héberge est elle-même déjà resserrée. */
+.produit-nul-split-nested .produit-nul-branch {
+  min-width: 220px;
+  max-width: 420px;
+  padding: 16px 28px;
+}
+
 /* Aperçu de "Produit nul" au survol de son bouton (voir renderAll dans render.js) :
    mise en page simple et indépendante de .produit-nul-split (pas de padding de 50vw —
    voir le commentaire dans render.js), juste centrée là où elle apparaît. Légèrement
