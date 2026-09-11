@@ -41,7 +41,7 @@ function ok(label, cond) {
     var colsMinLeft = Math.min(...cols.map((c) => c.left));
     var colsMaxRight = Math.max(...cols.map((c) => c.right));
     return {
-      scrollLeft: scroller.scrollLeft,
+      scrollLeft: window.App.Canvas.getX(),
       primaryCenter: (primaryRect.left + primaryRect.right) / 2,
       colsCenter: (colsMinLeft + colsMaxRight) / 2
     };
@@ -49,7 +49,7 @@ function ok(label, cond) {
   console.log('immediately after confirmProduitNul (no wait at all):', JSON.stringify(immediate));
 
   await page.waitForTimeout(600); // let any hypothetical animation fully finish
-  const settled = await page.evaluate(() => document.getElementById('historyScroll').scrollLeft);
+  const settled = await page.evaluate(() => window.App.Canvas.getX());
   console.log('scrollLeft once fully settled:', settled);
 
   ok('scrollLeft is already at its final value on the very first frame (no animation to wait for)',

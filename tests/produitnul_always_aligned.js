@@ -66,21 +66,37 @@ function ok(label, cond) {
 
   await page.screenshot({ path: `${SCRATCH}/produitnul_always_aligned.png` });
 
-  // Scroll to each extreme: every column must become fully visible, none permanently
-  // clipped by an unreachable "negative overflow" (see the comments in render.js).
-  await page.evaluate(() => { document.getElementById('historyScroll').scrollLeft = -999999; });
+  // Pan to each extreme (App.Canvas, voir canvas.js — plus de défilement natif borné,
+  // voir style.css) : chaque colonne doit pouvoir devenir entièrement visible, quel que
+  // soit l'offset requis pour l'amener à l'écran (y compris négatif) — plus aucun
+  // plafond/plancher à respecter, contrairement à l'ancien scrollLeft natif.
+  await page.evaluate(() => {
+    var scroller = document.getElementById('historyScroll');
+    var col = document.querySelectorAll('.produit-nul-branch')[0];
+    var rect = col.getBoundingClientRect();
+    var scrollerRect = scroller.getBoundingClientRect();
+    var desiredX = (rect.left - scrollerRect.left) + window.App.Canvas.getX() - 40; // 40px de marge à gauche
+    window.App.Canvas.set(desiredX, undefined);
+  });
   await page.waitForTimeout(80);
   const leftmost = await page.evaluate(() => document.querySelectorAll('.produit-nul-branch')[0].getBoundingClientRect());
-  ok('the leftmost column is fully reachable by scrolling left', leftmost.left >= 0 && leftmost.right <= 1366);
+  ok('the leftmost column is fully reachable by panning left (no lower bound)', leftmost.left >= 0 && leftmost.right <= 1366);
 
-  await page.evaluate(() => { document.getElementById('historyScroll').scrollLeft = 999999; });
+  await page.evaluate(() => {
+    var scroller = document.getElementById('historyScroll');
+    var cols = document.querySelectorAll('.produit-nul-branch');
+    var col = cols[cols.length - 1];
+    var rect = col.getBoundingClientRect();
+    var scrollerRect = scroller.getBoundingClientRect();
+    var desiredX = (rect.right - scrollerRect.left) + window.App.Canvas.getX() - scroller.clientWidth + 40; // 40px de marge à droite
+    window.App.Canvas.set(desiredX, undefined);
+  });
   await page.waitForTimeout(80);
-  const cols2 = await page.evaluate(() => document.querySelectorAll('.produit-nul-branch'));
   const rightmost = await page.evaluate(() => {
     var cols = document.querySelectorAll('.produit-nul-branch');
     return cols[cols.length - 1].getBoundingClientRect();
   });
-  ok('the rightmost column is fully reachable by scrolling right', rightmost.left >= 0 && rightmost.right <= 1366);
+  ok('the rightmost column is fully reachable by panning right (no upper bound)', rightmost.left >= 0 && rightmost.right <= 1366);
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');

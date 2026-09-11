@@ -177,11 +177,11 @@
 
   // Positionne le pavé "live" partagé (le <math-field> lui-même, voir bindLiveOpField
   // dans mathKeypad.js) à l'endroit exact où un pill statique apparaîtrait pour ce côté —
-  // même géométrie que drawSide, mais écrite en coordonnées de #historyScroll
-  // (scrollLeft/scrollTop inclus) plutôt qu'en viewport : le pavé est un enfant
-  // PERSISTANT de #historyScroll (jamais de `history`, reconstruit à chaque frappe, voir
-  // renderAll dans render.js), positionné en absolute pour défiler avec le contenu SANS
-  // le moindre code de synchronisation JS dédié au scroll.
+  // même géométrie que drawSide, mais écrite en coordonnées de #canvasLayer (offset
+  // App.Canvas inclus, voir canvas.js) plutôt qu'en viewport : le pavé est un enfant
+  // PERSISTANT de #canvasLayer (jamais de `history`, reconstruit à chaque frappe, voir
+  // renderAll dans render.js), positionné en absolute pour se déplacer avec le contenu
+  // SANS le moindre code de synchronisation JS dédié au défilement.
   function positionLiveField(historyRect, topEl, botEl, dir, warn, warnLatex, prefixLatex, constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect) {
     var pillEl = App.MathKeypad.getLiveOpPillEl();
     if (!pillEl) return;
@@ -209,8 +209,8 @@
 
     var historyScroll = document.getElementById('historyScroll');
     var hsRect = historyScroll ? historyScroll.getBoundingClientRect() : historyRect;
-    var scrollLeft = historyScroll ? historyScroll.scrollLeft : 0;
-    var scrollTop = historyScroll ? historyScroll.scrollTop : 0;
+    var scrollLeft = App.Canvas.getX();
+    var scrollTop = App.Canvas.getY();
     var viewportX = historyRect.left + anchor.extremeX;
     var viewportY = historyRect.top + anchor.midY;
     pillEl.style.left = (viewportX - hsRect.left + scrollLeft) + 'px';

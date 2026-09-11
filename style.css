@@ -180,28 +180,58 @@ button {
 /* ---- Historique des équations ---- */
 #historyScroll {
   flex: 1 1 auto;
-  overflow-y: auto;
-  /* Explicite (pas seulement le "auto" implicite qu'entraînerait overflow-y:auto sans
-     overflow-x défini) : nécessaire pour que le "produit nul" (deux colonnes qui ne se
-     compriment plus, voir .produit-nul-branch) puisse faire défiler TOUTE la page
-     horizontalement plutôt que chaque équation individuellement quand elles sont trop
-     larges côte à côte. Sans effet sur le cas normal (une équation centrée ne dépasse
-     jamais la largeur de #historyScroll, voir .eq-row { overflow-x: auto }). */
-  overflow-x: auto;
-  /* Ancre le pavé "live" de l'opération/facteur en cours de saisie (voir #liveOpPill dans
-     mathKeypad.js) : un enfant direct de #historyScroll (jamais #history, entièrement
-     reconstruit à chaque frappe, voir renderAll dans render.js) en position:absolute, pour
-     défiler naturellement AVEC le contenu sans le moindre code de synchronisation JS. */
+  /* Fenêtre FIXE, jamais de défilement natif : voir #canvasLayer ci-dessous, qui porte
+     tout le contenu et se déplace via `transform`, piloté par App.Canvas (js/canvas.js).
+     scrollLeft/scrollTop natifs ne peuvent jamais être négatifs ni dépasser
+     scrollWidth/scrollHeight — incompatible avec un panorama complètement libre dans
+     toutes les directions (voir la toile "infinie" ci-dessous), d'où ce choix plutôt que
+     overflow:auto. */
+  overflow: hidden;
+  /* Le "scroll anchoring" natif de Chromium (spec CSS Scroll Anchoring) s'applique à
+     N'IMPORTE QUEL conteneur overflow ≠ visible, y COMPRIS overflow:hidden — même sans
+     barre de défilement ni possibilité de défiler à la souris, le navigateur ajuste quand
+     même silencieusement le scrollTop/scrollLeft NATIF (inerte, jamais lu ni écrit
+     ailleurs dans ce fichier, voir App.Canvas dans canvas.js) pour compenser un
+     changement de taille de contenu AU-DESSUS de la zone visible (ex. sélectionner un
+     terme, qui ne change pourtant rien à la taille rendue ici, a suffi à le déclencher en
+     pratique) — et ce scrollTop natif, même inerte, est quand même soustrait de la
+     position peinte des enfants (getBoundingClientRect), entrant en conflit avec le
+     positionnement 100% manuel d'App.Canvas et décalant tout silencieusement. Désactivé
+     explicitement : App.Canvas est la SEULE source de vérité pour la position de la
+     toile, aucun ajustement automatique du navigateur ne doit s'y ajouter. */
+  overflow-anchor: none;
   position: relative;
   /* Toile "infinie" : le fond se saisit et se fait glisser pour naviguer, comme un
-     canvas (voir initCanvasPan dans main.js, qui pilote scrollLeft/scrollTop au
-     mousemove). "grab"/"grabbing" ne s'affichent que sur le fond lui-même — chaque
-     élément interactif (terme, bouton, panneau...) porte déjà son propre curseur
-     explicite, qui l'emporte naturellement sur celui-ci vu sa spécificité. */
+     canvas (voir initCanvasPan dans main.js, qui pilote App.Canvas au mousemove/wheel).
+     "grab"/"grabbing" ne s'affichent que sur le fond lui-même — chaque élément interactif
+     (terme, bouton, panneau...) porte déjà son propre curseur explicite, qui l'emporte
+     naturellement sur celui-ci vu sa spécificité. */
   cursor: grab;
 }
 #historyScroll.panning {
   cursor: grabbing;
+}
+
+/* Enfant PERSISTANT unique de #historyScroll (jamais #history seul, entièrement
+   reconstruit à chaque rendu, voir renderAll dans render.js) : héberge #history,
+   #opButtons ET #liveOpPill (voir mathKeypad.js) ensemble, pour qu'un même `transform`
+   (posé par App.Canvas) les déplace tous d'un seul bloc — position:relative établit son
+   propre repère de positionnement pour les enfants absolus (#opButtons/#liveOpPill),
+   déjà garanti de toute façon dès qu'un `transform` lui est posé (règle CSS standard),
+   mais explicite ici même avant la toute première application par App.Canvas.init(). */
+#canvasLayer {
+  position: relative;
+}
+/* Posée temporairement par App.Canvas.scrollTo({behavior:'smooth'}) le temps d'une seule
+   transition (retirée ensuite, voir stopAnimated dans canvas.js) : jamais présente en
+   continu, sinon un glisser/une molette (App.Canvas.set/panBy, toujours immédiats)
+   traînerait derrière le curseur au lieu de le suivre au pixel près. Volontairement bref
+   (le défilement natif "smooth" qu'elle remplace se réglait, en pratique, en bien moins de
+   100ms pour ces distances) : un enchaînement rapide d'interactions (ex. un double-clic
+   immédiat sur la ligne qui vient de se recentrer, voir tests/*.js) ne doit jamais viser
+   une cible encore en train de glisser. */
+#canvasLayer.canvas-panning-animated {
+  transition: transform 0.08s ease;
 }
 
 #history {
@@ -655,8 +685,8 @@ button {
    cet élément existe en permanence dans le DOM (juste masqué via `hidden` quand inactif,
    jamais retiré) et plusieurs tests Playwright comptent les ".arrow-label" réellement
    affichés à un instant donné — partager la classe fausserait ce compte même masqué.
-   position:absolute (pas fixed) car c'est un enfant PERSISTANT de #historyScroll, jamais
-   de #history : défile avec le contenu sans code JS dédié. pointer-events réactivé
+   position:absolute (pas fixed) car c'est un enfant PERSISTANT de #canvasLayer, jamais
+   de #history : se déplace avec le contenu sans code JS dédié. pointer-events réactivé
    (contrairement à .arrow-label, purement décoratif) pour rester cliquable. */
 .arrow-label-live {
   position: absolute;
@@ -769,11 +799,12 @@ button {
 }
 
 /* ---- Fenêtre flottante des boutons d'action, ancrée à gauche de l'équation active ----
-   Un enfant PERSISTANT de #historyScroll (jamais #history, entièrement reconstruit à
+   Un enfant PERSISTANT de #canvasLayer (jamais #history, entièrement reconstruit à
    chaque rendu) en position:absolute, repositionné à chaque rendu par
    App.Toolbar.positionPanel (voir toolbar.js) d'après la position réelle de l'équation
-   active — même principe que #liveOpPill (voir mathKeypad.js) : défile naturellement
-   AVEC le contenu, sans code de synchronisation JS dédié au scroll. */
+   active — même principe que #liveOpPill (voir mathKeypad.js) : se déplace naturellement
+   AVEC le contenu (le `transform` de #canvasLayer, voir canvas.js), sans code de
+   synchronisation JS dédié. */
 #opButtons {
   position: absolute;
   top: 0;

@@ -1435,14 +1435,6 @@
     renderSeq += 1;
     var mySeq = renderSeq;
     function isStaleRender() { return mySeq !== renderSeq; }
-    // Vider #history puis le reconstruire rend son contenu momentanément plus court/
-    // étroit le temps de tout ré-ajouter ; si une mesure de layout (autoFitRowFont) se
-    // produit entre-temps, le navigateur peut "clamper" scrollTop/scrollLeft à cette
-    // taille réduite — et rien ne les restaure ensuite tout seul une fois la taille
-    // retrouvée. On mémorise donc la position pour la restaurer explicitement plus bas
-    // si on ne recentre pas.
-    var preservedScrollTop = scroller ? scroller.scrollTop : 0;
-    var preservedScrollLeft = scroller ? scroller.scrollLeft : 0;
     history.innerHTML = '';
 
     var branches = Hist.getBranches();
@@ -1878,6 +1870,27 @@
       }
     }
 
+    // Vider #history puis le reconstruire (voir plus haut) rend son contenu
+    // momentanément plus court/étroit le temps de tout ré-ajouter ; le navigateur peut
+    // alors "clamper" le scrollTop/scrollLeft NATIF de #historyScroll à cette taille
+    // réduite — un comportement de bas niveau du modèle de boîte overflow, PAS désactivable
+    // via overflow-anchor (déjà à "none", voir style.css) puisqu'il ne s'agit pas
+    // d'ancrage de défilement mais d'un simple clampage obligatoire à la plage valide.
+    // Ce scrollTop/Left natif n'est plus lu ni écrit nulle part ailleurs dans ce fichier
+    // (toute la position de la toile passe par App.Canvas, voir canvas.js) mais reste
+    // TOUJOURS soustrait par le navigateur lors du calcul de getBoundingClientRect() des
+    // descendants — un clampage laissé en place décale donc silencieusement tout le
+    // contenu peint, indépendamment d'App.Canvas (observé en pratique : sélectionner un
+    // terme suffit à re-déclencher ce clampage). #historyScroll ne doit JAMAIS avoir de
+    // scrollTop/Left natif non nul (App.Canvas est la seule source de vérité) : on les
+    // reposent donc explicitement à 0 ici, une fois la reconstruction terminée, AVANT
+    // toute mesure de mise en page (positionPanel/drawAll ci-dessous, et le recentrage
+    // plus bas).
+    if (scroller) {
+      scroller.scrollTop = 0;
+      scroller.scrollLeft = 0;
+    }
+
     // Repositionne la fenêtre flottante des boutons d'action à gauche de la ligne
     // "current" (voir positionPanel dans toolbar.js) — dans un rAF comme App.Arrows.drawAll
     // ci-dessus, pour mesurer une mise en page à jour. scrollTarget vaut toujours cette
@@ -1888,17 +1901,6 @@
       if (isStaleRender()) return;
       App.Toolbar.positionPanel(scrollTarget, opPrevRowEl, scrollTargetSolved);
     });
-
-    // On restaure D'ABORD la position d'avant le rendu, SYSTÉMATIQUEMENT (annule un
-    // clampage éventuel dû à la reconstruction, voir preservedScrollTop/
-    // preservedScrollLeft plus haut) — AVANT même de savoir si on va recentrer ensuite :
-    // sans ça, une animation "smooth" ci-dessous partirait du bord (clampé) au lieu
-    // d'où on était vraiment, donnant l'impression que la page "saute" à CHAQUE
-    // confirmation d'étape plutôt que de glisser doucement vers le nouveau résultat.
-    if (scroller) {
-      scroller.scrollTop = preservedScrollTop;
-      scroller.scrollLeft = preservedScrollLeft;
-    }
 
     // Recentre (avec animation) lorsque le résultat encadré change réellement (nouvelle
     // étape validée, ou nouvelle équation) — pas à chaque frappe/sélection en cours de
@@ -1925,7 +1927,7 @@
     // d'autre force un nouveau recentrage. C'est précisément le bug "colonnes décalées à
     // droite selon le zoom" : reproductible en rétrécissant puis ré-élargissant la fenêtre
     // pendant qu'une scission large est affichée.
-    var splitNoLongerWide = !!branches && !isWideSplit && scroller && scroller.scrollLeft !== 0;
+    var splitNoLongerWide = !!branches && !isWideSplit && scroller && App.Canvas.getX() !== 0;
     if (scroller && (isNewStep || widthChangedDuringSplit || splitNoLongerWide)) {
       lastCenteredStepByEngine.set(scrollEngine, scrollIdentity);
       lastCenteredWidth = scroller.clientWidth;
@@ -1951,7 +1953,7 @@
       var scrollOpts = { behavior: (isNewStep && !isWideSplit) ? 'smooth' : 'auto' };
       if (isNewStep && scrollTarget) {
         var targetRect = scrollTarget.getBoundingClientRect();
-        var targetCenter = (targetRect.top - scrollerRect.top) + scroller.scrollTop + targetRect.height / 2;
+        var targetCenter = (targetRect.top - scrollerRect.top) + App.Canvas.getY() + targetRect.height / 2;
         scrollOpts.top = targetCenter - scroller.clientHeight / 2;
       }
       // Scission en cours ET en mise en page "large" (voir isWideSplit plus haut) :
@@ -1969,12 +1971,12 @@
       // à un endroit raisonnable de la fenêtre (son propre centre).
       if (branches && splitWrap && isWideSplit) {
         var splitRect = splitWrap.getBoundingClientRect();
-        var splitCenterX = (splitRect.left - scrollerRect.left) + scroller.scrollLeft + splitRect.width / 2;
+        var splitCenterX = (splitRect.left - scrollerRect.left) + App.Canvas.getX() + splitRect.width / 2;
         scrollOpts.left = splitCenterX - scroller.clientWidth / 2;
       } else if (splitNoLongerWide) {
         scrollOpts.left = 0;
       }
-      scroller.scrollTo(scrollOpts);
+      App.Canvas.scrollTo(scrollOpts);
     }
   }
 

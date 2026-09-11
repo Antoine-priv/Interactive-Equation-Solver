@@ -292,10 +292,10 @@
     peekTab.addEventListener('click', function () { setCollapsed(false); });
     document.body.appendChild(peekTab);
 
-    // Voir la déclaration de liveOpPill plus haut : un enfant persistant de
-    // #historyScroll (jamais document.body — doit défiler AVEC l'historique, pas rester
-    // fixe à l'écran), créé une seule fois, jamais retiré du DOM ensuite.
-    var historyScroll = document.getElementById('historyScroll');
+    // Voir la déclaration de liveOpPill plus haut : un enfant persistant de #canvasLayer
+    // (jamais document.body — doit se déplacer AVEC l'historique, pas rester fixe à
+    // l'écran, voir canvas.js), créé une seule fois, jamais retiré du DOM ensuite.
+    var canvasLayer = document.getElementById('canvasLayer');
     liveOpPill = document.createElement('div');
     liveOpPill.id = 'liveOpPill';
     // PAS la classe partagée .arrow-label (voir style.css) : cet élément existe en
@@ -323,7 +323,7 @@
     liveOpWarn.className = 'arrow-label-live-warn';
     liveOpWarn.hidden = true;
     liveOpPill.appendChild(liveOpWarn);
-    if (historyScroll) historyScroll.appendChild(liveOpPill);
+    if (canvasLayer) canvasLayer.appendChild(liveOpPill);
   }
 
   // Déplace le <math-field> partagé dans le pavé "live" de la ligne "pending" (voir

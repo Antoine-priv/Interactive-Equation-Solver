@@ -27,9 +27,9 @@ in `(function (App) { ... })(window.App = window.App || {});` IIFEs.
   CDN `<script>`/`<link>` tags). MathLive backs the unified math keypad; KaTeX
   remains the display renderer for confirmed equation steps/arrows, untouched by that work.
 - Script load order in `index.html` matters and mirrors the dependency graph: `expression.js`
-  → `equation.js` → `parser.js` → `generator.js` → `history.js` → `render.js` → `arrows.js`
-  → `toolbar.js` → `mathKeypad.js` → `keyboard.js` → `newEquationModal.js` → `theme.js` →
-  `main.js`.
+  → `equation.js` → `parser.js` → `generator.js` → `history.js` → `canvas.js` → `render.js`
+  → `arrows.js` → `toolbar.js` → `mathKeypad.js` → `keyboard.js` → `newEquationModal.js` →
+  `theme.js` → `main.js`.
 - No lint/build commands exist for this project. A regression test suite does exist (see
   below) — run the targeted test after any change to `js/*.js`.
 
@@ -85,6 +85,32 @@ Arrows between steps are hand-drawn SVG in `arrows.js`, positioned via `getBound
 each render (`requestAnimationFrame`). Overlay cleanup is scoped to `:scope > svg.arrows-overlay` (never a global id).
 
 Term drag-and-drop is mouse-only (no native HTML5 DnD) and shares its pointer gesture with click-to-select. It is intentionally disabled inside "Produit nul" branch columns (`noDrag`).
+
+## Infinite canvas (`js/canvas.js`)
+
+`#historyScroll` is a fixed-size `overflow:hidden` viewport — it never scrolls natively.
+Its single persistent child `#canvasLayer` (wrapping `#history`, `#opButtons`, and
+`#liveOpPill`, see `mathKeypad.js`) is moved via CSS `transform: translate()`, driven by
+`App.Canvas`, an unbounded `{x, y}` offset (deliberately API-compatible with
+`scrollLeft`/`scrollTop`/`scrollTo`, same sign convention, so `render.js`/`arrows.js`/
+`toolbar.js` reason about it exactly as they used to reason about native scroll — just
+never clamped to `[0, scrollWidth - clientWidth]` the way a real scroll container is).
+Background click-and-drag and wheel/trackpad panning (`initCanvasPan` in `main.js`) both
+go through this offset. `App.Canvas.scrollTo({..., behavior:'smooth'})` animates via a
+real CSS transition (`.canvas-panning-animated`) rather than a hand-rolled
+`requestAnimationFrame` loop — rAF on the main thread can be throttled (backgrounded tab,
+headless Chromium) independently of wall-clock time, which desynchronizes a JS-driven
+animation's real duration from its programmed one; a CSS transition is compositor-timed
+and doesn't have this problem. Because the transition updates `App.Canvas`'s internal
+target immediately while the *paint* catches up over ~80ms, `getX()`/`getY()` read the
+live computed transform (not the stored target) while a transition is in flight — reading
+the target early would desync any calculation done mid-transition (e.g. the next render's
+centering math) from what's actually on screen, the same way native `scrollLeft` never
+would have. `renderAll()` (`render.js`) also force-resets `#historyScroll`'s *native*
+`scrollTop`/`scrollLeft` to 0 after every rebuild: the browser still clamps that real
+(otherwise-unused) property to a container's valid range as content is torn down and
+rebuilt, and that clamped value is silently subtracted from descendants'
+`getBoundingClientRect()` regardless of `overflow-anchor`.
 
 ## Manual input parsing (`js/parser.js`)
 

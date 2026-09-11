@@ -45,13 +45,14 @@
     });
   }
 
-  // Toile "infinie" : cliquer-glisser le FOND de #historyScroll le fait défiler (donc
-  // panorama sur l'ensemble du tableau), comme un canvas — mousedown/mousemove/mouseup
-  // plutôt que du natif, même schéma que attachPointerDrag dans render.js (seuil de
-  // quelques pixels avant d'engager le geste, pour ne jamais gêner un simple clic).
-  // Aucun code de repositionnement dédié requis ailleurs (flèches, pavé live, fenêtre
-  // d'actions...) : tout défile déjà naturellement avec #historyScroll, voir son
-  // commentaire dans style.css.
+  // Toile "infinie" : cliquer-glisser le FOND de #historyScroll fait "panorâmer" le
+  // tableau (voir App.Canvas dans canvas.js, qui porte l'offset — SANS AUCUNE BORNE,
+  // contrairement à un défilement natif) — mousedown/mousemove/mouseup plutôt que du
+  // natif, même schéma que attachPointerDrag dans render.js (seuil de quelques pixels
+  // avant d'engager le geste, pour ne jamais gêner un simple clic). Aucun code de
+  // repositionnement dédié requis ailleurs (flèches, pavé live, fenêtre d'actions...) :
+  // tout se déplace déjà naturellement avec #canvasLayer, voir son commentaire dans
+  // style.css.
   var CANVAS_PAN_EXCLUDE = '.term, .factor-slot, .draggable-term, .drilled-exit, ' +
     '.produit-nul-branch, .solution-set, .arrow-label-live, .arrow-label-mirror, ' +
     'button, a, input, textarea, select, math-field, ' +
@@ -64,7 +65,7 @@
       if (e.target.closest(CANVAS_PAN_EXCLUDE)) return;
       e.preventDefault(); // évite la sélection de texte pendant le glisser
       var startX = e.clientX, startY = e.clientY;
-      var startScrollLeft = scroller.scrollLeft, startScrollTop = scroller.scrollTop;
+      var startPanX = App.Canvas.getX(), startPanY = App.Canvas.getY();
       var moved = false;
       function onMove(e2) {
         if (!moved) {
@@ -72,8 +73,7 @@
           moved = true;
           scroller.classList.add('panning');
         }
-        scroller.scrollLeft = startScrollLeft - (e2.clientX - startX);
-        scroller.scrollTop = startScrollTop - (e2.clientY - startY);
+        App.Canvas.set(startPanX - (e2.clientX - startX), startPanY - (e2.clientY - startY));
       }
       function onUp() {
         document.removeEventListener('mousemove', onMove);
@@ -83,23 +83,43 @@
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
+
+    // Molette/trackpad : reproduit le comportement d'un défilement natif (mêmes signes),
+    // simplement piloté par App.Canvas plutôt qu'un vrai scroll — sauf quand la cible est
+    // une ligne d'équation ENCORE scrollable nativement dans cette direction (voir
+    // .eq-row { overflow-x: auto }, pour les équations trop larges à taille de police
+    // minimale) : on lui laisse alors gérer elle-même son propre défilement horizontal,
+    // exactement comme le "scroll chaining" natif l'aurait fait avant ce module. Ctrl+molette
+    // (zoom du navigateur) n'est jamais intercepté.
+    scroller.addEventListener('wheel', function (e) {
+      if (e.ctrlKey) return;
+      var row = e.target.closest('.eq-row');
+      if (row && row.scrollWidth > row.clientWidth) {
+        var canRowScroll = (e.deltaX < 0 && row.scrollLeft > 0) ||
+          (e.deltaX > 0 && row.scrollLeft < row.scrollWidth - row.clientWidth);
+        if (canRowScroll) return;
+      }
+      e.preventDefault();
+      App.Canvas.panBy(e.deltaX, e.deltaY);
+    }, { passive: false });
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     App.History.subscribe(function () {
       // App.Toolbar.render() D'ABORD : il peut masquer/afficher des `.op-row` de
-      // #opButtons (voir renderToolbar dans toolbar.js), désormais un enfant PERSISTANT
-      // de #historyScroll — muter ça APRÈS le scroller.scrollTo(..., {behavior:'smooth'})
-      // synchrone d'App.Render.renderAll() (au lieu d'avant) annule silencieusement
-      // l'animation de défilement dans Chromium (une mutation DOM synchrone touchant un
-      // descendant du conteneur qui défile, dans le MÊME tour de boucle JS que l'appel à
-      // scrollTo, l'interrompt avant même la première frame). Aucune dépendance dans
-      // l'autre sens : App.Toolbar.render() ne lit jamais le DOM reconstruit par
-      // renderAll (seulement le modèle de données, voir computeSelectionInfo).
+      // #opButtons (voir renderToolbar dans toolbar.js), un enfant PERSISTANT de
+      // #canvasLayer. Plus une nécessité stricte depuis le passage à la toile "infinie"
+      // (voir canvas.js) : App.Canvas.scrollTo anime via son propre rAF plutôt que le
+      // scroll natif, donc une mutation DOM synchrone ailleurs ne peut plus l'interrompre
+      // comme le faisait Chromium avec l'ancien scroller.scrollTo({behavior:'smooth'}).
+      // Ordre conservé pour la seule dépendance qui reste : App.Toolbar.render() ne lit
+      // jamais le DOM reconstruit par renderAll (seulement le modèle de données, voir
+      // computeSelectionInfo), donc rien n'empêche de le garder en premier.
       App.Toolbar.render();
       App.Render.renderAll();
     });
 
+    App.Canvas.init();
     App.Toolbar.init();
     App.MathKeypad.init();
     App.Keyboard.init();

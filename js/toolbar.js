@@ -419,11 +419,8 @@
   function switchExprLiveSide(side) {
     if (exprLiveSide === side) return;
     exprLiveSide = side;
-    // renderToolbar() D'ABORD, App.Render.renderAll() ENSUITE (voir main.js pour la
-    // même règle et pourquoi) : renderToolbar peut faire varier la hauteur de #opButtons
-    // (ligne scindée/coche de validation), désormais un enfant de #historyScroll — muter ça APRÈS le
-    // scroller.scrollTo(..., {behavior:'smooth'}) synchrone de renderAll (au lieu
-    // d'avant) annule silencieusement l'animation de défilement dans Chromium.
+    // renderToolbar() D'ABORD, App.Render.renderAll() ENSUITE (voir main.js pour le même
+    // ordre et pourquoi il n'est plus strictement nécessaire depuis App.Canvas).
     renderToolbar();
     App.Render.renderAll();
   }
@@ -662,8 +659,8 @@
     var left = anchorRect.left - GAP - panelEl.offsetWidth;
 
     var hsRect = historyScroll.getBoundingClientRect();
-    var scrollLeft = historyScroll.scrollLeft;
-    var scrollTop = historyScroll.scrollTop;
+    var scrollLeft = App.Canvas.getX();
+    var scrollTop = App.Canvas.getY();
     panelEl.style.left = (left - hsRect.left + scrollLeft) + 'px';
     panelEl.style.top = (top - hsRect.top + scrollTop) + 'px';
 

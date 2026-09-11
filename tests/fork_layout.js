@@ -89,20 +89,27 @@ function ok(label, cond) {
   ok('.produit-nul-split padding-left is ~50vw', Math.abs(parseFloat(scrollInfo.paddingLeft) - scrollInfo.viewportWidth * 0.5) < 2);
   ok('.produit-nul-split padding-right is ~50vw', Math.abs(parseFloat(scrollInfo.paddingRight) - scrollInfo.viewportWidth * 0.5) < 2);
 
-  // Peut-on effectivement centrer la colonne la plus a gauche a l'ecran en scrollant ?
+  // Peut-on effectivement centrer la colonne la plus a gauche a l'ecran en la faisant
+  // panorâmer (App.Canvas, voir canvas.js) ? Plus de plafond/plancher a verifier ici
+  // (contrairement a l'ancien defilement natif, borne par scrollWidth/scrollLeft>=0) :
+  // la toile est desormais libre dans toutes les directions, donc on verifie directement
+  // qu'App.Canvas.set() amene bien la colonne pile au centre, y compris quand ca implique
+  // un offset negatif (plus jamais "hors bornes").
   const canCenterLeftCol = await page.evaluate(() => {
     var scroller = document.getElementById('historyScroll');
     var cols = document.querySelectorAll('.produit-nul-branch');
     var leftCol = cols[0];
     var rect = leftCol.getBoundingClientRect();
     var scrollerRect = scroller.getBoundingClientRect();
-    var colCenterAbs = (rect.left - scrollerRect.left) + scroller.scrollLeft + rect.width / 2;
-    var desiredScrollLeft = colCenterAbs - scroller.clientWidth / 2;
-    var maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
-    return { desiredScrollLeft, maxScrollLeft, reachable: desiredScrollLeft >= 0 && desiredScrollLeft <= maxScrollLeft };
+    var colCenterAbs = (rect.left - scrollerRect.left) + window.App.Canvas.getX() + rect.width / 2;
+    var desiredX = colCenterAbs - scroller.clientWidth / 2;
+    window.App.Canvas.set(desiredX, undefined);
+    var newRect = leftCol.getBoundingClientRect();
+    var offBy = Math.abs((newRect.left + newRect.width / 2) - (scrollerRect.left + scroller.clientWidth / 2));
+    return { desiredX, offBy };
   });
-  console.log('centrage possible de la colonne la plus a gauche:', JSON.stringify(canCenterLeftCol));
-  ok('leftmost column can be scrolled to screen center', canCenterLeftCol.reachable);
+  console.log('centrage de la colonne la plus a gauche (panorama libre):', JSON.stringify(canCenterLeftCol));
+  ok('leftmost column can be panned all the way to screen center (no lower bound)', canCenterLeftCol.offBy < 1);
 
   const canCenterRightCol = await page.evaluate(() => {
     var scroller = document.getElementById('historyScroll');
@@ -110,13 +117,15 @@ function ok(label, cond) {
     var rightCol = cols[cols.length - 1];
     var rect = rightCol.getBoundingClientRect();
     var scrollerRect = scroller.getBoundingClientRect();
-    var colCenterAbs = (rect.left - scrollerRect.left) + scroller.scrollLeft + rect.width / 2;
-    var desiredScrollLeft = colCenterAbs - scroller.clientWidth / 2;
-    var maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
-    return { desiredScrollLeft, maxScrollLeft, reachable: desiredScrollLeft >= 0 && desiredScrollLeft <= maxScrollLeft };
+    var colCenterAbs = (rect.left - scrollerRect.left) + window.App.Canvas.getX() + rect.width / 2;
+    var desiredX = colCenterAbs - scroller.clientWidth / 2;
+    window.App.Canvas.set(desiredX, undefined);
+    var newRect = rightCol.getBoundingClientRect();
+    var offBy = Math.abs((newRect.left + newRect.width / 2) - (scrollerRect.left + scroller.clientWidth / 2));
+    return { desiredX, offBy };
   });
-  console.log('centrage possible de la colonne la plus a droite:', JSON.stringify(canCenterRightCol));
-  ok('rightmost column can be scrolled to screen center', canCenterRightCol.reachable);
+  console.log('centrage de la colonne la plus a droite (panorama libre):', JSON.stringify(canCenterRightCol));
+  ok('rightmost column can be panned all the way to screen center (no upper bound)', canCenterRightCol.offBy < 1);
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
