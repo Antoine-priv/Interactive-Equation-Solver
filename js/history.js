@@ -1858,19 +1858,35 @@
       notify();
     }
 
-    // Détecte si `eq` est de la forme (A)(B)...=0 ou 0=(A)(B)... (un ProductGroup seul
-    // d'un côté, potentiellement imbriqué à volonté — voir Expr.flattenProductFactors,
-    // ex. "(a+b)(c+d)²" — la constante 0 seule de l'autre) ; renvoie { factors: Side[] },
+    // Détecte si `eq` est de la forme (A)(B)...=0 ou 0=(A)(B)... — soit un ProductGroup
+    // seul d'un côté, potentiellement imbriqué à volonté (voir Expr.flattenProductFactors,
+    // ex. "(a+b)(c+d)²"), soit un FactorGroup issu d'un facteur commun (ex. "x(x-5)=0",
+    // voir "Factoriser" dans history.js/confirm : `factor·innerTerms`, PAS une division) —
+    // la constante 0 seule de l'autre côté dans tous les cas ; renvoie { factors: Side[] },
     // les facteurs DISTINCTS après déduplication structurelle (voir Expr.sidesEquivalent —
     // ex. "(a+bx)²=0" ne donne qu'UN facteur, une seule colonne ; "(a+b)(c+d)²=0" en donne
-    // deux), ou null sinon. Le signe (à n'importe quel niveau d'imbrication) est
-    // indifférent : un produit nul reste nul quel que soit son signe global.
+    // deux), ou null sinon. Pour un FactorGroup, `factor` n'est retenu comme branche QUE
+    // s'il dépend de x (pow >= 1, ex. "x" dans "x(x-5)") : un facteur numérique constant
+    // (ex. "2" dans "2(x-5)=0") ne peut jamais s'annuler, seul innerTerms compte alors —
+    // pas de branche "2=0" vide de sens. Le signe (à n'importe quel niveau d'imbrication,
+    // et FactorGroup.sign) est indifférent : un produit nul reste nul quel que soit son
+    // signe global.
     function detectProduitNul(eq) {
       function trySide(prodSide, zeroSide) {
         var pSide = eq[prodSide], zSide = eq[zeroSide];
-        if (pSide.length !== 1 || !Expr.isProductGroup(pSide[0])) return null;
+        if (pSide.length !== 1) return null;
         if (zSide.length !== 1 || Expr.isGroup(zSide[0]) || zSide[0].pow !== 0 || Expr.roundClean(zSide[0].coeff) !== 0) return null;
-        var allFactors = Expr.flattenProductFactors(pSide[0]);
+        var node = pSide[0];
+        var allFactors;
+        if (Expr.isProductGroup(node)) {
+          allFactors = Expr.flattenProductFactors(node);
+        } else if (Expr.isFactorGroup(node) && !node.isDivision) {
+          allFactors = [];
+          if (node.factor.pow !== 0) allFactors.push([node.factor]);
+          allFactors.push(node.innerTerms);
+        } else {
+          return null;
+        }
         var distinct = [];
         allFactors.forEach(function (f) {
           if (!distinct.some(function (d) { return Expr.sidesEquivalent(d, f); })) distinct.push(f);

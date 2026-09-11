@@ -185,6 +185,62 @@ function applyOpAndSimplify(page, text) {
   ok('the outer split (top-level columns) is untouched by that undo', stateAfterFirstUndo.hasTop);
   ok('column equation is back to (x+3)^2=16', JSON.stringify(stateAfterFirstUndo.eq.right) === JSON.stringify([{ coeff: 16, pow: 0 }]));
 
+  // 8) Second bug signalé (repro exacte de la capture d'écran) : "Produit nul" doit
+  // aussi être proposé à l'intérieur d'une colonne quand elle atteint un FactorGroup issu
+  // d'un facteur commun (ex. "x(x-5)=0" après "Factoriser par x"), pas seulement un
+  // ProductGroup classique ((A)(B)=0) — voir detectProduitNul dans history.js. Entièrement
+  // piloté via de vrais clics DOM (pas l'API), pour vérifier le bouton lui-même, pas
+  // seulement l'état interne.
+  await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '(x-6)(x^2-5x)=0');
+  await page.waitForTimeout(80);
+  await page.click('.eq-row.current .side[data-side="left"] .term[data-index="0"]');
+  await page.click('button[data-op="produitnul"]');
+  await page.waitForTimeout(150);
+
+  const branchesRepro = await page.evaluate(() => window.App.History.getBranches().map((b) => b.lastEquation()));
+  const quadIdx = branchesRepro.findIndex((eq) => eq.left.some((n) => n.pow === 2));
+  ok('repro: found the "x^2-5x=0" column', quadIdx !== -1);
+  await page.evaluate((idx) => { window.App.History.setFocusedBranch(idx); }, quadIdx);
+  await page.waitForTimeout(100);
+
+  await page.click('.produit-nul-branch.branch-focused .eq-row.current .side[data-side="left"] .term[data-index="0"]');
+  await page.click('.produit-nul-branch.branch-focused .eq-row.current .side[data-side="left"] .term[data-index="1"]');
+  await page.click('button[data-op="factor"]');
+  await page.waitForTimeout(100);
+  await page.evaluate(() => {
+    var btns = Array.from(document.querySelectorAll('.factor-choice-btn'));
+    btns.find((el) => el.textContent.includes('Facteur commun')).click();
+  });
+  await page.waitForTimeout(100);
+  await page.click('[data-key="x"]');
+  await page.click('[data-key="enter"]');
+  await page.waitForTimeout(150);
+
+  const eqAfterFactor = await page.evaluate((idx) => window.App.History.getBranches()[idx].lastEquation(), quadIdx);
+  console.log('repro colonne apres "factoriser par x":', JSON.stringify(eqAfterFactor));
+  ok('repro: column reaches x(x-5)=0', JSON.stringify(eqAfterFactor) === JSON.stringify({
+    left: [{ sign: 1, factor: { coeff: 1, pow: 1 }, innerTerms: [{ coeff: 1, pow: 1 }, { coeff: -5, pow: 0 }] }],
+    right: [{ coeff: 0, pow: 0 }]
+  }));
+
+  const pnRowHidden = await page.evaluate(() => document.querySelector('button[data-op="produitnul"]').parentElement.hidden);
+  ok('THE REPORTED BUG: "Produit nul" row is NOT hidden for x(x-5)=0 inside this column', pnRowHidden === false);
+  await page.screenshot({ path: `${SCRATCH}/nested_produitnul_factorgroup_button.png` });
+
+  await page.click('.produit-nul-branch.branch-focused .eq-row.current .side[data-side="left"] .term[data-index="0"]');
+  await page.click('button[data-op="produitnul"]');
+  await page.waitForTimeout(150);
+
+  const nestedRepro = await page.evaluate((idx) => {
+    var sub = window.App.History.getBranches()[idx].getBranches();
+    return sub ? sub.map((s) => s.lastEquation()) : null;
+  }, quadIdx);
+  console.log('repro sous-branches apres Produit nul sur x(x-5)=0:', JSON.stringify(nestedRepro));
+  ok('repro: x(x-5)=0 splits into nested branches x=0 and x-5=0', nestedRepro && nestedRepro.length === 2 &&
+    JSON.stringify(nestedRepro[0]) === JSON.stringify({ left: [{ coeff: 1, pow: 1 }], right: [{ coeff: 0, pow: 0 }] }) &&
+    JSON.stringify(nestedRepro[1]) === JSON.stringify({ left: [{ coeff: 1, pow: 1 }, { coeff: -5, pow: 0 }], right: [{ coeff: 0, pow: 0 }] }));
+  await page.screenshot({ path: `${SCRATCH}/nested_produitnul_factorgroup_split.png` });
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;
