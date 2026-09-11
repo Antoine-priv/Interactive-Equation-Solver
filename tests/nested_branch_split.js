@@ -298,6 +298,21 @@ function applyOpAndSimplify(page, text) {
   ok('first click on a not-yet-focused column focuses it...', afterFirstSiblingClick.focused);
   ok('...without selecting the term it landed on', afterFirstSiblingClick.selectedCount === 0);
 
+  // 10b) Bug signalé : "quadIdx" ("x(x-5)=0") vient de perdre le focus de premier niveau
+  // au profit de "x-6=0" ci-dessus, mais sa sous-colonne imbriquée (x=0, focalisée en son
+  // sein — mémoire purement interne à SON PROPRE moteur, voir focusedIdx dans
+  // renderBranchNode) doit elle aussi perdre son liseré : sinon elle continue de
+  // ressembler à une sélection active alors que le focus réel est ailleurs. Voir
+  // `childFocused` (opts.focused !== false && focusedIdx === idx) désormais utilisé pour
+  // la classe ".branch-focused" elle-même, pas seulement pour le garde de clic.
+  const nestedShadowAfterTopSwitch = await page.evaluate(() => {
+    var el = document.querySelector('#history .produit-nul-split-nested > .produit-nul-branch');
+    return el ? { hasBranchFocused: el.classList.contains('branch-focused'), boxShadow: getComputedStyle(el).boxShadow } : null;
+  });
+  console.log('sous-colonne imbriquee de "x(x-5)=0" apres avoir perdu le focus de premier niveau:', JSON.stringify(nestedShadowAfterTopSwitch));
+  ok('THE REPORTED BUG: nested sub-column loses its own outline once its parent column is no longer the focused top-level column',
+    nestedShadowAfterTopSwitch && !nestedShadowAfterTopSwitch.hasBranchFocused && /rgba\(0,\s*0,\s*0,\s*0\)/.test(nestedShadowAfterTopSwitch.boxShadow));
+
   const focusedSel = '#history > .produit-nul-split > .produit-nul-branch.branch-focused .eq-row.current .side[data-side="left"] .term[data-index="0"]';
   await page.click(focusedSel);
   await page.waitForTimeout(100);

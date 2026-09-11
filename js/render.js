@@ -1542,6 +1542,17 @@
       var focusedChildRes = null;
       nodeBranches.forEach(function (child, idx) {
         var col = document.createElement('div');
+        // Colonne pas sur le chemin réellement focalisé (soit un autre enfant ICI, soit
+        // ce noeud lui-même déjà hors chemin — `opts.focused === false`, ex. un ancêtre
+        // qui a lui-même perdu le focus au profit d'une AUTRE colonne de premier niveau) :
+        // jamais d'aperçu en direct plus bas (voir shouldShowLivePreview dans renderChain),
+        // ET jamais son propre liseré de focus ci-dessous non plus — sans le second membre
+        // de cette condition, une sous-colonne gardait à tort son liseré ".branch-focused"
+        // (mémoire purement interne à SON PROPRE moteur, voir focusedIdx ci-dessus,
+        // totalement indépendante du chemin réellement actif) même après avoir basculé sur
+        // une colonne de premier niveau différente — ressemblant à tort à une sélection
+        // toujours active.
+        var childFocused = opts.focused !== false && focusedIdx === idx;
         // `child.getBranches()` (déjà connu ICI, avant tout DOM) plutôt que le sélecteur
         // CSS ":has(.produit-nul-split-nested)" : `col` est ajouté au DOM AVANT que
         // renderBranchNode(child, ...) n'y insère lui-même ce wrap imbriqué plus bas — une
@@ -1552,7 +1563,7 @@
         // nouveau rendu (ex. survol du bouton "Opération" plus bas dans l'arbre). La classe
         // ci-dessous est connue et posée AVANT la moindre insertion DOM : aucune fenêtre
         // d'état intermédiaire n'est jamais observable.
-        col.className = 'produit-nul-branch' + (focusedIdx === idx ? ' branch-focused' : '') +
+        col.className = 'produit-nul-branch' + (childFocused ? ' branch-focused' : '') +
           (child.getBranches() ? ' produit-nul-branch-resplit' : '');
         col.addEventListener('click', function () { engine.setFocusedBranch(idx); });
         var chainEl = document.createElement('div');
@@ -1561,10 +1572,6 @@
         nestedWrap.appendChild(col);
         colEls.push(col);
 
-        // Colonne pas sur le chemin réellement focalisé (soit un autre enfant ICI, soit
-        // ce noeud lui-même déjà hors chemin — `opts.focused === false`) : jamais
-        // d'aperçu en direct plus bas (voir shouldShowLivePreview dans renderChain).
-        var childFocused = opts.focused !== false && focusedIdx === idx;
         var childRes = renderBranchNode(child, chainEl, {
           noDrag: true, // simplifie le focus multi-branches (voir la tâche associée)
           onBeforeAction: function () {
