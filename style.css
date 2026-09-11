@@ -177,6 +177,41 @@ button {
 #themeToggleBtn:hover { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
 #themeToggleBtn:active { transform: translateY(0); }
 
+/* ---- Boutons flottants zoom avant/arrière (loupe), en bas à droite ----
+   Même gabarit/langage visuel que #undoBtn (surface neutre) : deux actions secondaires
+   empilées plutôt qu'une seule ligne, pour rester à portée de pouce sans chevaucher le
+   reste des contrôles flottants (tous alignés en haut). Voir App.Zoom (js/zoom.js) pour
+   leur icône et la logique de zoom (App.Canvas.zoomAt, canvas.js). */
+#zoomInBtn, #zoomOutBtn {
+  position: fixed;
+  right: 22px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+  /* Même registre que les autres boutons flottants (#newEquationBtn/#undoBtn/
+     #themeToggleBtn) : sans lui, #historyScroll (qui remplit toute la fenêtre pour le
+     panorama cliquer-glisser, voir initCanvasPan dans main.js) intercepte les clics ici. */
+  z-index: 30;
+}
+#zoomInBtn { bottom: 78px; }
+#zoomOutBtn { bottom: 22px; }
+#zoomInBtn:hover:not(:disabled), #zoomOutBtn:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+#zoomInBtn:active:not(:disabled), #zoomOutBtn:active:not(:disabled) { transform: translateY(0); }
+#zoomInBtn:disabled, #zoomOutBtn:disabled { opacity: 0.4; cursor: default; }
+
 /* ---- Historique des équations ---- */
 #historyScroll {
   flex: 1 1 auto;

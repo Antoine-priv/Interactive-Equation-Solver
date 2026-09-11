@@ -26,12 +26,25 @@
   'use strict';
 
   var x = 0, y = 0;
+  var scale = 1;
+  var MIN_SCALE = 0.4;
+  var MAX_SCALE = 2.5;
   var layer = null;
   var transitionCleanupTimer = null;
   var animating = false;
 
+  function clampScale(s) {
+    return Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
+  }
+
+  // Ordre important : `scale(...)` PUIS `translate(...)` — un point du repère local (non
+  // transformé) de #canvasLayer subit donc d'abord la translation, puis la mise à
+  // l'échelle (les fonctions d'une liste `transform` s'appliquent de la DERNIÈRE vers la
+  // PREMIÈRE à un point donné). La position visible d'un point local `p` vaut alors
+  // `scale * (p - {x, y})` : c'est cette relation que zoomAt() (voir plus bas) inverse
+  // pour garder un point ÉCRAN fixe pendant un changement de zoom.
   function apply() {
-    if (layer) layer.style.transform = 'translate(' + (-x) + 'px, ' + (-y) + 'px)';
+    if (layer) layer.style.transform = 'scale(' + scale + ') translate(' + (-x) + 'px, ' + (-y) + 'px)';
   }
 
   function stopAnimated() {
@@ -54,7 +67,12 @@
   function paintedOffset() {
     if (!animating || !layer) return { x: x, y: y };
     var m = new DOMMatrixReadOnly(getComputedStyle(layer).transform);
-    return { x: -m.m41, y: -m.m42 };
+    // m41/m42 portent la translation APRÈS mise à l'échelle (voir apply() : `scale()`
+    // englobe `translate()`), donc `-x*scale`/`-y*scale`, pas `-x`/`-y` — diviser par
+    // `m.a` (le facteur d'échelle courant, lu sur la même matrice plutôt que sur `scale`
+    // pour rester cohérent avec ce qui est réellement peint pendant la transition) annule
+    // ce facteur et retrouve l'offset "local" non transformé.
+    return { x: -m.m41 / m.a, y: -m.m42 / m.a };
   }
 
   var Canvas = {
@@ -64,6 +82,7 @@
     },
     getX: function () { return paintedOffset().x; },
     getY: function () { return paintedOffset().y; },
+    getScale: function () { return scale; },
     // Positionnement immédiat, sans animation (équivalent à poser scrollLeft/scrollTop
     // natifs directement) — `nx`/`ny` optionnels : omis, l'axe correspondant reste
     // inchangé (même comportement que `Element.scrollTo({...})` avec un seul axe fourni).
@@ -105,6 +124,40 @@
       // Filet de sécurité (retire la classe même si 'transitionend' ne se déclenche pas,
       // ex. si x/y n'ont en fait pas changé) : durée alignée sur celle de la transition
       // CSS (voir style.css), avec une marge.
+      transitionCleanupTimer = setTimeout(stopAnimated, 160);
+    },
+    // Change le zoom vers `newScale` (borné à [MIN_SCALE, MAX_SCALE]) en gardant le point
+    // ÉCRAN (`screenX`, `screenY` — coordonnées relatives au coin haut-gauche de
+    // #historyScroll, PAS du viewport) visuellement immobile : d'après la relation posée
+    // dans apply() (`écran = échelle * (local - offset)`), le nouvel offset à appliquer
+    // pour que ce même point local reste au même endroit à l'écran est
+    // `offset + écran * (1/ancienneÉchelle - 1/nouvelleÉchelle)`. `screenX`/`screenY`
+    // optionnels : par défaut, le centre du viewport (zoom "sur place" déclenché par un
+    // bouton plutôt que par la molette sous le curseur).
+    zoomAt: function (newScale, screenX, screenY, opts) {
+      opts = opts || {};
+      newScale = clampScale(newScale);
+      if (typeof screenX !== 'number' || typeof screenY !== 'number') {
+        var viewport = layer && layer.parentNode;
+        screenX = viewport ? viewport.clientWidth / 2 : 0;
+        screenY = viewport ? viewport.clientHeight / 2 : 0;
+      }
+      stopAnimated();
+      if (newScale !== scale) {
+        x += screenX * (1 / scale - 1 / newScale);
+        y += screenY * (1 / scale - 1 / newScale);
+        scale = newScale;
+      }
+      if (opts.behavior !== 'smooth' || !layer) {
+        apply();
+        return;
+      }
+      // Voir scrollTo ci-dessus pour le détail de ces trois lignes (même parade au
+      // fusionnement de frame).
+      animating = true;
+      layer.classList.add('canvas-panning-animated');
+      void layer.offsetHeight;
+      apply();
       transitionCleanupTimer = setTimeout(stopAnimated, 160);
     }
   };

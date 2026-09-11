@@ -53,6 +53,12 @@
   // étiquettes est toléré, pas un chevauchement de texte.
   function avoidLabelCollisions(el, placedLabels, equationRects, ownTopRect, ownBotRect) {
     var margin = 4;
+    // el.style.top est en repère LOCAL (non mis à l'échelle, voir computeSideGeometry),
+    // alors que tous les rectangles ci-dessous (getBoundingClientRect) sont en repère
+    // ÉCRAN (affecté par le zoom App.Canvas, voir canvas.js) : chaque décalage calculé à
+    // partir d'eux doit donc repasser en local (/scale) avant de s'ajouter à
+    // parseFloat(el.style.top).
+    var scale = App.Canvas.getScale();
     var guard;
     for (guard = 0; guard < 12; guard++) {
       var rect = el.getBoundingClientRect();
@@ -65,7 +71,7 @@
       // détecter (complet pour une équation, hitbox pour un autre libellé) : l'inset
       // vertical étant constant, la translation obtenue reste correcte pour `el` en entier.
       var reference = eqCollision ? rect : hitbox;
-      el.style.top = (parseFloat(el.style.top) + (collided.bottom + margin - reference.top)) + 'px';
+      el.style.top = (parseFloat(el.style.top) + (collided.bottom + margin - reference.top) / scale) + 'px';
     }
     // Si on est toujours coincé sur une équation après ces tentatives (ex. plus aucune
     // place sans chevaucher un autre libellé), on abandonne l'évitement des AUTRES
@@ -74,7 +80,7 @@
       var rect2 = el.getBoundingClientRect();
       var eqCollision2 = findCollision(rect2, equationRects, margin);
       if (!eqCollision2) break;
-      el.style.top = (parseFloat(el.style.top) + (eqCollision2.bottom + margin - rect2.top)) + 'px';
+      el.style.top = (parseFloat(el.style.top) + (eqCollision2.bottom + margin - rect2.top) / scale) + 'px';
     }
     // Dernier recours : les deux boucles ci-dessus ne poussent QUE vers le bas (jamais
     // vers le haut), donc rien ne les empêche de faire déborder le libellé sous
@@ -91,13 +97,13 @@
       if (ownTopRect) {
         var rTop = el.getBoundingClientRect();
         if (rTop.top < ownTopRect.bottom + margin) {
-          el.style.top = (parseFloat(el.style.top) + (ownTopRect.bottom + margin - rTop.top)) + 'px';
+          el.style.top = (parseFloat(el.style.top) + (ownTopRect.bottom + margin - rTop.top) / scale) + 'px';
         }
       }
       if (ownBotRect) {
         var rBot = el.getBoundingClientRect();
         if (rBot.bottom > ownBotRect.top - margin) {
-          el.style.top = (parseFloat(el.style.top) - (rBot.bottom - (ownBotRect.top - margin))) + 'px';
+          el.style.top = (parseFloat(el.style.top) - (rBot.bottom - (ownBotRect.top - margin)) / scale) + 'px';
         }
       }
     }
@@ -125,6 +131,12 @@
     // bulge = décalage du point de contrôle ; le renflement visuel réel d'une quadratique
     // symétrique n'est qu'environ la moitié de cette valeur.
     var bulge = Math.max(34, Math.min(130, available * 1.15)) * dir;
+    // Repère ÉCRAN (getBoundingClientRect, affecté par le zoom App.Canvas — voir canvas.js) :
+    // ses deux consommateurs (buildPathD/computeLabelAnchor via drawSide/drawMirrorField, où
+    // l'élément peint vit dans le repère LOCAL de `history` ; positionLiveField, qui
+    // reconvertit lui-même en repère local via l'offset App.Canvas) n'ont pas le même besoin
+    // de repère final — chacun divise donc par l'échelle à SON point de consommation plutôt
+    // qu'ici, à la source.
     return { topX: topX, topY: topY, botX: botX, botY: botY, bulge: bulge };
   }
 
@@ -141,21 +153,28 @@
   // d'une autre équation) pour ne jamais empiéter sur la colonne voisine.
   function drawSide(svg, history, historyRect, topEl, botEl, label, warn, dir, markerId, constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect) {
     var geom = computeSideGeometry(historyRect, topEl, botEl, dir);
+    // geom (voir computeSideGeometry) est en repère ÉCRAN, alors que `svg` et `el`
+    // ci-dessous vivent tous deux dans le repère LOCAL de `history` (descendants du même
+    // #canvasLayer transformé, voir canvas.js) : on divise donc par l'échelle courante à
+    // CE point de consommation, pour tout ce qui en est directement issu.
+    var scale = App.Canvas.getScale();
 
     var path = document.createElementNS(SVG_NS, 'path');
-    path.setAttribute('d', buildPathD(geom.topX, geom.topY, geom.botX, geom.botY, geom.bulge));
+    path.setAttribute('d', buildPathD(geom.topX / scale, geom.topY / scale, geom.botX / scale, geom.botY / scale, geom.bulge / scale));
     path.setAttribute('class', 'arrow-path');
     path.setAttribute('marker-end', 'url(#' + markerId + ')');
     svg.appendChild(path);
 
     if (!label) return;
     var anchor = computeLabelAnchor(geom, dir);
+    var localExtremeX = anchor.extremeX / scale;
+    var localMidY = anchor.midY / scale;
 
     var el = document.createElement('div');
     el.className = 'arrow-label ' + (dir < 0 ? 'arrow-label-left' : 'arrow-label-right') +
       (warn ? ' arrow-label-warning' : '');
-    el.style.left = anchor.extremeX + 'px';
-    el.style.top = anchor.midY + 'px';
+    el.style.left = localExtremeX + 'px';
+    el.style.top = localMidY + 'px';
     // Rendu en LaTeX (comme les équations) : x et signes identiques, plus de police système.
     window.katex.render(label, el, { throwOnError: false, trust: true, strict: false });
     history.appendChild(el);
@@ -167,10 +186,13 @@
     var rect = el.getBoundingClientRect();
     var boundLeft = constrainLabels ? historyRect.left : 0;
     var boundRight = constrainLabels ? historyRect.right : window.innerWidth;
+    // rect/boundLeft/boundRight sont en repère ÉCRAN, localExtremeX déjà en repère LOCAL :
+    // la correction (un écart entre deux mesures écran) doit repasser en local (/scale)
+    // avant de s'additionner.
     if (rect.left < boundLeft + margin) {
-      el.style.left = (anchor.extremeX + (boundLeft + margin - rect.left)) + 'px';
+      el.style.left = (localExtremeX + (boundLeft + margin - rect.left) / scale) + 'px';
     } else if (rect.right > boundRight - margin) {
-      el.style.left = (anchor.extremeX - (rect.right - (boundRight - margin))) + 'px';
+      el.style.left = (localExtremeX - (rect.right - (boundRight - margin)) / scale) + 'px';
     }
     avoidLabelCollisions(el, placedLabels, equationRects, ownTopRect, ownBotRect);
   }
@@ -211,10 +233,18 @@
     var hsRect = historyScroll ? historyScroll.getBoundingClientRect() : historyRect;
     var scrollLeft = App.Canvas.getX();
     var scrollTop = App.Canvas.getY();
+    // pillEl est un enfant DIRECT de #canvasLayer (jamais de `history`, voir plus haut) :
+    // contrairement à drawSide (où l'élément peint vit dans le repère LOCAL de `history`,
+    // voir sa propre division par l'échelle), on reconstruit ici une position ÉCRAN absolue
+    // (historyRect/hsRect, tous deux via getBoundingClientRect) puis on ne repasse en local
+    // qu'à la toute fin, comme le fait le recentrage automatique dans render.js — seule la
+    // PARTIE écran (le delta measuré depuis hsRect) doit être divisée par l'échelle avant de
+    // s'ajouter à scrollLeft/scrollTop (déjà en repère local, voir App.Canvas.getX/getY).
+    var scale = App.Canvas.getScale();
     var viewportX = historyRect.left + anchor.extremeX;
     var viewportY = historyRect.top + anchor.midY;
-    pillEl.style.left = (viewportX - hsRect.left + scrollLeft) + 'px';
-    pillEl.style.top = (viewportY - hsRect.top + scrollTop) + 'px';
+    pillEl.style.left = ((viewportX - hsRect.left) / scale + scrollLeft) + 'px';
+    pillEl.style.top = ((viewportY - hsRect.top) / scale + scrollTop) + 'px';
 
     // Débordement/collision : même logique que drawSide, appliquée au pavé "live".
     var margin = 6;
@@ -222,9 +252,9 @@
     var boundLeft = constrainLabels ? historyRect.left : 0;
     var boundRight = constrainLabels ? historyRect.right : window.innerWidth;
     if (rect.left < boundLeft + margin) {
-      pillEl.style.left = (parseFloat(pillEl.style.left) + (boundLeft + margin - rect.left)) + 'px';
+      pillEl.style.left = (parseFloat(pillEl.style.left) + (boundLeft + margin - rect.left) / scale) + 'px';
     } else if (rect.right > boundRight - margin) {
-      pillEl.style.left = (parseFloat(pillEl.style.left) - (rect.right - (boundRight - margin))) + 'px';
+      pillEl.style.left = (parseFloat(pillEl.style.left) - (rect.right - (boundRight - margin)) / scale) + 'px';
     }
     avoidLabelCollisions(pillEl, placedLabels, equationRects, ownTopRect, ownBotRect);
   }
@@ -252,12 +282,18 @@
   // (voir aussi l'exclusion .arrow-label-mirror dans le clic-en-dehors de toolbar.js).
   function drawMirrorField(history, historyRect, topEl, botEl, dir, warn, rawLatex, warnLatex, constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect) {
     var anchor = computeLabelAnchor(computeSideGeometry(historyRect, topEl, botEl, dir), dir);
+    // Voir drawSide : `el` vit dans le repère LOCAL de `history`, anchor est en repère
+    // ÉCRAN (computeSideGeometry) — division par l'échelle courante à ce point de
+    // consommation.
+    var scale = App.Canvas.getScale();
+    var localExtremeX = anchor.extremeX / scale;
+    var localMidY = anchor.midY / scale;
 
     var el = document.createElement('div');
     el.className = 'arrow-label arrow-label-mirror ' + (dir < 0 ? 'arrow-label-left' : 'arrow-label-right') +
       (warn ? ' arrow-label-warning' : '');
-    el.style.left = anchor.extremeX + 'px';
-    el.style.top = anchor.midY + 'px';
+    el.style.left = localExtremeX + 'px';
+    el.style.top = localMidY + 'px';
     // Couvre aussi un clic sur le padding/la réserve ("valide si...") du pill, en dehors
     // de la zone du champ lui-même (voir l'overlay dédié, plus fiable, posé sur CETTE
     // zone-là juste en dessous) — un double appel (overlay ET bulle jusqu'ici) ne fait
@@ -325,9 +361,9 @@
     var boundLeft = constrainLabels ? historyRect.left : 0;
     var boundRight = constrainLabels ? historyRect.right : window.innerWidth;
     if (rect.left < boundLeft + margin) {
-      el.style.left = (anchor.extremeX + (boundLeft + margin - rect.left)) + 'px';
+      el.style.left = (localExtremeX + (boundLeft + margin - rect.left) / scale) + 'px';
     } else if (rect.right > boundRight - margin) {
-      el.style.left = (anchor.extremeX - (rect.right - (boundRight - margin))) + 'px';
+      el.style.left = (localExtremeX - (rect.right - (boundRight - margin)) / scale) + 'px';
     }
     avoidLabelCollisions(el, placedLabels, equationRects, ownTopRect, ownBotRect);
   }
@@ -393,9 +429,14 @@
       d.x = d.rawX + (originX < d.rawX ? -pull : pull);
     });
 
+    // Toute la géométrie ci-dessus est mesurée en repère ÉCRAN (getBoundingClientRect,
+    // affecté par le zoom App.Canvas) alors que `svg` et `label` vivent tous deux dans le
+    // repère LOCAL de `history` (voir drawSide) : division par l'échelle courante à ce
+    // point de consommation, pour le chemin comme pour l'étiquette.
+    var scale = App.Canvas.getScale();
     destinations.forEach(function (d) {
       var path = document.createElementNS(SVG_NS, 'path');
-      path.setAttribute('d', buildForkBranchD(originX, originY, d.x, d.y));
+      path.setAttribute('d', buildForkBranchD(originX / scale, originY / scale, d.x / scale, d.y / scale));
       path.setAttribute('class', 'arrow-path');
       path.setAttribute('marker-end', 'url(#' + markerId + ')');
       svg.appendChild(path);
@@ -408,8 +449,8 @@
     var labelY = originY + (avgDestY - originY) * 0.4;
     var label = document.createElement('div');
     label.className = 'arrow-label arrow-label-fork';
-    label.style.left = originX + 'px';
-    label.style.top = labelY + 'px';
+    label.style.left = (originX / scale) + 'px';
+    label.style.top = (labelY / scale) + 'px';
     // `labelText` est du LaTeX déjà prêt à l'affichage (voir splitIntoBranches dans
     // history.js) : "\text{produit nul}" pour l'un (texte), un symbole mathématique brut
     // pour l'autre (ex. "\sqrt{...}" pour la racine carrée) — jamais enveloppé ici, pour

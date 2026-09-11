@@ -27,9 +27,9 @@ in `(function (App) { ... })(window.App = window.App || {});` IIFEs.
   CDN `<script>`/`<link>` tags). MathLive backs the unified math keypad; KaTeX
   remains the display renderer for confirmed equation steps/arrows, untouched by that work.
 - Script load order in `index.html` matters and mirrors the dependency graph: `expression.js`
-  → `equation.js` → `parser.js` → `generator.js` → `history.js` → `canvas.js` → `render.js`
-  → `arrows.js` → `toolbar.js` → `mathKeypad.js` → `keyboard.js` → `newEquationModal.js` →
-  `theme.js` → `main.js`.
+  → `equation.js` → `parser.js` → `generator.js` → `history.js` → `canvas.js` → `zoom.js` →
+  `render.js` → `arrows.js` → `toolbar.js` → `mathKeypad.js` → `keyboard.js` →
+  `newEquationModal.js` → `theme.js` → `main.js`.
 - No lint/build commands exist for this project. A regression test suite does exist (see
   below) — run the targeted test after any change to `js/*.js`.
 
@@ -111,6 +111,22 @@ would have. `renderAll()` (`render.js`) also force-resets `#historyScroll`'s *na
 (otherwise-unused) property to a container's valid range as content is torn down and
 rebuilt, and that clamped value is silently subtracted from descendants'
 `getBoundingClientRect()` regardless of `overflow-anchor`.
+
+`App.Canvas` also carries the zoom level (`getScale`/`zoomAt`, clamped to `[0.4, 2.5]`),
+applied as `transform: scale(...) translate(...)` on `#canvasLayer` (scale first, so a
+screen-space delta between two points inside `#canvasLayer` equals `scale` times the
+equivalent *local* delta). `App.Zoom` (`js/zoom.js`) drives it from the two floating
+magnifying-glass buttons (`#zoomInBtn`/`#zoomOutBtn`, centered on the viewport, animated)
+and from Ctrl+wheel (`initCanvasPan` in `main.js`, centered on the cursor, instant — see
+`wheelZoom`). Because `getBoundingClientRect()` is always real screen space regardless of
+this scale, any code that turns a rect-derived screen delta into a *local* pixel value
+(`style.left`/`top` on a descendant of `#canvasLayer`, or an SVG path's `d`) must divide
+that delta by `App.Canvas.getScale()` first — see the geometry helpers in `arrows.js`
+(`computeSideGeometry`/`drawFork`), the recentring math in `render.js`'s `renderAll`, and
+`positionPanel` in `toolbar.js` for the pattern. `offsetWidth`/`offsetHeight` are
+unaffected by this transform (it only changes paint, not layout), so comparisons against
+them (e.g. `render.js`'s `isWideSplit`) instead divide the *screen*-space threshold
+(`scroller.clientWidth`) by the scale to bring it into the same local space.
 
 ## Manual input parsing (`js/parser.js`)
 

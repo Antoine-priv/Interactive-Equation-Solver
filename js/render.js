@@ -22,6 +22,14 @@
   // ouverture des DevTools...) désynchronise silencieusement scrollLeft de "où sont
   // vraiment les colonnes à l'écran", les laissant décalées jusqu'à la prochaine étape.
   var lastCenteredWidth = null;
+  // Même principe que lastCenteredWidth ci-dessus, mais pour le zoom (App.Canvas.getScale,
+  // voir canvas.js) : columnsNaturalWidth/offsetWidth sont mesurés dans le repère LOCAL de
+  // #canvasLayer (jamais affecté par sa propre mise à l'échelle CSS), alors que
+  // scroller.clientWidth est un repère ÉCRAN — un zoom seul (sans redimensionnement de
+  // fenêtre) peut donc, comme un redimensionnement, faire basculer isWideSplit ou
+  // désynchroniser le scrollLeft absolu d'une scission "large" de la position réellement
+  // visible des colonnes.
+  var lastCenteredScale = null;
   // Vrai si le dernier rendu était en mise en page "large" (voir isWideSplit plus bas) —
   // sert UNIQUEMENT à détecter une VRAIE transition large -> tient (voir splitNoLongerWide
   // plus bas), jamais un simple état courant : depuis le passage à la toile "infinie"
@@ -1803,7 +1811,13 @@
       var columnsNaturalWidth = branchResults.reduce(function (sum, b, i) {
         return sum + b.col.offsetWidth + (i > 0 ? 90 : 0); // 90 = gap, voir .produit-nul-split
       }, 0);
-      var isWideSplit = columnsNaturalWidth > (scroller ? scroller.clientWidth : history.clientWidth);
+      var canvasScale = App.Canvas.getScale();
+      // offsetWidth ci-dessus est mesuré dans le repère LOCAL de #canvasLayer (le zoom,
+      // une transform CSS, ne change jamais la mise en page ni les offsetWidth de ses
+      // descendants — seulement leur taille PEINTE) : on divise donc le seuil de
+      // comparaison (scroller.clientWidth, un repère ÉCRAN) par l'échelle courante plutôt
+      // que de multiplier columnsNaturalWidth, pour rester dans ce même repère local.
+      var isWideSplit = columnsNaturalWidth > (scroller ? scroller.clientWidth / canvasScale : history.clientWidth / canvasScale);
       splitWrap.classList.toggle('produit-nul-split-wide', isWideSplit);
       if (isWideSplit) {
         // Les colonnes ne tiennent pas dans la largeur normale de #history : plutôt que
@@ -1924,7 +1938,9 @@
     // réelle des colonnes à l'écran — non pertinent pour une scission "simple" (pas de
     // scrollLeft explicite à maintenir dans ce cas, voir plus bas).
     var isNewStep = scrollTarget && scrollIdentity !== lastCenteredStepByEngine.get(scrollEngine);
-    var widthChangedDuringSplit = !!branches && isWideSplit && scroller && lastCenteredWidth !== null && scroller.clientWidth !== lastCenteredWidth;
+    var currentScale = App.Canvas.getScale();
+    var widthChangedDuringSplit = !!branches && isWideSplit && scroller && lastCenteredWidth !== null &&
+      (scroller.clientWidth !== lastCenteredWidth || currentScale !== lastCenteredScale);
     // Redimensionnement (ex. zoom du navigateur) qui fait REPASSER une scission de "large"
     // (offset horizontal explicite posé plus bas pour centrer le groupe de colonnes, voir
     // isWideSplit) à "tient dans la largeur disponible" : le centrage bascule alors sur le
@@ -1945,6 +1961,7 @@
     if (scroller && (isNewStep || widthChangedDuringSplit || splitNoLongerWide)) {
       lastCenteredStepByEngine.set(scrollEngine, scrollIdentity);
       lastCenteredWidth = scroller.clientWidth;
+      lastCenteredScale = currentScale;
       // getBoundingClientRect (position réelle à l'écran), pas offsetTop : offsetTop est
       // relatif au plus proche ancêtre positionné, qui pour une colonne "produit nul"
       // n'est PAS `scroller` mais `.produit-nul-chain` (son propre position:relative,
@@ -1967,8 +1984,14 @@
       var scrollOpts = { behavior: (isNewStep && !isWideSplit) ? 'smooth' : 'auto' };
       if (isNewStep && scrollTarget) {
         var targetRect = scrollTarget.getBoundingClientRect();
-        var targetCenter = (targetRect.top - scrollerRect.top) + App.Canvas.getY() + targetRect.height / 2;
-        scrollOpts.top = targetCenter - scroller.clientHeight / 2;
+        // getBoundingClientRect renvoie une position/taille ÉCRAN (affectée par le zoom
+        // CSS, voir currentScale plus haut), alors qu'App.Canvas.getY() et le futur
+        // scrollOpts.top attendu par App.Canvas.scrollTo sont dans le repère LOCAL (avant
+        // mise à l'échelle) de #canvasLayer — diviser les deux premiers termes par
+        // currentScale ramène tout dans ce même repère local avant de les combiner (voir
+        // apply()/zoomAt() dans canvas.js pour la relation écran = échelle * local).
+        var targetCenter = (targetRect.top - scrollerRect.top) / currentScale + App.Canvas.getY() + targetRect.height / (2 * currentScale);
+        scrollOpts.top = targetCenter - scroller.clientHeight / (2 * currentScale);
       }
       // Scission en cours ET en mise en page "large" (voir isWideSplit plus haut) :
       // recentre aussi HORIZONTALEMENT sur le groupe de colonnes entier. Seulement dans
@@ -1985,8 +2008,9 @@
       // à un endroit raisonnable de la fenêtre (son propre centre).
       if (branches && splitWrap && isWideSplit) {
         var splitRect = splitWrap.getBoundingClientRect();
-        var splitCenterX = (splitRect.left - scrollerRect.left) + App.Canvas.getX() + splitRect.width / 2;
-        scrollOpts.left = splitCenterX - scroller.clientWidth / 2;
+        // Même conversion écran -> local que targetCenter ci-dessus.
+        var splitCenterX = (splitRect.left - scrollerRect.left) / currentScale + App.Canvas.getX() + splitRect.width / (2 * currentScale);
+        scrollOpts.left = splitCenterX - scroller.clientWidth / (2 * currentScale);
       } else if (splitNoLongerWide) {
         scrollOpts.left = 0;
       }

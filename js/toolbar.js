@@ -646,8 +646,17 @@
     var prevLine = prevRowEl ? (prevRowEl.querySelector('.eq-line') || prevRowEl) : null;
     var prevRect = prevLine ? prevLine.getBoundingClientRect() : null;
 
-    var GAP = 26; // espace entre le bord droit de la fenêtre et le texte de l'équation
-    var height = panelEl.offsetHeight;
+    // panelEl est un enfant PERSISTANT de #canvasLayer (voir CLAUDE.md) : sa propre taille
+    // (offsetHeight/offsetWidth), jamais affectée par le `transform` de son ancêtre
+    // (contrairement à getBoundingClientRect, qui lui EST affecté), reste dans le repère
+    // LOCAL (non mis à l'échelle) de #canvasLayer — alors qu'anchorRect/prevRect (mesurés
+    // via getBoundingClientRect) sont dans le repère ÉCRAN. Tout ce calcul de placement est
+    // donc mené ENTIÈREMENT en repère ÉCRAN (GAP/height/panelEl.offsetWidth multipliés par
+    // l'échelle courante pour y entrer) puis converti UNE SEULE FOIS en repère local à la
+    // toute fin (voir App.Canvas.zoomAt dans canvas.js pour la même relation écran/local).
+    var scale = App.Canvas.getScale();
+    var GAP = 26 * scale; // espace entre le bord droit de la fenêtre et le texte de l'équation
+    var height = panelEl.offsetHeight * scale;
     var centerY = anchorRect.top + anchorRect.height / 2;
 
     var top = centerY - height / 2;
@@ -656,20 +665,21 @@
     var minTop = prevRect ? prevRect.bottom : -Infinity; // limite dure : jamais sur la ligne précédente
     if (top < minTop) top = minTop;
 
-    var left = anchorRect.left - GAP - panelEl.offsetWidth;
+    var left = anchorRect.left - GAP - panelEl.offsetWidth * scale;
 
     var hsRect = historyScroll.getBoundingClientRect();
     var scrollLeft = App.Canvas.getX();
     var scrollTop = App.Canvas.getY();
-    panelEl.style.left = (left - hsRect.left + scrollLeft) + 'px';
-    panelEl.style.top = (top - hsRect.top + scrollTop) + 'px';
+    panelEl.style.left = ((left - hsRect.left) / scale + scrollLeft) + 'px';
+    panelEl.style.top = ((top - hsRect.top) / scale + scrollTop) + 'px';
 
     var arrowEl = panelEl.querySelector('.op-buttons-arrow');
     if (arrowEl) {
       var margin = 14;
-      var arrowTop = centerY - top;
+      var arrowTop = (centerY - top) / scale;
+      var localHeight = height / scale;
       if (arrowTop < margin) arrowTop = margin;
-      if (arrowTop > height - margin) arrowTop = height - margin;
+      if (arrowTop > localHeight - margin) arrowTop = localHeight - margin;
       arrowEl.style.top = arrowTop + 'px';
     }
   }

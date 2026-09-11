@@ -105,7 +105,11 @@
           moved = true;
           scroller.classList.add('panning');
         }
-        App.Canvas.set(startPanX - (e2.clientX - startX), startPanY - (e2.clientY - startY));
+        // /scale : le contenu doit suivre le curseur AU PIXEL ÉCRAN près quel que soit le
+        // zoom (voir App.Canvas.zoomAt dans canvas.js pour la même relation écran/local) —
+        // un déplacement souris de N px écran ne correspond qu'à N/échelle px locaux.
+        var scale = App.Canvas.getScale();
+        App.Canvas.set(startPanX - (e2.clientX - startX) / scale, startPanY - (e2.clientY - startY) / scale);
       }
       function onUp() {
         document.removeEventListener('mousemove', onMove);
@@ -125,9 +129,16 @@
     // .eq-row { overflow-x: auto }, pour les équations trop larges à taille de police
     // minimale) : on lui laisse alors gérer elle-même son propre défilement horizontal,
     // exactement comme le "scroll chaining" natif l'aurait fait avant ce module. Ctrl+molette
-    // (zoom du navigateur) n'est jamais intercepté.
+    // zoome désormais la toile elle-même (voir App.Zoom plus bas) au lieu du zoom navigateur
+    // (systématiquement intercepté par preventDefault, comme n'importe quel autre geste de
+    // molette ici — le navigateur ne voit jamais passer ce Ctrl+molette).
     scroller.addEventListener('wheel', function (e) {
-      if (e.ctrlKey) return;
+      if (e.ctrlKey) {
+        e.preventDefault();
+        var rect = scroller.getBoundingClientRect();
+        App.Zoom.wheelZoom(e.deltaY, e.clientX - rect.left, e.clientY - rect.top);
+        return;
+      }
       var row = e.target.closest('.eq-row');
       if (row && row.scrollWidth > row.clientWidth) {
         var canRowScroll = (e.deltaX < 0 && row.scrollLeft > 0) ||
@@ -135,7 +146,10 @@
         if (canRowScroll) return;
       }
       e.preventDefault();
-      App.Canvas.panBy(e.deltaX, e.deltaY);
+      // /scale : voir le glisser-déposer juste au-dessus, même raisonnement (un delta de
+      // molette est lui aussi exprimé en px ÉCRAN).
+      var scale = App.Canvas.getScale();
+      App.Canvas.panBy(e.deltaX / scale, e.deltaY / scale);
     }, { passive: false });
   }
 
@@ -155,6 +169,7 @@
     });
 
     App.Canvas.init();
+    App.Zoom.init();
     App.Toolbar.init();
     App.MathKeypad.init();
     App.Keyboard.init();
