@@ -256,6 +256,17 @@ button {
    mais explicite ici même avant la toute première application par App.Canvas.init(). */
 #canvasLayer {
   position: relative;
+  /* CRITIQUE pour App.Canvas.zoomAt (canvas.js) : le CSS par défaut mettrait à l'échelle
+     autour du CENTRE de la boîte (transform-origin: 50% 50%) — un point qui, lui, dépend
+     de la hauteur de #history (donc du nombre d'étapes), jamais du coin haut-gauche que
+     tout le reste du code (App.Canvas.getX/getY, et la conversion écran->local qu'ils
+     alimentent dans render.js/arrows.js/toolbar.js) suppose. Sans ce 0 0, la relation
+     "écran = échelle × (local − offset)" posée dans canvas.js devient fausse dès que le
+     zoom ≠ 1, et TOUT calcul qui s'appuie dessus (recentrage automatique, positionnement
+     du pavé "live"/de la fenêtre d'actions, ancrage du zoom lui-même sur le curseur/centre
+     du viewport) dérive silencieusement.
+  */
+  transform-origin: 0 0;
 }
 /* Posée temporairement par App.Canvas.scrollTo({behavior:'smooth'}) le temps d'une seule
    transition (retirée ensuite, voir stopAnimated dans canvas.js) : jamais présente en

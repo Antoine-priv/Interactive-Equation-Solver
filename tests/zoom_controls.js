@@ -104,10 +104,110 @@ function approx(a, b, eps) {
   // en reproduisant le même panorama sans jamais toucher au zoom), pas une régression liée
   // au zoom — sans intérêt pour la suite de ce test, qui vérifie seulement que tout reste
   // utilisable/bien positionné UNE FOIS zoomé, pas la reconstitution d'un panorama extrême.
-  await page.evaluate(() => { window.App.Canvas.set(0, 0); window.App.Canvas.zoomAt(1); });
+  // window.App.Zoom.wheelZoom(0, ...) : deltaY=0 => facteur 1 (aucun changement d'échelle
+  // réel), mais passe par App.Zoom plutôt que App.Canvas.zoomAt directement pour aussi
+  // rafraîchir l'état "disabled" des boutons loupe (voir refreshButtons dans zoom.js) —
+  // sinon un bouton resté désactivé après un appel bas niveau à App.Canvas.zoomAt (comme
+  // celui juste avant) refuserait tout clic natif ultérieur dans ce test, alors qu'un
+  // vrai utilisateur ne passe JAMAIS par cette API bas niveau (seul App.Zoom le fait).
+  await page.evaluate(() => { window.App.Canvas.set(0, 0); window.App.Canvas.zoomAt(1); window.App.Zoom.wheelZoom(0, 0, 0); });
   await page.waitForTimeout(100);
 
-  // 7) L'equation reste utilisable une fois zoomee : cliquer un terme le selectionne toujours,
+  // 7) La fenêtre d'action flottante (#opButtons, voir positionPanel dans toolbar.js) reste
+  // ancrée sur la ligne "current" à travers zoom ET panorama : elle est un enfant PERSISTANT
+  // de #canvasLayer, donc positionnée UNE FOIS en repère LOCAL (non affecté par le
+  // `transform` de son ancêtre) doit suivre le transform SANS recalcul — nécessite
+  // `#canvasLayer { transform-origin: 0 0 }` (voir style.css) pour que la relation
+  // écran = échelle × (local − offset) posée dans canvas.js reste vraie une fois zoom ≠ 1
+  // (le défaut CSS, le CENTRE de la boîte, la casserait), ET que cliquer les boutons
+  // loupe n'annule pas la sélection en cours (voir l'exclusion #zoomInBtn/#zoomOutBtn dans
+  // le clic-en-dehors de toolbar.js).
+  await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '3x+5=17');
+  await page.waitForTimeout(150);
+  await page.click('.eq-row.current .side[data-side="left"] .term[data-index="0"]');
+  await page.waitForTimeout(150);
+
+  function panelGapAndDy(panel, anchor) {
+    return { gap: anchor.x - (panel.x + panel.width), dy: (panel.y + panel.height / 2) - (anchor.y + anchor.height / 2) };
+  }
+  let panelBox = await page.locator('#opButtons').boundingBox();
+  let anchorBox = await page.locator('.eq-row.current .eq-line').boundingBox();
+  let rel = panelGapAndDy(panelBox, anchorBox);
+  ok('fenêtre d\'action correctement alignée avant tout zoom (dy=' + rel.dy.toFixed(2) + ')', approx(rel.dy, 0, 1));
+
+  await page.click('#zoomInBtn');
+  await page.click('#zoomInBtn');
+  await page.waitForTimeout(300);
+  const selectionAfterZoomClicks = await page.evaluate(() => window.App.History.getPending().selectedLeft);
+  ok('cliquer les boutons loupe ne desselectionne pas le terme en cours', JSON.stringify(selectionAfterZoomClicks) === '[0]');
+  const scaleNow = await page.evaluate(() => window.App.Canvas.getScale());
+  panelBox = await page.locator('#opButtons').boundingBox();
+  anchorBox = await page.locator('.eq-row.current .eq-line').boundingBox();
+  rel = panelGapAndDy(panelBox, anchorBox);
+  ok('fenêtre d\'action reste alignée verticalement apres 2 clics "zoom avant" (dy=' + rel.dy.toFixed(2) + ')', approx(rel.dy, 0, 1));
+  ok('l\'ecart avec l\'equation suit l\'echelle courante (gap=' + rel.gap.toFixed(2) + ' vs attendu ' + (26 * scaleNow).toFixed(2) + ')', approx(rel.gap, 26 * scaleNow, 1));
+
+  await page.mouse.wheel(120, 60);
+  await page.waitForTimeout(150);
+  panelBox = await page.locator('#opButtons').boundingBox();
+  anchorBox = await page.locator('.eq-row.current .eq-line').boundingBox();
+  rel = panelGapAndDy(panelBox, anchorBox);
+  ok('fenêtre d\'action reste alignée apres un panorama (molette) une fois zoomee (dy=' + rel.dy.toFixed(2) + ')', approx(rel.dy, 0, 1));
+
+  // 8) Le zoom lui-même reste ancré : le point local qui était pile au centre du viewport
+  // avant un clic "zoom avant" doit toujours peindre exactement à ce même centre après —
+  // pas seulement "un zoom qui se produit quelque part".
+  // window.App.Zoom.wheelZoom(0, ...) : deltaY=0 => facteur 1 (aucun changement d'échelle
+  // réel), mais passe par App.Zoom plutôt que App.Canvas.zoomAt directement pour aussi
+  // rafraîchir l'état "disabled" des boutons loupe (voir refreshButtons dans zoom.js) —
+  // sinon un bouton resté désactivé après un appel bas niveau à App.Canvas.zoomAt (comme
+  // celui juste avant) refuserait tout clic natif ultérieur dans ce test, alors qu'un
+  // vrai utilisateur ne passe JAMAIS par cette API bas niveau (seul App.Zoom le fait).
+  await page.evaluate(() => { window.App.Canvas.set(0, 0); window.App.Canvas.zoomAt(1); window.App.Zoom.wheelZoom(0, 0, 0); });
+  await page.waitForTimeout(100);
+  const anchorCheck = await page.evaluate(() => {
+    var scroller = document.getElementById('historyScroll');
+    var before = { x: window.App.Canvas.getX(), y: window.App.Canvas.getY(), s: window.App.Canvas.getScale() };
+    var vcx = scroller.clientWidth / 2, vcy = scroller.clientHeight / 2;
+    var localAtCenter = { x: before.x + vcx / before.s, y: before.y + vcy / before.s };
+    window.App.Canvas.zoomAt(before.s * 1.5, vcx, vcy);
+    var after = { x: window.App.Canvas.getX(), y: window.App.Canvas.getY(), s: window.App.Canvas.getScale() };
+    return {
+      screenX: after.s * (localAtCenter.x - after.x),
+      screenY: after.s * (localAtCenter.y - after.y),
+      vcx: vcx, vcy: vcy
+    };
+  });
+  ok('le zoom (bouton, centré sur le viewport) garde le point central immobile à l\'écran (x=' +
+    anchorCheck.screenX.toFixed(2) + ' vs ' + anchorCheck.vcx.toFixed(2) + ', y=' + anchorCheck.screenY.toFixed(2) + ' vs ' + anchorCheck.vcy.toFixed(2) + ')',
+    approx(anchorCheck.screenX, anchorCheck.vcx, 1) && approx(anchorCheck.screenY, anchorCheck.vcy, 1));
+
+  const cursorAnchorCheck = await page.evaluate(() => {
+    var before = { x: window.App.Canvas.getX(), y: window.App.Canvas.getY(), s: window.App.Canvas.getScale() };
+    var cursor = { x: 180, y: 260 }; // point volontairement hors du centre du viewport
+    var localAtCursor = { x: before.x + cursor.x / before.s, y: before.y + cursor.y / before.s };
+    window.App.Zoom.wheelZoom(-200, cursor.x, cursor.y);
+    var after = { x: window.App.Canvas.getX(), y: window.App.Canvas.getY(), s: window.App.Canvas.getScale() };
+    return {
+      screenX: after.s * (localAtCursor.x - after.x),
+      screenY: after.s * (localAtCursor.y - after.y),
+      cursor: cursor
+    };
+  });
+  ok('le zoom (Ctrl+molette, centré sur le curseur) garde ce point immobile a l\'écran (x=' +
+    cursorAnchorCheck.screenX.toFixed(2) + ' vs ' + cursorAnchorCheck.cursor.x + ', y=' + cursorAnchorCheck.screenY.toFixed(2) + ' vs ' + cursorAnchorCheck.cursor.y + ')',
+    approx(cursorAnchorCheck.screenX, cursorAnchorCheck.cursor.x, 1) && approx(cursorAnchorCheck.screenY, cursorAnchorCheck.cursor.y, 1));
+
+  // window.App.Zoom.wheelZoom(0, ...) : deltaY=0 => facteur 1 (aucun changement d'échelle
+  // réel), mais passe par App.Zoom plutôt que App.Canvas.zoomAt directement pour aussi
+  // rafraîchir l'état "disabled" des boutons loupe (voir refreshButtons dans zoom.js) —
+  // sinon un bouton resté désactivé après un appel bas niveau à App.Canvas.zoomAt (comme
+  // celui juste avant) refuserait tout clic natif ultérieur dans ce test, alors qu'un
+  // vrai utilisateur ne passe JAMAIS par cette API bas niveau (seul App.Zoom le fait).
+  await page.evaluate(() => { window.App.Canvas.set(0, 0); window.App.Canvas.zoomAt(1); window.App.Zoom.wheelZoom(0, 0, 0); });
+  await page.waitForTimeout(100);
+
+  // 9) L'equation reste utilisable une fois zoomee : cliquer un terme le selectionne toujours,
   // sans erreur JS (verifie au passage tout le recalage d'ecran/local dans arrows.js/render.js).
   await page.evaluate(() => { window.App.History.startNewEquation(window.App.Parser.parseEquation('(x+2)(x+3)=0')); });
   await page.waitForTimeout(150);
@@ -117,7 +217,7 @@ function approx(a, b, eps) {
   const selectedAfterZoom = await page.evaluate(() => !!window.App.History.getPending().selectedFactors.left);
   ok('selection d\'un terme fonctionne toujours une fois zoome', selectedAfterZoom);
 
-  // 8) "Produit nul" (scission en colonnes, flèches + étiquettes recalculées) sous zoom :
+  // 10) "Produit nul" (scission en colonnes, flèches + étiquettes recalculées) sous zoom :
   // ne doit produire ni NaN ni erreur JS dans le positionnement (arrows.js/toolbar.js).
   // Clic DOM direct (comme branch_scroll_center2.js) plutôt que page.click : le pavé
   // d'actions suit l'équation active et peut légitimement déborder du viewport une fois

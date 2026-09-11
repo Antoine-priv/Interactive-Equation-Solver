@@ -775,7 +775,15 @@
         (mathKeypadPeek && mathKeypadPeek.contains(e.target)) ||
         (liveOpPillEl && liveOpPillEl.contains(e.target)) ||
         (e.target.closest && e.target.closest('.arrow-label-mirror'));
-      if (panel.contains(e.target) || opBtnsEl.contains(e.target) || onEquation || onMathKeypad) return;
+      // Boutons zoom avant/arrière (voir App.Zoom, js/zoom.js) : un zoom/panorama est un
+      // geste de NAVIGATION dans la toile, pas une désélection volontaire de l'équation —
+      // sans cette exclusion, cliquer l'un ou l'autre annulait à tort toute sélection/
+      // opération en cours (voir cancelOp plus bas), pour ensuite se re-rendre à une
+      // position qui, elle, suit correctement le zoom (App.Toolbar.positionPanel) mais
+      // pour un panneau ayant perdu son ancrage — perçu comme la fenêtre d'actions
+      // "dérivant" au zoom.
+      var onZoomBtn = e.target.closest && e.target.closest('#zoomInBtn, #zoomOutBtn');
+      if (panel.contains(e.target) || opBtnsEl.contains(e.target) || onEquation || onMathKeypad || onZoomBtn) return;
       App.History.cancelOp();
     }, true);
   }
