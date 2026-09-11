@@ -23,7 +23,10 @@ function ok(label, cond) {
   await page.goto(FILE);
 
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x=5');
-  await page.click('button[data-op="expr"]');
+  // 'x=5' est déjà résolue : la fenêtre d'action est masquée dessus (voir positionPanel
+  // dans toolbar.js), donc pas de bouton "Opération" à cliquer — on entre en mode 'expr'
+  // via l'API directement.
+  await page.evaluate(() => { window.App.History.selectOp('expr'); });
   await page.waitForTimeout(80);
 
   const operandDisplayGone = await page.$('.operand-display');

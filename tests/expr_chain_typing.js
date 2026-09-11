@@ -33,8 +33,11 @@ function ok(label, cond) {
   }, { eq: START_EQ, latex: EXPECTED_LATEX });
 
   // --- Chemin testé : composée touche par touche sur le pavé ancré. ---
+  // START_EQ ('x=5') est déjà résolue : la fenêtre d'action (bouton "Opération") est
+  // masquée dessus (voir positionPanel dans toolbar.js) — on entre en mode 'expr' via
+  // l'API, seule la composition qui suit, touche par touche, doit passer par le pavé réel.
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, START_EQ);
-  await page.click('button[data-op="expr"]');
+  await page.evaluate(() => { window.App.History.selectOp('expr'); });
   await page.waitForTimeout(80);
 
   async function clickKey(key) { await page.click('[data-key="' + key + '"]'); }
@@ -74,7 +77,7 @@ function ok(label, cond) {
 
   // --- Édition au clavier physique une fois le champ focalisé (retour arrière natif). ---
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x=5');
-  await page.click('button[data-op="expr"]');
+  await page.evaluate(() => { window.App.History.selectOp('expr'); });
   await page.waitForTimeout(80);
   await page.keyboard.type('+8');
   await page.keyboard.press('Backspace');

@@ -1289,6 +1289,7 @@
     }
 
     var framedRowEl = null; // la ligne encadrée (dernier résultat obtenu) : celle qu'on centre à l'écran
+    var framedSolved = false; // voir positionPanel dans toolbar.js : plus de fenêtre d'action sur "x=..."
 
     steps.forEach(function (step, i) {
       var isLastConfirmed = (i === steps.length - 1);
@@ -1319,7 +1320,7 @@
       var row = createRow(step.equation, rowOpts);
       container.appendChild(row);
       autoFitRowFont(row);
-      if (isLastConfirmed) framedRowEl = row;
+      if (isLastConfirmed) { framedRowEl = row; framedSolved = solved; }
       rowsData.push({
         el: row,
         opLeft: formatOpLabel(step.opLeft),
@@ -1376,7 +1377,7 @@
       liveInfo = computeLiveOpInfo(pending, preview);
     }
 
-    return { rowsData: rowsData, framedRowEl: framedRowEl, liveInfo: liveInfo };
+    return { rowsData: rowsData, framedRowEl: framedRowEl, framedSolved: framedSolved, liveInfo: liveInfo };
   }
 
   // Ligne juste AU-DESSUS de `framedEl` (la ligne "current") dans `rowsData` — jamais la
@@ -1426,11 +1427,16 @@
     // toujours la même ligne que `scrollTarget` (la ligne "current") ; `opPrevRowEl`
     // (celle juste au-dessus dans la MÊME chaîne, ou null) lui sert de limite haute dure.
     var opPrevRowEl = null;
+    // Une fois l'équation encadrée résolue ("x=...", voir framedSolved dans renderChain),
+    // plus aucune opération n'a de sens dessus : la fenêtre d'action disparaît entièrement
+    // plutôt que de rester affichée avec ses boutons pour la plupart grisés.
+    var scrollTargetSolved = false;
 
     if (!branches) {
       // Cas normal (pas de "produit nul" en cours) : une seule chaîne, comme avant.
       var res = renderChain(Hist, history, {});
       scrollTarget = res.framedRowEl;
+      scrollTargetSolved = res.framedSolved;
       opPrevRowEl = findPrevRowEl(res.rowsData, res.framedRowEl);
       var steps = Hist.getSteps();
       scrollIdentity = steps[steps.length - 1];
@@ -1661,6 +1667,7 @@
       });
 
       scrollTarget = branchResults[focused].res.framedRowEl;
+      scrollTargetSolved = branchResults[focused].res.framedSolved;
       scrollEngine = branchResults[focused].engine;
       opPrevRowEl = findPrevRowEl(branchResults[focused].res.rowsData, scrollTarget);
       var focusedSteps = scrollEngine.getSteps();
@@ -1691,7 +1698,7 @@
     // alors chevaucher les colonnes non focalisées, voir CLAUDE.md).
     requestAnimationFrame(function () {
       if (isStaleRender()) return;
-      App.Toolbar.positionPanel(scrollTarget, opPrevRowEl);
+      App.Toolbar.positionPanel(scrollTarget, opPrevRowEl, scrollTargetSolved);
     });
 
     // On restaure D'ABORD la position d'avant le rendu, SYSTÉMATIQUEMENT (annule un

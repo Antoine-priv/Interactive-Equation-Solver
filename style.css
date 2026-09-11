@@ -718,6 +718,11 @@ button {
   box-shadow: var(--shadow-lg);
   z-index: 41;
 }
+/* #opButtons pose déjà son propre display:flex ci-dessus : sans ce rappel, l'attribut
+   `hidden` (posé par positionPanel dans toolbar.js une fois l'équation résolue) resterait
+   sans effet, une règle d'auteur battant toujours la feuille de style par défaut du
+   navigateur quelle que soit la spécificité. */
+#opButtons[hidden] { display: none; }
 
 /* Petite pointe qui désigne l'équation ciblée par la fenêtre : un carré pivoté à 45°
    dont seul le coin dépasse du bord droit — position verticale posée dynamiquement par

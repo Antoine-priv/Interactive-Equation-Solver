@@ -75,7 +75,10 @@ function ok(label, cond) {
   }
 
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x=5');
-  await page.click('button[data-op="expr"]');
+  // 'x=5' est déjà résolue : la fenêtre d'action est masquée dessus (voir positionPanel
+  // dans toolbar.js), donc pas de bouton "Opération" à cliquer — on entre en mode 'expr'
+  // via l'API directement, ce qui revient exactement au même pour ce que ce test vérifie.
+  await page.evaluate(() => { window.App.History.selectOp('expr'); });
   await page.waitForTimeout(80);
 
   // --- Dès l'entrée en mode 'expr', le pavé live est visible + focalisé, à gauche. ---
@@ -111,7 +114,7 @@ function ok(label, cond) {
   // --- Frappe d'une opération à risque (×(x+5)) : réserve "valide si..." + couleur alerte
   // sur les DEUX côtés (curseur du champ live, texte/fond du pill live ET du miroir). ---
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x=5');
-  await page.click('button[data-op="expr"]');
+  await page.evaluate(() => { window.App.History.selectOp('expr'); });
   await page.waitForTimeout(80);
   await page.evaluate((l) => { window.App.History.setExprChainText(l); }, '\\times\\left(x+5\\right)');
   await page.waitForTimeout(80);

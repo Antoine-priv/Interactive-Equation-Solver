@@ -37,7 +37,10 @@ function ok(label, cond) {
   }
 
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x=5');
-  await page.click('button[data-op="expr"]');
+  // 'x=5' est déjà résolue : la fenêtre d'action est masquée dessus (voir positionPanel
+  // dans toolbar.js), donc pas de bouton "Opération" à cliquer — on entre en mode 'expr'
+  // via l'API directement.
+  await page.evaluate(() => { window.App.History.selectOp('expr'); });
   await page.waitForTimeout(80);
   await page.keyboard.type('+3');
   await page.waitForTimeout(80);
@@ -97,7 +100,7 @@ function ok(label, cond) {
   // MathLive déjà présent partout ailleurs dans l'appli (voir le même délai après le tout
   // premier clic sur "Opération" dans tests/expr_chain_typing.js). ---
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x=5');
-  await page.click('button[data-op="expr"]');
+  await page.evaluate(() => { window.App.History.selectOp('expr'); });
   await page.waitForTimeout(80);
   await page.keyboard.type('+7');
   await page.waitForTimeout(80);

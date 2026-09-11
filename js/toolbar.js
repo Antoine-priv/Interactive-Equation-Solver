@@ -627,9 +627,20 @@
   // évité en priorité (limite MOLLE, voir maxBottom ci-dessous) mais cède si la fenêtre
   // est trop haute pour tenir — un chevauchement occasionnel avec un aperçu en dessous
   // reste préférable à recouvrir la ligne précédente.
-  function positionPanel(anchorRowEl, prevRowEl) {
+  //
+  // `hide` (voir renderAll dans render.js, posé dès que l'équation encadrée est résolue,
+  // "x=...") : plus aucune opération n'a de sens une fois la solution obtenue, la fenêtre
+  // entière disparaît plutôt que de rester affichée avec ses boutons pour la plupart
+  // grisés (seul "Opération" resterait actif, ce qui n'a pas de sens sur un résultat
+  // final).
+  function positionPanel(anchorRowEl, prevRowEl, hide) {
     var panelEl = document.getElementById('opButtons');
-    if (!panelEl || !anchorRowEl) return;
+    if (!panelEl) return;
+    if (hide || !anchorRowEl) {
+      panelEl.hidden = true;
+      return;
+    }
+    panelEl.hidden = false;
     var historyScroll = document.getElementById('historyScroll');
     if (!historyScroll) return;
 

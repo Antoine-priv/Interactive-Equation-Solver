@@ -48,7 +48,10 @@ function ok(label, cond) {
 
   // --- Test 3 : boutons Valider integres a la grille (pas de rangee separee) ---
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x=5');
-  await page.click('button[data-op="expr"]');
+  // 'x=5' est déjà résolue : la fenêtre d'action (dont le bouton "Opération") est masquée
+  // dessus (voir positionPanel dans toolbar.js) — on entre donc en mode 'expr' via l'API
+  // plutôt que par un clic, ce test portant sur le pavé Opération lui-même, pas ce bouton.
+  await page.evaluate(() => { window.App.History.selectOp('expr'); });
   const exprConfirmInGrid = await page.evaluate(() => {
     var cell = document.querySelector('#mathKeypadPanel .panel-confirm-cell');
     return cell ? cell.closest('.math-keypad-keys') !== null : false;
