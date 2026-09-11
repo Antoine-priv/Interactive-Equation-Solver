@@ -214,7 +214,18 @@ function applyOpAndSimplify(page, text) {
   // ProductGroup classique ((A)(B)=0) — voir detectProduitNul dans history.js. Entièrement
   // piloté via de vrais clics DOM (pas l'API), pour vérifier le bouton lui-même, pas
   // seulement l'état interne.
-  await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '(x-6)(x^2-5x)=0');
+  //
+  // App.Canvas.set(0, 0) d'abord : startNewEquation (voir history.js) ne réinitialise
+  // JAMAIS le panorama/zoom de la toile lui-même (aucune raison qu'il le fasse -- ce
+  // n'est pas son rôle) -- sans ce repli explicite, le panorama horizontal laissé par le
+  // scénario 7 ci-dessus (colonnes larges, jamais recentré horizontalement hors "wide
+  // split", voir isWideSplit dans render.js) fait apparaître cette nouvelle équation hors
+  // du viewport, provoquant un timeout sur le clic ci-dessous. Même repli que
+  // zoom_controls.js entre deux scénarios indépendants du même fichier.
+  await page.evaluate((eq) => {
+    window.App.Canvas.set(0, 0);
+    window.App.History.startNewEquation(window.App.Parser.parseEquation(eq));
+  }, '(x-6)(x^2-5x)=0');
   await page.waitForTimeout(80);
   await page.click('.eq-row.current .side[data-side="left"] .term[data-index="0"]');
   await page.click('button[data-op="produitnul"]');

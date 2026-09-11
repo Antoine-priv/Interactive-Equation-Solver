@@ -22,12 +22,13 @@ function ok(label, cond) {
   // clic de confirmation (rendu synchrone + son propre rAF), sans attendre entre les
   // deux -- exactement le scenario qui laissait des etiquettes fantomes bloquees en
   // (0,0) avant le correctif dans arrows.js (nettoyage des .arrow-label, pas seulement
-  // du svg, a chaque appel de drawAll).
-  for (let i = 0; i < 5; i++) {
-    await page.hover('button[data-op="produitnul"]');
-    await page.click('button[data-op="produitnul"]', { force: true }).catch(() => {});
-    await page.waitForTimeout(20);
-  }
+  // du svg, a chaque appel de drawAll). UNE seule fois (pas une boucle) : ce premier clic
+  // confirme reellement la scission (le terme est deja selectionne), donc le bouton lui-
+  // meme disparait ensuite (plus aucun "Produit nul" a proposer sur la colonne fraichement
+  // focalisee, sans selection) -- le hover d'une iteration suivante n'aurait alors plus
+  // rien a viser.
+  await page.hover('button[data-op="produitnul"]');
+  await page.click('button[data-op="produitnul"]', { force: true });
   await page.waitForTimeout(400);
 
   const labelInfo = await page.evaluate(() => {
