@@ -1941,9 +1941,14 @@
     // même ligne "current" dans les deux branches ci-dessus (chaîne simple ou branche
     // focalisée), y compris pendant un "produit nul"/une "racine carrée" (la fenêtre peut
     // alors chevaucher les colonnes non focalisées, voir CLAUDE.md).
+    // `branches && !branchOutlineVisible` (voir tout en haut du fichier) : mêmes clics "en
+    // dehors" de toute colonne qui masquent déjà son liseré de focus masquent aussi cette
+    // fenêtre — ses boutons agissent sur LA colonne focalisée, ça n'a pas de sens de les
+    // laisser flotter au-dessus d'une équation qui vient de perdre son focus visuel.
+    var hidePanel = scrollTargetSolved || (!!branches && !branchOutlineVisible);
     requestAnimationFrame(function () {
       if (isStaleRender()) return;
-      App.Toolbar.positionPanel(scrollTarget, opPrevRowEl, scrollTargetSolved);
+      App.Toolbar.positionPanel(scrollTarget, opPrevRowEl, hidePanel);
     });
 
     // Recentre (avec animation) lorsque le résultat encadré change réellement (nouvelle

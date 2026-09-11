@@ -24,26 +24,36 @@ function ok(label, cond) {
   const focusedCountInit = await page.$$eval('.produit-nul-branch.branch-focused', (els) => els.length);
   ok('exactly one column carries the focus outline right after the split', focusedCountInit === 1);
 
+  const panelHiddenInit = await page.$eval('#opButtons', (el) => el.hidden);
+  ok('the floating action window is shown right after the split', panelHiddenInit === false);
+
   // Bouton de zoom (chrome flottant, PAS une colonne) : ne doit jamais masquer le liseré
-  // (voir BRANCH_OUTLINE_KEEP_SELECTOR dans render.js) -- interagir avec l'UI flottante de
-  // la colonne active n'est pas un clic "en dehors" au sens de l'utilisateur.
+  // ni la fenêtre d'action (voir BRANCH_OUTLINE_KEEP_SELECTOR dans render.js) -- interagir
+  // avec l'UI flottante de la colonne active n'est pas un clic "en dehors" au sens de
+  // l'utilisateur.
   await page.click('#zoomInBtn');
   await page.waitForTimeout(150);
   const focusedAfterZoom = await page.$$eval('.produit-nul-branch.branch-focused', (els) => els.length);
   ok('clicking the zoom button does not clear the outline', focusedAfterZoom === 1);
+  const panelHiddenAfterZoom = await page.$eval('#opButtons', (el) => el.hidden);
+  ok('clicking the zoom button does not hide the action window', panelHiddenAfterZoom === false);
 
   // Clic sur le fond de la toile, loin de toute colonne ET des boutons flottants (coin
   // bas-gauche, vide -- #newEquationBtn/#undoBtn sont en haut-gauche, #zoomInBtn/
-  // #zoomOutBtn en bas-DROITE, voir style.css) : masque le liseré partout.
+  // #zoomOutBtn en bas-DROITE, voir style.css) : masque le liseré ET la fenêtre d'action
+  // partout (voir hidePanel dans render.js).
   await page.mouse.click(30, 780);
   await page.waitForTimeout(150);
   const focusedAfterOutsideClick = await page.$$eval('.produit-nul-branch.branch-focused', (els) => els.length);
   ok('clicking outside every column clears the outline everywhere', focusedAfterOutsideClick === 0);
+  const panelHiddenAfterOutsideClick = await page.$eval('#opButtons', (el) => el.hidden);
+  ok('clicking outside every column also hides the floating action window', panelHiddenAfterOutsideClick === true);
 
   await page.screenshot({ path: `${SCRATCH}/branch_outline_dismissal_hidden.png` });
 
   // Re-cliquer une colonne (la seconde, pas encore focalisee) la fait reapparaitre, sur LA
-  // BONNE colonne, sans changer le focus logique en arriere-plan (App.History.getFocusedBranch()).
+  // BONNE colonne, sans changer le focus logique en arriere-plan (App.History.getFocusedBranch()) --
+  // et ramène aussi la fenêtre d'action.
   const branchB = '.produit-nul-branch:nth-child(2)';
   await page.click(`${branchB} .side[data-side="left"] .term[data-index="0"]`);
   await page.waitForTimeout(150);
@@ -53,6 +63,9 @@ function ok(label, cond) {
 
   const bHasOutline = await page.evaluate((sel) => document.querySelector(sel).classList.contains('branch-focused'), branchB);
   ok('the outline reappears on the column that was actually clicked', bHasOutline === true);
+
+  const panelHiddenAfterClickB = await page.$eval('#opButtons', (el) => el.hidden);
+  ok('the floating action window reappears once a column is focused again', panelHiddenAfterClickB === false);
 
   const focusedBranchIdx = await page.evaluate(() => window.App.History.getFocusedBranch());
   ok('the logical focused branch really moved to column B (routing unaffected)', focusedBranchIdx === 1);
