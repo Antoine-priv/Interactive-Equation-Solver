@@ -1542,7 +1542,18 @@
       var focusedChildRes = null;
       nodeBranches.forEach(function (child, idx) {
         var col = document.createElement('div');
-        col.className = 'produit-nul-branch' + (focusedIdx === idx ? ' branch-focused' : '');
+        // `child.getBranches()` (déjà connu ICI, avant tout DOM) plutôt que le sélecteur
+        // CSS ":has(.produit-nul-split-nested)" : `col` est ajouté au DOM AVANT que
+        // renderBranchNode(child, ...) n'y insère lui-même ce wrap imbriqué plus bas — une
+        // mesure forcant la mise en page (autoFitRowFont notamment) entre les deux
+        // surprendrait alors ":has()" en plein "faux" état (colonne focalisée SANS
+        // descendant imbriqué), démarrant à tort la transition CSS du liseré (voir
+        // .produit-nul-branch.branch-focused ci-dessous) — clignotement au moindre
+        // nouveau rendu (ex. survol du bouton "Opération" plus bas dans l'arbre). La classe
+        // ci-dessous est connue et posée AVANT la moindre insertion DOM : aucune fenêtre
+        // d'état intermédiaire n'est jamais observable.
+        col.className = 'produit-nul-branch' + (focusedIdx === idx ? ' branch-focused' : '') +
+          (child.getBranches() ? ' produit-nul-branch-resplit' : '');
         col.addEventListener('click', function () { engine.setFocusedBranch(idx); });
         var chainEl = document.createElement('div');
         chainEl.className = 'produit-nul-chain';
@@ -1725,7 +1736,11 @@
       var focused = Hist.getFocusedBranch();
       var branchResults = branches.map(function (engine, idx) {
         var col = document.createElement('div');
-        col.className = 'produit-nul-branch' + (focused === idx ? ' branch-focused' : '');
+        // Voir le commentaire jumeau dans renderBranchNode (nodeBranches.forEach) : même
+        // classe posée avant toute insertion DOM, pour la même raison (évite le
+        // clignotement du liseré via ":has()" pris en flagrant délit d'état intermédiaire).
+        col.className = 'produit-nul-branch' + (focused === idx ? ' branch-focused' : '') +
+          (engine.getBranches() ? ' produit-nul-branch-resplit' : '');
         col.addEventListener('click', function () { Hist.setFocusedBranch(idx); });
         var chainEl = document.createElement('div');
         chainEl.className = 'produit-nul-chain';

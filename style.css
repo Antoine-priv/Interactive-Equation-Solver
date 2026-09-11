@@ -366,8 +366,20 @@ button {
    l'équation réellement sélectionnée — pas ce conteneur parent tout entier, qui héberge
    aussi ses étapes gelées ET les autres sous-branches. Son propre liseré serait donc
    redondant (double contour) et trompeur ; on le supprime ici pour ne garder le focus
-   visible que sur la sous-colonne effectivement sélectionnée. */
-.produit-nul-branch.branch-focused:has(.produit-nul-split-nested) {
+   visible que sur la sous-colonne effectivement sélectionnée.
+
+   ".produit-nul-branch-resplit" (posée par render.js DIRECTEMENT depuis
+   `engine.getBranches()`, connu avant toute insertion DOM), PAS ":has(.produit-nul-split-
+   nested)" : ce wrap imbriqué n'existe qu'une fois renderBranchNode(engine, ...) appelé,
+   TOUJOURS après que `col` soit déjà inséré dans le DOM (voir ce même fichier) — une
+   mesure forçant la mise en page entre les deux (ex. autoFitRowFont) aurait sinon pu
+   surprendre ":has()" dans cette fenêtre intermédiaire (colonne focalisée SANS encore son
+   descendant imbriqué), démarrant à tort la transition CSS ci-dessous à chaque nouveau
+   rendu — clignotement du liseré au moindre survol d'un bouton "Opération" plus bas dans
+   l'arbre (qui redessine tout, voir hoveredOp dans toolbar.js), sans aucun changement réel
+   de focalisation. Une classe posée AVANT toute insertion DOM n'a, elle, jamais cette
+   fenêtre d'état intermédiaire observable. */
+.produit-nul-branch.branch-focused.produit-nul-branch-resplit {
   box-shadow: inset 0 0 0 1.5px transparent;
 }
 
@@ -375,8 +387,9 @@ button {
    produit un carré parfait à l'intérieur d'une colonne "Produit nul", résolu ensuite par
    "Racine carrée" DANS cette colonne, voir renderBranchNode dans render.js) : la largeur
    fixe de .produit-nul-branch (pensée pour UNE équation) ne suffit alors plus à héberger
-   plusieurs sous-colonnes côte à côte. */
-.produit-nul-branch:has(.produit-nul-split-nested) {
+   plusieurs sous-colonnes côte à côte. Même classe ".produit-nul-branch-resplit" que
+   ci-dessus, pour la même raison (pas de ":has()", voir le commentaire juste au-dessus). */
+.produit-nul-branch.produit-nul-branch-resplit {
   max-width: none;
 }
 
@@ -509,6 +522,20 @@ button {
 .factor-slot:hover { background: var(--accent-soft-border); }
 .factor-slot.selected { background: #fde68a; color: #2b2100; }
 .factor-slot.selected:hover { background: #f6c33d; }
+
+/* Colonne "Produit nul"/"Racine carrée" PAS focalisée (voir opts.focused dans render.js,
+   qui bloque déjà la sélection elle-même côté clic — un premier clic n'y fait que
+   focaliser la colonne) : le survol gris n'a plus lieu d'être non plus, pour ne pas
+   suggérer à tort qu'un clic y sélectionnerait le terme/facteur survolé. Plus spécifique
+   que .term.selectable:hover/.factor-slot:hover ci-dessus (une classe de plus), pas
+   besoin de les réordonner. S'applique à n'importe quelle profondeur d'imbrication : un
+   ancêtre ".produit-nul-branch" pas focalisé désactive le survol de TOUS ses termes,
+   y compris ceux d'une sous-colonne elle-même marquée ".branch-focused" en son sein (déjà
+   hors du chemin réellement actif dans ce cas, voir opts.focused/childFocused). */
+.produit-nul-branch:not(.branch-focused) .term.selectable:hover,
+.produit-nul-branch:not(.branch-focused) .factor-slot:hover {
+  background: none;
+}
 
 /* Parenthèse d'un groupe dans lequel on est "entré" (voir pending.drilled et
    drilledGroupLatex) : cliquer dedans (ou clic droit n'importe où sur la page, voir

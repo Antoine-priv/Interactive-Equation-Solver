@@ -128,6 +128,29 @@ function applyOpAndSimplify(page, text) {
   ok('2 nested column elements actually rendered in the DOM', domNested === 2);
   await page.screenshot({ path: `${SCRATCH}/nested_branch_split.png` });
 
+  // 5b) Bug signalé : survoler le bouton "Opération" d'une équation NICHÉE dans une
+  // sous-colonne redessine tout (voir hoveredOp dans toolbar.js) — ce conteneur parent
+  // ("(x+3)^2=16", qui a lui-même une scission imbriquée) ne doit JAMAIS montrer son
+  // propre liseré pendant ce survol (ni transitionner brièvement vers lui), seule la
+  // sous-colonne réellement sélectionnée le montre — voir ".produit-nul-branch-resplit"
+  // dans style.css/render.js (remplace ":has()", vulnérable à un état DOM intermédiaire).
+  const outerColSel = '#history > .produit-nul-split > .produit-nul-branch.branch-focused';
+  const outerShadowBefore = await page.evaluate((sel) => getComputedStyle(document.querySelector(sel)).boxShadow, outerColSel);
+  const opBtn = await page.$('button[data-op="expr"]');
+  const opBtnBox = await opBtn.boundingBox();
+  await page.mouse.move(opBtnBox.x + opBtnBox.width / 2, opBtnBox.y + opBtnBox.height / 2);
+  await page.waitForTimeout(50);
+  const outerShadowDuring = await page.evaluate((sel) => getComputedStyle(document.querySelector(sel)).boxShadow, outerColSel);
+  await page.waitForTimeout(200);
+  const outerShadowSettled = await page.evaluate((sel) => getComputedStyle(document.querySelector(sel)).boxShadow, outerColSel);
+  await page.mouse.move(10, 10);
+  await page.waitForTimeout(50);
+  const outerShadowAfter = await page.evaluate((sel) => getComputedStyle(document.querySelector(sel)).boxShadow, outerColSel);
+  console.log('liseré colonne parente (re-scindée) avant/pendant/après survol "Opération":',
+    JSON.stringify({ before: outerShadowBefore, during: outerShadowDuring, settled: outerShadowSettled, after: outerShadowAfter }));
+  ok('outer column outline never leaves its suppressed (transparent) resting state while hovering "Opération" on a nested equation',
+    outerShadowBefore === outerShadowDuring && outerShadowDuring === outerShadowSettled && outerShadowSettled === outerShadowAfter);
+
   // 6) Termine de résoudre TOUT l'arbre (les 2 sous-branches + l'autre colonne de
   // premier niveau) et vérifie le résumé final agrégé (pas seulement le premier niveau).
   await page.evaluate((idx) => {
@@ -281,6 +304,31 @@ function applyOpAndSimplify(page, text) {
   const afterSecondSiblingClick = await page.evaluate((idx) => window.App.History.getBranches()[idx].getPending().selectedLeft.length, otherTopIdx);
   ok('second click on the now-focused column selects the term normally', afterSecondSiblingClick === 1);
   await page.screenshot({ path: `${SCRATCH}/branch_focus_before_select.png` });
+
+  // 11) Le survol gris (voir .term.selectable:hover dans style.css) doit lui aussi rester
+  // désactivé tant que la colonne n'est pas focalisée — cohérent avec le clic (§10
+  // ci-dessus) : un terme qui ne se sélectionne pas au clic ne doit pas non plus SEMBLER
+  // survolable. `quadIdx` (celle contenant "x(x-5)=0", elle-même déjà re-scindée) vient
+  // de perdre le focus au profit de `otherTopIdx` ci-dessus.
+  const quadTermSel = '#history > .produit-nul-split > .produit-nul-branch:not(.branch-focused) .term.selectable';
+  const quadTermHandle = await page.$(quadTermSel);
+  ok('unfocused sibling column ("x(x-5)=0") has a hoverable-looking term in the DOM', !!quadTermHandle);
+  const quadTermBox = await quadTermHandle.boundingBox();
+  await page.mouse.move(quadTermBox.x + quadTermBox.width / 2, quadTermBox.y + quadTermBox.height / 2);
+  await page.waitForTimeout(60);
+  const quadTermBg = await page.evaluate((sel) => getComputedStyle(document.querySelector(sel)).backgroundColor, quadTermSel);
+  console.log('fond au survol dans la colonne NON focalisee:', quadTermBg);
+  ok('hover gray background is disabled on a term inside a not-focused column', /rgba\(0,\s*0,\s*0,\s*0\)/.test(quadTermBg));
+
+  const focusedTermSel = '#history > .produit-nul-split > .produit-nul-branch.branch-focused .eq-row.current .side[data-side="left"] .term[data-index="1"]';
+  const focusedTermHandle = await page.$(focusedTermSel);
+  ok('now-focused sibling column term found', !!focusedTermHandle);
+  const focusedTermBox = await focusedTermHandle.boundingBox();
+  await page.mouse.move(focusedTermBox.x + focusedTermBox.width / 2, focusedTermBox.y + focusedTermBox.height / 2);
+  await page.waitForTimeout(60);
+  const focusedTermBg = await page.evaluate((sel) => getComputedStyle(document.querySelector(sel)).backgroundColor, focusedTermSel);
+  console.log('fond au survol dans la colonne focalisee:', focusedTermBg);
+  ok('hover gray background still shows normally on a term inside the focused column', !/rgba\(0,\s*0,\s*0,\s*0\)/.test(focusedTermBg));
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
