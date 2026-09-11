@@ -360,6 +360,17 @@ button {
   box-shadow: inset 0 0 0 2px var(--accent);
 }
 
+/* Colonne qui s'est scindée À NOUVEAU (nested split, voir renderBranchNode dans
+   render.js) : c'est alors UNE de ses propres sous-colonnes (elle aussi
+   ".branch-focused", la règle ci-dessus s'y applique donc déjà) qui représente
+   l'équation réellement sélectionnée — pas ce conteneur parent tout entier, qui héberge
+   aussi ses étapes gelées ET les autres sous-branches. Son propre liseré serait donc
+   redondant (double contour) et trompeur ; on le supprime ici pour ne garder le focus
+   visible que sur la sous-colonne effectivement sélectionnée. */
+.produit-nul-branch.branch-focused:has(.produit-nul-split-nested) {
+  box-shadow: inset 0 0 0 1.5px transparent;
+}
+
 /* Une colonne peut elle-même se scinder À NOUVEAU (ex. une identité remarquable qui
    produit un carré parfait à l'intérieur d'une colonne "Produit nul", résolu ensuite par
    "Racine carrée" DANS cette colonne, voir renderBranchNode dans render.js) : la largeur

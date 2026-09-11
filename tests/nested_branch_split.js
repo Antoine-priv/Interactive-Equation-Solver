@@ -241,6 +241,47 @@ function applyOpAndSimplify(page, text) {
     JSON.stringify(nestedRepro[1]) === JSON.stringify({ left: [{ coeff: 1, pow: 1 }, { coeff: -5, pow: 0 }], right: [{ coeff: 0, pow: 0 }] }));
   await page.screenshot({ path: `${SCRATCH}/nested_produitnul_factorgroup_split.png` });
 
+  // 9) La colonne de premier niveau "quadIdx" (celle-ci) s'est donc scindée À NOUVEAU :
+  // elle héberge maintenant ses propres étapes gelées ET la scission imbriquée, ce n'est
+  // plus "une équation" mais un conteneur de plusieurs. Son propre liseré de focus
+  // (.branch-focused, voir style.css) doit s'effacer au profit de celui de la sous-colonne
+  // réellement sélectionnée (x=0, focalisée par défaut) — voir la règle CSS ajoutée pour
+  // ".produit-nul-branch.branch-focused:has(.produit-nul-split-nested)".
+  const shadows = await page.evaluate(() => {
+    var outerEl = document.querySelector('#history > .produit-nul-split > .produit-nul-branch.branch-focused');
+    var nestedEl = document.querySelector('#history .produit-nul-split-nested > .produit-nul-branch.branch-focused');
+    return { outer: outerEl ? getComputedStyle(outerEl).boxShadow : null, nested: nestedEl ? getComputedStyle(nestedEl).boxShadow : null };
+  });
+  console.log('box-shadow colonne parente re-scindee vs sous-colonne focalisee:', JSON.stringify(shadows));
+  const TRANSPARENT_RE = /rgba\(0,\s*0,\s*0,\s*0\)/;
+  ok('outer column outline is suppressed once it hosts a nested split', shadows.outer && TRANSPARENT_RE.test(shadows.outer));
+  ok('the nested focused sub-column keeps its own visible accent outline', shadows.nested && !TRANSPARENT_RE.test(shadows.nested));
+
+  // 10) Cliquer un terme dans une colonne de PREMIER NIVEAU pas encore focalisée (l'autre
+  // facteur, "x-6=0", jamais visitée depuis le tout premier "Produit nul" de ce repro) ne
+  // doit QUE la focaliser — sans sélectionner accidentellement le terme sur lequel le clic
+  // a atterri. Un second clic, une fois focalisée, sélectionne normalement — voir le garde
+  // `opts.focused === false` ajouté dans onTermClick (render.js).
+  const otherTopIdx = quadIdx === 0 ? 1 : 0;
+  const siblingSel = '#history > .produit-nul-split > .produit-nul-branch:not(.branch-focused) .eq-row.current .side[data-side="left"] .term[data-index="0"]';
+  ok('sibling top-level column ("x-6=0") term found in the DOM', !!(await page.$(siblingSel)));
+  await page.click(siblingSel);
+  await page.waitForTimeout(100);
+  const afterFirstSiblingClick = await page.evaluate((idx) => ({
+    focused: window.App.History.getFocusedBranch() === idx,
+    selectedCount: window.App.History.getBranches()[idx].getPending().selectedLeft.length
+  }), otherTopIdx);
+  console.log('apres 1er clic sur "x-6=0" (jamais visitee):', JSON.stringify(afterFirstSiblingClick));
+  ok('first click on a not-yet-focused column focuses it...', afterFirstSiblingClick.focused);
+  ok('...without selecting the term it landed on', afterFirstSiblingClick.selectedCount === 0);
+
+  const focusedSel = '#history > .produit-nul-split > .produit-nul-branch.branch-focused .eq-row.current .side[data-side="left"] .term[data-index="0"]';
+  await page.click(focusedSel);
+  await page.waitForTimeout(100);
+  const afterSecondSiblingClick = await page.evaluate((idx) => window.App.History.getBranches()[idx].getPending().selectedLeft.length, otherTopIdx);
+  ok('second click on the now-focused column selects the term normally', afterSecondSiblingClick === 1);
+  await page.screenshot({ path: `${SCRATCH}/branch_focus_before_select.png` });
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;

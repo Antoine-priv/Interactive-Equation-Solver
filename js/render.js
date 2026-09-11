@@ -1240,12 +1240,26 @@
           selectedInner: new Set(pending.selectedInner),
           draggable: innerDraggable,
           onInnerClick: function (innerIdx) {
+            // Colonne pas encore focalisée à ce rendu (voir le même garde-fou dans
+            // onTermClick ci-dessus, notifyFocus compris — ce clic natif s'arrête ici
+            // (stopPropagation, voir plus bas dans ce fichier) et ne bulle JAMAIS jusqu'à
+            // la colonne, contrairement à onTermClick : sans notifyFocus explicite ici,
+            // rien ne (re)focaliserait la colonne) : ce clic la focalise seulement, sans
+            // sélectionner le terme intérieur cliqué.
+            if (opts.focused === false) {
+              if (opts.notifyFocus) opts.notifyFocus();
+              return;
+            }
             if (opts.onBeforeAction) opts.onBeforeAction();
             // Le double-clic (descendre encore d'un niveau) est détecté par mesure de
             // temps DANS toggleInnerSelection elle-même (voir consumeDoubleClick), pas ici.
             engine.toggleInnerSelection(innerIdx);
           },
           onExitDrill: function () {
+            if (opts.focused === false) {
+              if (opts.notifyFocus) opts.notifyFocus();
+              return;
+            }
             if (opts.onBeforeAction) opts.onBeforeAction();
             engine.exitDrill();
           },
@@ -1272,6 +1286,19 @@
         drilled: drilledOpt,
         selectedFactors: selectedFactorsOpt,
         onTermClick: function (side, idx, targetEl, isDenPart) {
+          // Colonne de branche PAS ENCORE focalisée au moment de ce rendu (voir
+          // opts.focused/opts.notifyFocus, câblés depuis renderBranchNode — toujours
+          // `undefined`, jamais `false`, hors "Produit nul") : ce premier clic ne fait
+          // QUE la focaliser (notifyFocus, la variante NON silencieuse — sans action
+          // réelle à la suite pour déclencher son propre rendu, contrairement à
+          // onBeforeAction plus bas, silencieux car toujours suivi d'un vrai rendu à lui)
+          // sans sélectionner le terme cliqué — évite qu'un simple clic pour activer une
+          // colonne ne sélectionne accidentellement un de ses termes en même temps. Un
+          // second clic, une fois la colonne redessinée focalisée, sélectionne normalement.
+          if (opts.focused === false) {
+            if (opts.notifyFocus) opts.notifyFocus();
+            return;
+          }
           if (opts.onBeforeAction) opts.onBeforeAction();
           // Le double-clic (entrer dans le groupe, dans UNE branche précise d'un
           // ProductGroup, ou dans le dénominateur-expression d'une fraction) est détecté
@@ -1533,6 +1560,15 @@
             if (opts.onBeforeAction) opts.onBeforeAction();
             engine.focusBranch(idx);
           },
+          // Variante NON silencieuse de onBeforeAction ci-dessus (même chaînage parent
+          // d'abord) : déclenche un vrai rendu à chaque niveau, pour le cas où AUCUNE
+          // action réelle ne suit (un premier clic dans une colonne pas encore focalisée,
+          // voir onTermClick/onInnerClick/onExitDrill plus haut) — sans quoi la focalisation
+          // resterait invisible (état interne à jour, DOM jamais redessiné).
+          notifyFocus: function () {
+            if (opts.notifyFocus) opts.notifyFocus();
+            engine.setFocusedBranch(idx);
+          },
           focused: childFocused
         });
         if (idx === focusedIdx) {
@@ -1699,6 +1735,10 @@
         var branchRes = renderBranchNode(engine, chainEl, {
           noDrag: true, // simplifie le focus multi-branches (voir la tâche associée)
           onBeforeAction: function () { Hist.focusBranch(idx); },
+          // Variante NON silencieuse de onBeforeAction ci-dessus, pour le cas où AUCUNE
+          // action réelle ne suit (voir le même commentaire dans le renderBranchNode
+          // imbriqué plus haut, et onTermClick/onInnerClick/onExitDrill dans renderChain).
+          notifyFocus: function () { Hist.setFocusedBranch(idx); },
           // Colonne pas active : jamais d'aperçu en direct (voir shouldShowLivePreview),
           // même si une sélection ou un survol y correspondrait par ailleurs.
           focused: focused === idx
