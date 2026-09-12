@@ -14,14 +14,23 @@
   // recentre que lorsque CE moteur précis avance vraiment d'une étape — jamais pour un
   // simple changement de focus entre des branches déjà affichées.
   var lastCenteredStepByEngine = new WeakMap();
-  // Suivi PAR MOTEUR (même principe que lastCenteredStepByEngine ci-dessus) du dernier
-  // aperçu "pending" réellement affiché (voir isNewPendingPreview dans renderChain) : la
-  // ligne "pending" est entièrement reconstruite à CHAQUE rendu, donc sans cette mémoire
-  // son animation d'apparition (voir .preview-pop-in dans style.css) rejouerait à tort
-  // dès qu'un rendu est redéclenché sans que le contenu prévisualisé ait vraiment changé
-  // — notamment survoler "Opération" PUIS cliquer dessus (voir selectOp dans history.js),
-  // qui affiche exactement la même ligne sous deux valeurs différentes de pending.opType.
-  var lastPendingSignatureByEngine = new WeakMap();
+  // Suivi PAR MOTEUR (même principe que lastCenteredStepByEngine ci-dessus) de la
+  // présence, au dernier rendu, d'un aperçu "pending" (voir isNewPendingPreview dans
+  // renderChain) : la ligne "pending" est entièrement reconstruite à CHAQUE rendu, donc
+  // sans cette mémoire son animation d'apparition (voir .preview-pop-in dans style.css)
+  // rejouerait à tort dès qu'un rendu est redéclenché sans que la ligne vienne de RÉELLEMENT
+  // apparaître — notamment survoler "Opération" PUIS cliquer dessus (voir selectOp dans
+  // history.js), qui affiche exactement la même ligne sous deux valeurs différentes de
+  // pending.opType, ou taper un caractère de plus dans la chaîne "Opération"/le facteur
+  // commun de "Factoriser" (setExprChainText/setFactorTermLatex), qui reconstruit la ligne
+  // avec un CONTENU différent (le résultat prévisualisé change) sans que la ligne, elle,
+  // vienne d'apparaître. Seul un vrai passage "pas de ligne pending" -> "ligne pending"
+  // (donc `false` -> `true` ci-dessous) rejoue l'animation, jamais un simple changement de
+  // contenu pendant qu'elle reste continûment affichée — un mode déjà engagé ('expr'/
+  // 'factor') bloque de toute façon tout autre bouton tant qu'il n'est pas annulé/validé
+  // (voir initToolbar dans toolbar.js), donc CE passage à `false` (pending redevenu null)
+  // est bien systématique avant qu'un nouvel aperçu, réellement distinct, puisse apparaître.
+  var lastPendingShownByEngine = new WeakMap();
   // Largeur du scroller au moment du dernier recentrage horizontal (voir plus bas) : une
   // scission ("Produit nul"/"Racine carrée") utilise un scrollLeft ABSOLU calculé une
   // fois, alors que .produit-nul-split (voir style.css) se repositionne tout seul en
@@ -1461,18 +1470,31 @@
       var pendingRow = createRow(preview.equation, { pending: true, solved: false });
       // "Pop" à l'apparition (voir .preview-pop-in dans style.css) : la ligne "pending"
       // est entièrement reconstruite à chaque rendu (jamais réutilisée, voir plus haut),
-      // donc rejouer l'animation à CHAQUE rendu la ferait aussi rejouer quand le CONTENU
-      // prévisualisé, lui, n'a pas changé — notamment le survol de "Opération" suivi d'un
-      // clic dessus (voir selectOp dans history.js) : la ligne affichée est rigoureusement
-      // la même (chaîne toujours vide), seul `pending.opType` passe de null à 'expr', ce
-      // qui déclenchait pourtant un second "pop" bien qu'aucune nouveauté ne soit
-      // réellement apparue à l'écran. isNewPendingPreview (voir lastPendingSignatureByEngine
-      // tout en haut) compare le contenu réellement affiché (équation + étiquettes) au
-      // dernier rendu de CE moteur : seule une vraie différence rejoue l'animation.
-      var previewSignature = JSON.stringify(preview.equation) + '|' + formatOpLabel(preview.opLeft) + '|' + formatOpLabel(preview.opRight);
-      var isNewPendingPreview = lastPendingSignatureByEngine.get(engine) !== previewSignature;
-      lastPendingSignatureByEngine.set(engine, previewSignature);
-      if (isNewPendingPreview) pendingRow.classList.add('preview-pop-in');
+      // donc rejouer l'animation à CHAQUE rendu la ferait aussi rejouer alors que la ligne,
+      // elle, reste continûment affichée depuis le rendu précédent — notamment le survol de
+      // "Opération" suivi d'un clic dessus (voir selectOp dans history.js), ou taper un
+      // caractère de plus dans la chaîne "Opération"/le facteur commun de "Factoriser" (voir
+      // lastPendingShownByEngine tout en haut pour le détail des deux cas). Seul un vrai
+      // passage "pas de ligne" -> "ligne" rejoue l'animation.
+      var isNewPendingPreview = !lastPendingShownByEngine.get(engine);
+      if (isNewPendingPreview) {
+        pendingRow.classList.add('preview-pop-in');
+        // Ne verrouille "déjà montré" qu'APRÈS ce tour synchrone (microtâche), pas tout de
+        // suite : un même geste utilisateur peut déclencher PLUSIEURS rendus synchrones
+        // d'affilée avant qu'aucun ne soit jamais peint — ex. la toute première frappe
+        // d'"Opération" au clavier physique (voir keyboard.js) appelle coup sur coup
+        // App.History.selectOp('expr') PUIS setExprChainText(key), chacun via notify() son
+        // propre rendu complet de #history (voir plus haut : jamais réutilisé). Verrouiller
+        // dès CE rendu-ci ferait manquer le "pop" sur le second (le seul réellement peint,
+        // le premier étant aussitôt remplacé) puisqu'il verrait alors "déjà montré". Une
+        // microtâche s'exécute après la fin de CE tour (donc après tous ses rendus
+        // synchrones, mais avant le prochain rendu déclenché par un événement séparé,
+        // ex. la frappe suivante, gérée nativement par le <math-field>) : tous les rendus
+        // synchrones de CE tour voient donc encore "pas montré" et rejouent tous le "pop"
+        // (sans effet visible en trop, seul le dernier de la série étant réellement peint),
+        // tandis qu'un rendu d'un tour ULTÉRIEUR verra bien "déjà montré".
+        Promise.resolve().then(function () { lastPendingShownByEngine.set(engine, true); });
+      }
       container.appendChild(pendingRow);
       autoFitRowFont(pendingRow);
       // Quel(s) côté(s) doi(ven)t recevoir une flèche même sans étiquette (voir
@@ -1502,7 +1524,7 @@
       });
       liveInfo = computeLiveOpInfo(pending, preview);
     } else {
-      lastPendingSignatureByEngine.delete(engine);
+      lastPendingShownByEngine.delete(engine);
     }
 
     return { rowsData: rowsData, framedRowEl: framedRowEl, framedSolved: framedSolved, liveInfo: liveInfo };
