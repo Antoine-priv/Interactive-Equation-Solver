@@ -1645,7 +1645,10 @@ button {
 .math-keypad-peek {
   position: fixed;
   right: 22px;
-  bottom: 22px;
+  /* Empile au-dessus de #zoomInBtn (bottom: 78px, 44px de haut) avec le même écart de
+     12px que celui séparant #zoomInBtn/#zoomOutBtn, pour ne pas superposer ce petit
+     bouton "clavier" replié à l'icône zoom arrière (elles occupent sinon le même coin). */
+  bottom: 134px;
   width: 44px;
   height: 44px;
   display: flex;
