@@ -1109,7 +1109,16 @@ button {
   cursor: pointer;
   text-align: left;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  /* "width" DOIT transitionner à la même durée/allure que le gap de .op-row-split et la
+     largeur de la coche (voir plus haut) : les trois ne se compensent exactement (somme
+     toujours égale à 212px, voir le commentaire de .op-row-split) que si les TROIS
+     progressent ensemble. Sans "width" ici, l'étiquette sautait instantanément à 212px
+     dès le clic pendant que le gap/la coche, eux, continuaient encore à rétrécir sur
+     0.22s — la ligne (et donc la fenêtre #opButtons, qui épouse sa largeur) gonflait
+     alors momentanément jusqu'à 212+8+54=274px, décalant tout le panneau vers la gauche
+     (positionPanel le recule d'autant plus que #opButtons est large, voir toolbar.js). */
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease,
+              width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 /* Contour bleu au survol (jamais un remplissage plein, réservé à la sélection ci-dessous
    — voir CLAUDE.md) : box-shadow "inset" plutôt que border, pour ne pas décaler la mise
