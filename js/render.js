@@ -31,6 +31,18 @@
   // (voir initToolbar dans toolbar.js), donc CE passage à `false` (pending redevenu null)
   // est bien systématique avant qu'un nouvel aperçu, réellement distinct, puisse apparaître.
   var lastPendingShownByEngine = new WeakMap();
+  // Vrai UNIQUEMENT pendant le TOUT PREMIER appel à renderAll() — le rendu de montage,
+  // déclenché par App.History.init() juste après le chargement de la page (voir
+  // DOMContentLoaded dans main.js). Capturé une fois dans une variable LOCALE en tête de
+  // renderAll (voir wasInitialMount plus bas, jamais relu depuis cette variable-ci une
+  // fois capturé) puis retombe à `false` — closures obligent, tout code planifié via
+  // requestAnimationFrame DEPUIS ce premier appel (positionPanel, le recentrage "smooth")
+  // continue de voir la valeur `true` qu'il a capturée, même une fois ce module-ci déjà
+  // retombé à `false` pour de bon. Consulté pour que ce tout premier rendu affiche
+  // directement sa mise en page finale (équation déjà centrée, fenêtre d'action déjà en
+  // place) sans aucune des animations normalement jouées lors d'un changement d'état réel —
+  // rien n'a "changé" aux yeux de l'utilisateur puisqu'il n'a encore rien vu du tout.
+  var isInitialMount = true;
   // Largeur du scroller au moment du dernier recentrage horizontal (voir plus bas) : une
   // scission ("Produit nul"/"Racine carrée") utilise un scrollLeft ABSOLU calculé une
   // fois, alors que .produit-nul-split (voir style.css) se repositionne tout seul en
@@ -1553,6 +1565,13 @@
     var history = document.getElementById('history');
     var scroller = document.getElementById('historyScroll');
     if (!history) return;
+    // Capturé AVANT de retomber tout de suite à `false` (voir isInitialMount tout en haut
+    // du fichier pour la raison de cette capture immédiate plutôt qu'en toute fin de
+    // fonction) : tout code ci-dessous, y compris à l'intérieur d'un requestAnimationFrame
+    // planifié plus bas, doit lire CETTE variable locale — jamais isInitialMount
+    // directement, qui a déjà basculé par la ligne suivante.
+    var wasInitialMount = isInitialMount;
+    isInitialMount = false;
     // Voir renderSeq tout en haut du fichier : capturé ici, comparé dans chaque rAF
     // planifié plus bas pour ignorer un callback devenu périmé.
     renderSeq += 1;
@@ -2053,7 +2072,12 @@
     var hidePanel = scrollTargetSolved || (!!branches && !branchOutlineVisible);
     requestAnimationFrame(function () {
       if (isStaleRender()) return;
-      App.Toolbar.positionPanel(scrollTarget, opPrevRowEl, hidePanel, isNewStep);
+      // `isNewStep && !wasInitialMount` (jamais `isNewStep` seul) : positionPanel doit bien
+      // POSITIONNER la fenêtre au montage (une VRAIE cible existe déjà, le tout premier
+      // step), seulement sans l'animation "pop" qu'un `isNewStep` à `true` déclencherait
+      // sinon (voir wasInitialMount tout en haut du fichier) — applyPanelPosition, la
+      // pose effective, tourne de toute façon indépendamment de ce paramètre.
+      App.Toolbar.positionPanel(scrollTarget, opPrevRowEl, hidePanel, isNewStep && !wasInitialMount);
     });
 
     // Recentre (avec animation) lorsque le résultat encadré change réellement (nouvelle
@@ -2111,7 +2135,11 @@
       // bon" plutôt qu'une transition utile. Sauter directement à la position finale évite
       // ce blanc/faux départ ; la scission "simple" (colonnes qui tiennent, pas de
       // changement de largeur de #history) garde, elle, son animation habituelle.
-      var scrollOpts = { behavior: (isNewStep && !isWideSplit) ? 'smooth' : 'auto' };
+      // `!wasInitialMount` en plus : le tout premier rendu de la page a bien une VRAIE
+      // "nouvelle étape" à centrer (le tout premier step), mais doit y sauter directement
+      // plutôt que d'y glisser — rien ne "bouge" aux yeux de l'utilisateur qui n'a encore
+      // rien vu, voir wasInitialMount tout en haut du fichier.
+      var scrollOpts = { behavior: (isNewStep && !isWideSplit && !wasInitialMount) ? 'smooth' : 'auto' };
       if (isNewStep && scrollTarget) {
         var targetRect = scrollTarget.getBoundingClientRect();
         // getBoundingClientRect renvoie une position/taille ÉCRAN (affectée par le zoom

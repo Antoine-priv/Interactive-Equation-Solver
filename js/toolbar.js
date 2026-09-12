@@ -575,13 +575,26 @@
   // `transitionend` à attendre.
   var prefersReducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
+  // Vrai jusqu'à la fin du TOUT PREMIER appel à renderToolbar() — le rendu de montage,
+  // déclenché par App.History.init() juste après le chargement de la page (voir
+  // DOMContentLoaded dans main.js, seul et unique appelant de renderToolbar, jamais
+  // rappelée ailleurs). Pendant qu'il est vrai, setRowVisibility (plus bas) bascule
+  // directement `hidden` sans transition, comme prefersReducedMotion ci-dessus : ce tout
+  // premier rendu doit afficher directement la disposition FINALE des boutons (les
+  // inutilisables déjà masqués), jamais les faire d'abord tous apparaître pour ensuite se
+  // réduire un par un sous les yeux de l'utilisateur. Remis à `false` à la toute fin de
+  // renderToolbar (pas au début) : la boucle ci-dessous, elle, reste synchrone du début à
+  // la fin d'UN appel, donc lire cette même valeur tout du long de CET appel est sûr — rien
+  // ici n'est différé (pas de requestAnimationFrame dans cette fonction).
+  var isInitialToolbarRender = true;
+
   // Bascule une rangée .op-row visible/masquée en animant l'apparition ("pop", voir
   // .op-row.row-appearing dans style.css) et la disparition (réduction de hauteur, voir
   // .op-row.row-hidden) plutôt que de poser `hidden` d'un coup. Idempotent (comme l'ancien
   // `row.hidden = unusable`) : appelé à CHAQUE renderToolbar, donc ne doit rien redéclencher
   // si l'état visuel demandé est déjà celui en cours (y compris EN COURS de transition).
   function setRowVisibility(row, unusable) {
-    if (prefersReducedMotion) {
+    if (prefersReducedMotion || isInitialToolbarRender) {
       row.hidden = unusable;
       return;
     }
@@ -765,6 +778,10 @@
         panel.appendChild(err);
       }
     }
+    // Retirée seulement ICI, en tout dernier (jamais en tête de fonction) : voir son
+    // commentaire de déclaration — tout ce qui précède dans CET appel doit encore la lire
+    // à `true`.
+    isInitialToolbarRender = false;
   }
 
   // Repositionne la fenêtre flottante des boutons d'action à gauche de `anchorRowEl`
