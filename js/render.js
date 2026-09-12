@@ -14,6 +14,14 @@
   // recentre que lorsque CE moteur précis avance vraiment d'une étape — jamais pour un
   // simple changement de focus entre des branches déjà affichées.
   var lastCenteredStepByEngine = new WeakMap();
+  // Suivi PAR MOTEUR (même principe que lastCenteredStepByEngine ci-dessus) du dernier
+  // aperçu "pending" réellement affiché (voir isNewPendingPreview dans renderChain) : la
+  // ligne "pending" est entièrement reconstruite à CHAQUE rendu, donc sans cette mémoire
+  // son animation d'apparition (voir .preview-pop-in dans style.css) rejouerait à tort
+  // dès qu'un rendu est redéclenché sans que le contenu prévisualisé ait vraiment changé
+  // — notamment survoler "Opération" PUIS cliquer dessus (voir selectOp dans history.js),
+  // qui affiche exactement la même ligne sous deux valeurs différentes de pending.opType.
+  var lastPendingSignatureByEngine = new WeakMap();
   // Largeur du scroller au moment du dernier recentrage horizontal (voir plus bas) : une
   // scission ("Produit nul"/"Racine carrée") utilise un scrollLeft ABSOLU calculé une
   // fois, alors que .produit-nul-split (voir style.css) se repositionne tout seul en
@@ -1453,11 +1461,18 @@
       var pendingRow = createRow(preview.equation, { pending: true, solved: false });
       // "Pop" à l'apparition (voir .preview-pop-in dans style.css) : la ligne "pending"
       // est entièrement reconstruite à chaque rendu (jamais réutilisée, voir plus haut),
-      // donc cette classe posée à la création rejoue l'animation exactement quand
-      // l'aperçu apparaît (survol démarré/nouvelle étape engagée) — jamais en boucle,
-      // puisque renderAll lui-même n'est pas rappelé en continu pendant un survol figé
-      // (seulement mouseenter/mouseleave, voir initToolbar).
-      pendingRow.classList.add('preview-pop-in');
+      // donc rejouer l'animation à CHAQUE rendu la ferait aussi rejouer quand le CONTENU
+      // prévisualisé, lui, n'a pas changé — notamment le survol de "Opération" suivi d'un
+      // clic dessus (voir selectOp dans history.js) : la ligne affichée est rigoureusement
+      // la même (chaîne toujours vide), seul `pending.opType` passe de null à 'expr', ce
+      // qui déclenchait pourtant un second "pop" bien qu'aucune nouveauté ne soit
+      // réellement apparue à l'écran. isNewPendingPreview (voir lastPendingSignatureByEngine
+      // tout en haut) compare le contenu réellement affiché (équation + étiquettes) au
+      // dernier rendu de CE moteur : seule une vraie différence rejoue l'animation.
+      var previewSignature = JSON.stringify(preview.equation) + '|' + formatOpLabel(preview.opLeft) + '|' + formatOpLabel(preview.opRight);
+      var isNewPendingPreview = lastPendingSignatureByEngine.get(engine) !== previewSignature;
+      lastPendingSignatureByEngine.set(engine, previewSignature);
+      if (isNewPendingPreview) pendingRow.classList.add('preview-pop-in');
       container.appendChild(pendingRow);
       autoFitRowFont(pendingRow);
       // Quel(s) côté(s) doi(ven)t recevoir une flèche même sans étiquette (voir
@@ -1479,9 +1494,15 @@
         opRightWarn: descHasZeroRisk(preview.opRight),
         pending: true,
         pendingForceLeft: isExprLikeActive(pending) || pendingLeftChanged,
-        pendingForceRight: isExprLikeActive(pending) || pendingRightChanged
+        pendingForceRight: isExprLikeActive(pending) || pendingRightChanged,
+        // Voir isNewPendingPreview ci-dessus : la flèche qui mène à cette ligne ne doit,
+        // elle non plus, se "tracer" que quand la ligne est une vraie nouveauté (voir
+        // isGrowingArrow dans arrows.js), jamais en continuation d'un aperçu déjà montré.
+        pendingIsNew: isNewPendingPreview
       });
       liveInfo = computeLiveOpInfo(pending, preview);
+    } else {
+      lastPendingSignatureByEngine.delete(engine);
     }
 
     return { rowsData: rowsData, framedRowEl: framedRowEl, framedSolved: framedSolved, liveInfo: liveInfo };

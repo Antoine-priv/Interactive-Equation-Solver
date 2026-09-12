@@ -508,6 +508,25 @@
     var hasFork = fork && fork.from && fork.to && fork.to.length > 0;
     if (!hasRowArrows && !hasFork) return;
 
+    // La ligne/le bloc "pending" qui vient d'apparaître (voir .preview-pop-in dans
+    // style.css, posée par render.js) est encore en plein "pop" (transform: scale(...))
+    // au moment précis où CE rendu s'exécute — toujours planifié un cran plus tard via
+    // requestAnimationFrame (voir renderAll dans render.js), donc bien après l'insertion
+    // dans le DOM, mais pas forcément après que l'animation ait fini de grandir. Or
+    // TOUTE la géométrie ci-dessous (computeSideGeometry, drawFork) se base sur
+    // getBoundingClientRect(), qui reflète ce scale TRANSITOIRE plutôt que la position
+    // RÉELLE, au repos, du texte — la flèche viserait alors où le texte se trouvait
+    // pendant le "pop", pas où il finit par se stabiliser (la pointe atterrit alors trop
+    // loin À L'INTÉRIEUR de l'équation, voir le rapport de bug associé). On neutralise
+    // donc temporairement cette seule animation (jamais celles, déjà réglées, des flèches
+    // elles-mêmes) le temps de mesurer/tracer, avant de la restaurer : elle reprend alors
+    // sa course depuis son tout DÉBUT, mais toujours avant le moindre repaint réel côté
+    // utilisateur (tout se joue de façon synchrone, dans le même tick JS), donc sans le
+    // moindre saut visible.
+    var poppingEls = Array.prototype.slice.call(history.querySelectorAll(':scope > .preview-pop-in'));
+    var poppingElsPrevAnimation = poppingEls.map(function (el) { return el.style.animation; });
+    poppingEls.forEach(function (el) { el.style.animation = 'none'; });
+
     overlaySeq += 1;
     var markerId = 'arrowhead-' + overlaySeq;
     // Second marqueur, dédié aux flèches "en train de se tracer" (voir markGrowingPath/
@@ -560,7 +579,11 @@
         // racine carrée à une seule ligne, par exemple, garde ses étiquettes "√" normales
         // (rows[i].opLeft/opRight) sans jamais poser pendingForceLeft/Right, mais sa flèche
         // reste bien celle d'un aperçu qui vient d'apparaître.
-        var isGrowingArrow = !!rows[i].pending;
+        // rows[i].pendingIsNew (voir isNewPendingPreview dans render.js) : `undefined` pour
+        // les aperçus qui ne suivent pas encore ce mécanisme (racine carrée/produit nul,
+        // jamais reconduits d'un survol vers un clic comme "Opération") — traité comme
+        // "nouveau" par défaut, `!== false` plutôt que `!!` pour ne pas les faire régresser.
+        var isGrowingArrow = !!rows[i].pending && rows[i].pendingIsNew !== false;
         // opts.live (voir computeLiveOpInfo dans render.js) : SEULE la ligne "pending" peut
         // héberger le pavé "live" (le <math-field> partagé), jamais une étape déjà
         // confirmée — sur CE côté, le pill statique habituel (drawSide) est remplacé par
@@ -609,6 +632,12 @@
     if (hasFork) {
       drawFork(svg, history, historyRect, markerId, fork.from, fork.to, fork.label, placedLabels, equationRects, fork.preview, growMarkerId);
     }
+
+    // Restaure l'animation "pop" suspendue plus haut : tout ce qui précède (mesures ET
+    // tracé) s'est déroulé de façon purement synchrone, donc rien n'a encore été peint à
+    // l'écran avec `animation: none` — la relâcher ici la fait repartir de son tout début
+    // sans le moindre saut visible pour l'utilisateur.
+    poppingEls.forEach(function (el, i) { el.style.animation = poppingElsPrevAnimation[i]; });
   }
 
   App.Arrows = {
