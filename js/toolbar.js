@@ -684,7 +684,16 @@
           // avant d'entamer la transition/le rebond vers l'état étendu.
           var confirmBtn = document.createElement('button');
           confirmBtn.type = 'button';
-          confirmBtn.className = 'op-confirm-btn';
+          // "confirm-collapsed" DÈS LA CRÉATION (pas seulement sur la ligne) : c'est cette
+          // classe sur la COCHE ELLE-MÊME (voir #opButtons .op-confirm-btn.confirm-collapsed
+          // dans style.css) qui la fait naître à largeur 0, jamais celle posée sur la ligne
+          // (qui, elle, ne pilote que le gap et la largeur de l'étiquette). Sans elle, la
+          // coche apparaissait d'emblée à sa pleine largeur (54px) PENDANT que l'étiquette,
+          // elle, rétrécissait encore sur 0.22s — la ligne gonflait alors temporairement
+          // bien au-delà de 212px, ce que positionPanel (jamais réinvoqué depuis le suivi
+          // en rAF, réservé aux .op-row, voir trackPanelDuringRowAnimation) figeait alors
+          // durablement, décalant toute la fenêtre vers la gauche.
+          confirmBtn.className = 'op-confirm-btn confirm-collapsed';
           confirmBtn.textContent = '✓';
           confirmBtn.title = 'Valider';
           confirmBtn.addEventListener('click', confirmExprOrSqrt);
@@ -704,6 +713,7 @@
           row.appendChild(confirmBtn);
           void row.offsetWidth;
           row.classList.remove('confirm-collapsed');
+          confirmBtn.classList.remove('confirm-collapsed');
           confirmBtn.classList.add('confirm-appearing');
           confirmBtn.addEventListener('animationend', function () {
             confirmBtn.classList.remove('confirm-appearing');
