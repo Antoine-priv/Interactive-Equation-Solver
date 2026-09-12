@@ -124,6 +124,13 @@
   var onTabCb = null;
   var collapsed = false;
 
+  // Doit rester en phase avec la transition CSS de .math-keypad-panel (voir style.css) :
+  // durée du fondu/rétrécissement de disparition, après laquelle `hidden` est enfin posé
+  // (voir setPanelHidden plus bas).
+  var PANEL_VANISH_MS = 180;
+  var panelVanishTimer = null;
+  var prefersReducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
   // Pavé "live" (voir #liveOpPill dans style.css) : accueille le <math-field> partagé à
   // même la ligne "pending" (pendant qu'une "Opération" ou un facteur commun est en train
   // d'être tapé, voir bindLiveOpField) plutôt que dans le pavé ancré/#controlPanel. Un
@@ -141,8 +148,51 @@
 
   function render() {
     var show = !!activeField;
-    panel.hidden = !show || collapsed;
+    setPanelHidden(!show || collapsed);
     peekTab.hidden = !show || !collapsed;
+  }
+
+  // Bascule le pavé visible/masqué en animant l'apparition ("pop", .keypad-pop-in) et la
+  // disparition (fondu + rétrécissement, .keypad-vanish) plutôt que de poser `hidden` d'un
+  // coup — même chorégraphie que setRowVisibility dans toolbar.js. Idempotent : appelé à
+  // chaque render(), donc ne doit rien redéclencher si l'état visuel demandé est déjà celui
+  // en cours (y compris EN COURS de disparition).
+  function setPanelHidden(hidden) {
+    if (prefersReducedMotion) {
+      panel.hidden = hidden;
+      return;
+    }
+    // `panel.hidden` seul ne suffit pas : un pavé en cours de disparition a `keypad-vanish`
+    // posé mais `hidden` pas encore (posé par le minuteur ci-dessous) — sans le `||`, une
+    // disparition suivie d'une réapparition rapide (avant la fin du minuteur) ne serait pas
+    // détectée comme un changement d'état réel.
+    var currentlyHidden = panel.hidden || panel.classList.contains('keypad-vanish');
+    if (hidden === currentlyHidden) return;
+    if (panelVanishTimer !== null) { clearTimeout(panelVanishTimer); panelVanishTimer = null; }
+    if (hidden) {
+      panel.classList.remove('keypad-pop-in');
+      // Force un reflow AVANT d'ajouter keypad-vanish : sans lui, retirer une classe
+      // d'animation encore active (keypad-pop-in, jamais nettoyée après coup) et ajouter
+      // keypad-vanish dans le MÊME tour peut fusionner les deux en une seule frame, sans
+      // jamais peindre l'état de départ (opaque) séparément de l'arrivée (transparent) —
+      // la transition n'a alors rien à interpoler et saute directement à la cible (même
+      // parade que pour l'apparition ci-dessous et que setRowVisibility dans toolbar.js).
+      void panel.offsetWidth;
+      panel.classList.add('keypad-vanish');
+      panelVanishTimer = setTimeout(function () {
+        panel.hidden = true;
+        panel.classList.remove('keypad-vanish');
+        panelVanishTimer = null;
+      }, PANEL_VANISH_MS);
+    } else {
+      panel.classList.remove('keypad-vanish');
+      panel.hidden = false;
+      // Force un reflow AVANT d'ajouter keypad-pop-in : même parade que setRowVisibility
+      // dans toolbar.js (voir son commentaire) — sans lui, le navigateur peut fusionner le
+      // `hidden` tout juste retiré avec l'état de départ de l'animation en une seule frame.
+      void panel.offsetWidth;
+      panel.classList.add('keypad-pop-in');
+    }
   }
 
   function setCollapsed(next) {

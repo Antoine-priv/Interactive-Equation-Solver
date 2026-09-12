@@ -45,7 +45,9 @@ function ok(label, cond) {
   await page.evaluate(() => window.App.MathKeypad.setLatex('x(x-5)=12'));
   await page.waitForTimeout(80);
   await page.click('#manualSubmit');
-  await page.waitForTimeout(80);
+  // Le modal se ferme désormais avec un fondu (voir VANISH_MS dans newEquationModal.js) :
+  // laisser le temps à la transition avant de vérifier `hidden` plus bas.
+  await page.waitForTimeout(260);
   const eqAfterVarFactor = await page.evaluate(() => window.App.History.lastEquation());
   console.log('equation after submitting "x(x-5)=12":', JSON.stringify(eqAfterVarFactor));
   ok('modal accepts "x(x-5)=12" and builds a FactorGroup with x as the factor', JSON.stringify(eqAfterVarFactor) === JSON.stringify({

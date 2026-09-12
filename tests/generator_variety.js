@@ -121,6 +121,9 @@ function ok(label, cond) {
     await page.click('#randomGenerate');
     const raw = await page.evaluate(() => window.App.MathKeypad.getLatex());
     await page.click('.math-keypad-keys .panel-confirm-cell');
+    // Le modal se ferme désormais avec un fondu (voir VANISH_MS dans newEquationModal.js) :
+    // laisser le temps à la transition avant de vérifier `hidden` plus bas.
+    await page.waitForTimeout(220);
     const errorAfter = await page.$eval('#manualError', (el) => el.textContent);
     const modalStillOpen = await page.evaluate(() => !document.getElementById('modalOverlay').hidden);
     if (errorAfter || modalStillOpen) {

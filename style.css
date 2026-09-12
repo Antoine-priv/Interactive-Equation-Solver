@@ -271,13 +271,15 @@ button {
 /* Posée temporairement par App.Canvas.scrollTo({behavior:'smooth'}) le temps d'une seule
    transition (retirée ensuite, voir stopAnimated dans canvas.js) : jamais présente en
    continu, sinon un glisser/une molette (App.Canvas.set/panBy, toujours immédiats)
-   traînerait derrière le curseur au lieu de le suivre au pixel près. Volontairement bref
-   (le défilement natif "smooth" qu'elle remplace se réglait, en pratique, en bien moins de
-   100ms pour ces distances) : un enchaînement rapide d'interactions (ex. un double-clic
-   immédiat sur la ligne qui vient de se recentrer, voir tests/*.js) ne doit jamais viser
-   une cible encore en train de glisser. */
+   traînerait derrière le curseur au lieu de le suivre au pixel près. Une décélération
+   franche (courbe "ease-out", pas de rebond : on recentre une équation, pas un pop
+   d'interface) rend le panoramique vers l'étape suivante perceptible comme un vrai
+   mouvement de caméra plutôt qu'un saut instantané, tout en restant assez court pour ne
+   jamais gêner un enchaînement rapide d'interactions (ex. un double-clic sur la ligne qui
+   vient de se recentrer, voir tests/*.js — qui laissent tous largement plus de temps que
+   cette durée avant d'interagir de nouveau). */
 #canvasLayer.canvas-panning-animated {
-  transition: transform 0.08s ease;
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 #history {
@@ -1530,9 +1532,18 @@ button {
   align-items: center;
   justify-content: center;
   z-index: 50;
+  opacity: 1;
+  /* Sert aux DEUX sens (voir js/newEquationModal.js) : posée puis retirée juste après un
+     reflow forcé à l'ouverture (fondu depuis transparent), posée puis laissée le temps de
+     la fermeture (fondu vers transparent avant le `hidden` final) — un seul et même
+     langage visuel dans les deux cas, pas de classe séparée par sens. */
+  transition: opacity 0.16s ease;
 }
 .modal-overlay[hidden] {
   display: none;
+}
+.modal-overlay.modal-overlay-hiding {
+  opacity: 0;
 }
 
 .modal-box {
@@ -1542,6 +1553,32 @@ button {
   padding: 30px;
   width: 420px;
   box-shadow: var(--shadow-lg);
+  opacity: 1;
+  transform: scale(1);
+  /* Anime seulement la DISPARITION (.modal-vanish, posée par js/newEquationModal.js juste
+     avant le `hidden` final) — même asymétrie que #opButtons/.panel-swap-out : l'apparition
+     "pop" via une @keyframes dédiée (.modal-pop-in ci-dessous) avec un léger rebond, une
+     simple transition ne rendrait pas ce rebond. */
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+.modal-box.modal-vanish {
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+}
+@keyframes modalPopIn {
+  0% { transform: scale(0.85); opacity: 0; }
+  60% { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.modal-box.modal-pop-in {
+  animation: modalPopIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-overlay { transition: none; }
+  .modal-box { transition: none; }
+  .modal-box.modal-pop-in { animation: none; }
 }
 
 .modal-box h2 {
@@ -1629,8 +1666,32 @@ button {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  /* Anime seulement la DISPARITION (.keypad-vanish, posée par setPanelHidden dans
+     mathKeypad.js juste avant le `hidden` final) — même asymétrie que .modal-box plus haut :
+     l'apparition "pop" via .keypad-pop-in ci-dessous, avec un léger rebond. */
+  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 .math-keypad-panel[hidden] { display: none; }
+.math-keypad-panel.keypad-vanish {
+  opacity: 0;
+  transform: scale(0.94) translateY(8px);
+  pointer-events: none;
+}
+@keyframes keypadPopIn {
+  0% { transform: scale(0.9) translateY(14px); opacity: 0; }
+  60% { transform: scale(1.02) translateY(-2px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+.math-keypad-panel.keypad-pop-in {
+  animation: keypadPopIn 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .math-keypad-panel { transition: none; }
+  .math-keypad-panel.keypad-pop-in { animation: none; }
+}
 
 .math-keypad-header {
   display: flex;

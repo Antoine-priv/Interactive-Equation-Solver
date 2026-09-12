@@ -124,7 +124,7 @@
       // Filet de sécurité (retire la classe même si 'transitionend' ne se déclenche pas,
       // ex. si x/y n'ont en fait pas changé) : durée alignée sur celle de la transition
       // CSS (voir style.css), avec une marge.
-      transitionCleanupTimer = setTimeout(stopAnimated, 160);
+      transitionCleanupTimer = setTimeout(stopAnimated, 360);
     },
     // Change le zoom vers `newScale` (borné à [MIN_SCALE, MAX_SCALE]) en gardant le point
     // ÉCRAN (`screenX`, `screenY` — coordonnées relatives au coin haut-gauche de
@@ -158,7 +158,7 @@
       layer.classList.add('canvas-panning-animated');
       void layer.offsetHeight;
       apply();
-      transitionCleanupTimer = setTimeout(stopAnimated, 160);
+      transitionCleanupTimer = setTimeout(stopAnimated, 360);
     }
   };
 
