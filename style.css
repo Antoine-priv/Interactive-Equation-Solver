@@ -980,19 +980,43 @@ button {
   display: flex;
   align-items: stretch;
   gap: 8px;
+  /* Anime le passage à 0 pendant que la coche disparaît (voir .confirm-collapsed plus
+     bas) — sans ça, un vide de 8px resterait entre l'étiquette (redevenue pleine largeur)
+     et l'ancien emplacement de la coche pendant qu'elle se réduit. */
+  transition: gap 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
+/* État transitoire, posé À LA FOIS à la création de la coche (avant le reflow forcé qui
+   révèle l'état "étendu", voir renderToolbar dans toolbar.js) ET pendant toute sa
+   disparition (jusqu'au removeChild final) : gap ramené à 0, l'étiquette et la coche
+   reprenant alors respectivement 212px et 0px (voir les deux règles plus bas) — la somme
+   150+8+54 valant TOUJOURS 212 quelle que soit la progression de la transition (mêmes
+   durée/allure sur les trois propriétés), la largeur totale de la ligne ne bouge donc
+   jamais d'un pixel, apparition comme disparition. */
+.op-row-split.confirm-collapsed { gap: 0; }
+
 /* #opButtons .op-row-split button[data-op] (pas juste .op-row-split button[data-op]) :
    il faut battre la spécificité de "#opButtons button" ci-dessous (un sélecteur #id, plus
    fort que deux classes) — sans ce préfixe, "width:212px" l'emportait malgré l'ordre
    d'écriture et empêchait toute réduction, avec des effets de bord en cascade sur
-   aspect-ratio de la coche voisine (toutes deux finissaient à 212×212). */
+   aspect-ratio de la coche voisine (toutes deux finissaient à 212×212).
+   Une largeur FIXE (150px = 212 − 8 de gap − 54 de coche, voir plus bas) plutôt que le
+   "flex:1 1 auto; width:auto" d'origine : ce dernier ne peut pas être animé par une
+   transition CSS (un flex-basis/width "auto" n'est pas une valeur interpolable, le
+   navigateur y saute directement) — une valeur explicite en pixels, elle, transitionne
+   normalement via la règle "width" de #opButtons button plus bas. */
 #opButtons .op-row-split button[data-op] {
-  flex: 1 1 auto;
-  width: auto;
-  min-width: 0; /* autorise ce flex-item à rétrécir sous la largeur fixe habituelle */
+  flex: 0 0 auto;
+  width: 150px;
+  min-width: 0;
   /* Padding droit réduit (plus besoin d'autant d'air côté coche, juste accolée) : rend
      un peu de place à l'étiquette, voir le commentaire de .op-row-split plus haut. */
   padding-right: 14px;
+}
+/* Pendant que la coche disparaît (ou juste avant qu'elle apparaisse, voir
+   renderToolbar) : l'étiquette reprend ses 212px habituels, EN MÊME TEMPS que la coche se
+   réduit à 0 et que le gap se referme ci-dessus — les trois transitionnent ensemble. */
+#opButtons .op-row-split.confirm-collapsed button[data-op] {
+  width: 212px;
 }
 
 /* Coche de validation : un sibling flex de l'étiquette dans la ligne scindée (voir
@@ -1025,13 +1049,46 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s ease, transform 0.1s ease;
+  opacity: 1;
+  transform: scale(1);
+  overflow: hidden; /* le "✓" ne doit pas déborder du carré pendant qu'il se réduit à 0 */
+  transition: background 0.15s ease, width 0.22s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.18s ease, transform 0.18s ease;
 }
 /* Sur :hover, la règle générique "#opButtons button:hover" est plus spécifique que le
    simple ".op-confirm-btn" de base pour le fond (un pseudo-classe de plus au même
    niveau) : sans ce rappel explicite, la coche perdrait son fond plein au survol. */
 #opButtons .op-confirm-btn:hover { background: var(--accent-hover); color: #fff; box-shadow: var(--shadow-md); }
 #opButtons .op-confirm-btn:active { background: var(--accent-hover); color: #fff; }
+
+/* Disparition (voir renderToolbar dans toolbar.js) : une transition CSS ordinaire, sans
+   rebond — celui-ci reste réservé à l'apparition (.confirm-appearing plus bas), même
+   asymétrie que .op-row/.op-row.row-hidden un peu plus haut dans ce fichier. Sert aussi
+   d'état de DÉPART le temps d'une frame à la création de la coche (voir le reflow forcé
+   dans renderToolbar), avant que confirm-appearing ne prenne le relais vers l'état plein. */
+#opButtons .op-confirm-btn.confirm-collapsed {
+  width: 0;
+  opacity: 0;
+  transform: scale(0.4);
+  pointer-events: none;
+}
+
+/* Apparition : "pop" avec un léger rebond, exactement le même langage que
+   .op-row.row-appearing plus haut — signale activement la coche fraîchement disponible. */
+@keyframes confirmPopIn {
+  0% { transform: scale(0.4); opacity: 0; }
+  65% { transform: scale(1.12); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+#opButtons .op-confirm-btn.confirm-appearing {
+  animation: confirmPopIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .op-row-split { transition: none; }
+  #opButtons .op-confirm-btn { transition: background 0.15s ease; }
+  #opButtons .op-confirm-btn.confirm-appearing { animation: none; }
+}
 
 #opButtons button {
   position: relative; /* ancre l'infobulle (voir [data-tooltip]::after ci-dessous) */

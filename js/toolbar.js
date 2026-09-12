@@ -647,23 +647,79 @@
       // les seuls qui ont encore besoin d'une saisie à confirmer) : une seule et même
       // façon de valider, plutôt que l'ancien bouton "Valider" texte du panneau flottant.
       // La ligne elle-même bascule en scindée (voir .op-row-split dans style.css) : le
-      // bouton se réduit à sa portion "étiquette", la coche occupe le reste en carré —
-      // jamais de coche qui déborderait de la fenêtre. Redevient un bouton pleine largeur
-      // dès que le mode n'est plus engagé (coche retirée, classe enlevée).
+      // bouton se réduit à sa portion "étiquette" pendant que la coche apparaît en carré
+      // à côté ("pop", voir .op-confirm-btn.confirm-appearing) — jamais de coche qui
+      // déborderait de la fenêtre, la largeur totale (150+8+54, voir le commentaire de
+      // #opButtons .op-row-split button[data-op] dans style.css) restant TOUJOURS égale
+      // aux 212px habituels, à tout instant de la transition. Redevient un bouton pleine
+      // largeur dès que le mode n'est plus engagé, la coche se réduisant à rien plutôt que
+      // de disparaître d'un coup.
       var row = btn.parentElement;
       var existingConfirm = row.querySelector('.op-confirm-btn');
-      if (isActive && !existingConfirm) {
-        var confirmBtn = document.createElement('button');
-        confirmBtn.type = 'button';
-        confirmBtn.className = 'op-confirm-btn';
-        confirmBtn.textContent = '✓';
-        confirmBtn.title = 'Valider';
-        confirmBtn.addEventListener('click', confirmExprOrSqrt);
-        row.appendChild(confirmBtn);
-        row.classList.add('op-row-split');
-      } else if (!isActive && existingConfirm) {
-        row.removeChild(existingConfirm);
-        row.classList.remove('op-row-split');
+      if (prefersReducedMotion) {
+        // Bascule instantanée façon ancien code : sans transition CSS active, aucun
+        // `transitionend` ne se déclencherait jamais pour finaliser une réduction
+        // animée (voir setRowVisibility plus haut pour la même logique sur .op-row).
+        if (isActive && !existingConfirm) {
+          var reducedConfirmBtn = document.createElement('button');
+          reducedConfirmBtn.type = 'button';
+          reducedConfirmBtn.className = 'op-confirm-btn';
+          reducedConfirmBtn.textContent = '✓';
+          reducedConfirmBtn.title = 'Valider';
+          reducedConfirmBtn.addEventListener('click', confirmExprOrSqrt);
+          row.appendChild(reducedConfirmBtn);
+          row.classList.add('op-row-split');
+        } else if (!isActive && existingConfirm) {
+          row.removeChild(existingConfirm);
+          row.classList.remove('op-row-split');
+        }
+        return;
+      }
+      if (isActive) {
+        if (!existingConfirm) {
+          // Créée déjà dans son état RÉDUIT (confirm-collapsed posé sur la ligne AVANT
+          // qu'elle rejoigne le DOM) puis "révélée" après un reflow forcé — même
+          // chorégraphie "ajoute, force un reflow, retire" que setRowVisibility, pour que
+          // le navigateur voie bien l'état de départ (largeur 0) séparément de l'arrivée
+          // avant d'entamer la transition/le rebond vers l'état étendu.
+          var confirmBtn = document.createElement('button');
+          confirmBtn.type = 'button';
+          confirmBtn.className = 'op-confirm-btn';
+          confirmBtn.textContent = '✓';
+          confirmBtn.title = 'Valider';
+          confirmBtn.addEventListener('click', confirmExprOrSqrt);
+          // `transitionend` posé UNE FOIS ICI (pas dans initToolbar) : contrairement aux
+          // .op-row, persistantes, cette coche est un élément JETABLE recréé à chaque
+          // engagement puis détruit à chaque sortie — l'écouteur part avec elle, aucun
+          // risque d'accumulation. Le test `confirm-collapsed` distingue la fin de LA
+          // croissance (classe déjà retirée, voir plus bas : on ignore) de la fin d'une
+          // VRAIE réduction (classe encore posée : on finalise, voir le "else" plus bas).
+          confirmBtn.addEventListener('transitionend', function (e) {
+            if (e.propertyName === 'width' && confirmBtn.classList.contains('confirm-collapsed')) {
+              if (confirmBtn.parentNode) confirmBtn.parentNode.removeChild(confirmBtn);
+              row.classList.remove('op-row-split', 'confirm-collapsed');
+            }
+          });
+          row.classList.add('op-row-split', 'confirm-collapsed');
+          row.appendChild(confirmBtn);
+          void row.offsetWidth;
+          row.classList.remove('confirm-collapsed');
+          confirmBtn.classList.add('confirm-appearing');
+          confirmBtn.addEventListener('animationend', function () {
+            confirmBtn.classList.remove('confirm-appearing');
+          }, { once: true });
+        } else if (existingConfirm.classList.contains('confirm-collapsed')) {
+          // Ré-engagement pendant qu'une coche précédente était encore en train de
+          // disparaître (annuler puis re-cliquer très vite) : on la fait regrandir depuis
+          // là où elle en est plutôt que d'en recréer une seconde par-dessus — une simple
+          // transition CSS ordinaire suffit, pas besoin de rejouer le rebond d'apparition.
+          existingConfirm.classList.remove('confirm-collapsed');
+          row.classList.remove('confirm-collapsed');
+        }
+      } else if (existingConfirm && !existingConfirm.classList.contains('confirm-collapsed')) {
+        existingConfirm.classList.remove('confirm-appearing');
+        existingConfirm.classList.add('confirm-collapsed');
+        row.classList.add('confirm-collapsed');
       }
     });
     trackPanelDuringRowAnimation(opButtons);
