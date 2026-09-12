@@ -1979,12 +1979,14 @@
     // la constante 0 seule de l'autre côté dans tous les cas ; renvoie { factors: Side[] },
     // les facteurs DISTINCTS après déduplication structurelle (voir Expr.sidesEquivalent —
     // ex. "(a+bx)²=0" ne donne qu'UN facteur, une seule colonne ; "(a+b)(c+d)²=0" en donne
-    // deux), ou null sinon. Pour un FactorGroup, `factor` n'est retenu comme branche QUE
-    // s'il dépend de x (pow >= 1, ex. "x" dans "x(x-5)") : un facteur numérique constant
-    // (ex. "2" dans "2(x-5)=0") ne peut jamais s'annuler, seul innerTerms compte alors —
-    // pas de branche "2=0" vide de sens. Le signe (à n'importe quel niveau d'imbrication,
-    // et FactorGroup.sign) est indifférent : un produit nul reste nul quel que soit son
-    // signe global.
+    // deux), ou null sinon. Un facteur purement numérique constant (le `factor` d'un
+    // FactorGroup, ex. "2" dans "2(x-5)=0" ; ou un facteur terminal d'un ProductGroup, ex.
+    // "-1" dans "(x+1)(-1)=0") n'est jamais retenu comme branche : il ne dépend jamais de x
+    // et ne peut donc jamais s'annuler — pas de branche "2=0" ou "-1=0" vide de sens, seuls
+    // les facteurs dépendant de x comptent alors. Renvoie null si aucun facteur ainsi
+    // filtré ne subsiste. Le signe (à n'importe quel niveau d'imbrication, et
+    // FactorGroup.sign) est indifférent : un produit nul reste nul quel que soit son signe
+    // global.
     function detectProduitNul(eq) {
       function trySide(prodSide, zeroSide) {
         var pSide = eq[prodSide], zSide = eq[zeroSide];
@@ -1993,7 +1995,13 @@
         var node = pSide[0];
         var allFactors;
         if (Expr.isProductGroup(node)) {
-          allFactors = Expr.flattenProductFactors(node);
+          // Comme pour le facteur numérique d'un FactorGroup ci-dessous (ex. "2" dans
+          // "2(x-5)=0"), un facteur purement constant (ex. "-1" dans "(x+1)(-1)=0", produit
+          // par "×(-1)" — voir wrapSideInProduct/operandFactors) ne dépend jamais de x et ne
+          // peut donc jamais s'annuler : pas de branche "-1=0" vide de sens.
+          allFactors = Expr.flattenProductFactors(node).filter(function (f) {
+            return !(f.length === 1 && !Expr.isGroup(f[0]) && f[0].pow === 0);
+          });
         } else if (Expr.isFactorGroup(node) && !node.isDivision) {
           allFactors = [];
           if (node.factor.pow !== 0) allFactors.push([node.factor]);
@@ -2005,6 +2013,7 @@
         allFactors.forEach(function (f) {
           if (!distinct.some(function (d) { return Expr.sidesEquivalent(d, f); })) distinct.push(f);
         });
+        if (distinct.length === 0) return null;
         return { factors: distinct };
       }
       return trySide('left', 'right') || trySide('right', 'left');
