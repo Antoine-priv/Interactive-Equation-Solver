@@ -757,16 +757,20 @@ button {
    dasharray/dashoffset qui ne concerne que le TRAIT — sans ceci, la pointe apparaîtrait
    d'un coup à son point d'arrivée dès le tout début de l'animation, comme si elle
    attendait déjà là que le trait la rejoigne. Un délai proche de la durée de arrowGrow
-   ci-dessus la fait apparaître seulement une fois le trait arrivé, avec le même petit
-   rebond que les autres "pop" de l'appli (voir @keyframes previewPopIn plus haut). */
+   ci-dessus la fait apparaître seulement une fois le trait arrivé.
+   Fondu en OPACITÉ SEULE, jamais de `transform` ici (contrairement aux autres "pop" de
+   l'appli, ex. @keyframes previewPopIn plus haut) : ce `<path>` vit à l'intérieur d'un
+   `<marker>` SVG (voir defs dans drawAll, arrows.js), réinstancié à chaque frame le long
+   du tracé — animer son `transform` y scintille de façon erratique (observé en pratique),
+   le moteur de rendu ne semblant pas toujours repeindre correctement le contenu d'un
+   marqueur dont le `transform` change pendant qu'il est utilisé. `opacity` seule n'a pas
+   ce problème. */
 @keyframes arrowheadPop {
-  0% { opacity: 0; transform: scale(0.4); }
-  60% { opacity: 1; transform: scale(1.15); }
-  100% { opacity: 1; transform: scale(1); }
+  0% { opacity: 0; }
+  100% { opacity: 1; }
 }
 .arrowhead-fill-grow {
-  transform-origin: center;
-  animation: arrowheadPop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) 0.32s both;
+  animation: arrowheadPop 0.18s ease-out 0.32s both;
 }
 
 @media (prefers-reduced-motion: reduce) {
