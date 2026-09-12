@@ -523,6 +523,48 @@
     err.textContent = displayError;
   }
 
+  // Respecte prefers-reduced-motion : dans ce cas, setRowVisibility (ci-dessous) repasse
+  // en bascule instantanée façon ancien code (juste `hidden`), sans quoi la finalisation
+  // de la disparition (voir son écouteur `transitionend` dans initToolbar) ne se
+  // déclencherait jamais — aucune transition CSS ne tourne, donc aucun événement
+  // `transitionend` à attendre.
+  var prefersReducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // Bascule une rangée .op-row visible/masquée en animant l'apparition ("pop", voir
+  // .op-row.row-appearing dans style.css) et la disparition (réduction de hauteur, voir
+  // .op-row.row-hidden) plutôt que de poser `hidden` d'un coup. Idempotent (comme l'ancien
+  // `row.hidden = unusable`) : appelé à CHAQUE renderToolbar, donc ne doit rien redéclencher
+  // si l'état visuel demandé est déjà celui en cours (y compris EN COURS de transition).
+  function setRowVisibility(row, unusable) {
+    if (prefersReducedMotion) {
+      row.hidden = unusable;
+      return;
+    }
+    // `row.hidden` seul ne suffit pas : une rangée en cours de réduction a `row-hidden`
+    // posé mais `hidden` pas encore (voir le `transitionend` dans initToolbar qui ne le
+    // pose qu'à la fin) — sans le `||`, un re-render pendant la transition redéclencherait
+    // `classList.add('row-hidden')` sur une classe déjà présente (sans effet, mais gaspille
+    // le test) ET, pire, un aller-retour rapide unusable=true puis false pendant la même
+    // transition ne serait pas détecté comme un changement d'état réel.
+    var currentlyHidden = row.hidden || row.classList.contains('row-hidden');
+    if (unusable === currentlyHidden) return;
+    if (unusable) {
+      row.classList.remove('row-appearing');
+      row.classList.add('row-hidden');
+    } else {
+      row.hidden = false;
+      // Force un reflow AVANT de retirer row-hidden : sans lui, le navigateur ne voit
+      // jamais l'état de départ (max-height:0, posé par row-hidden) peint séparément de
+      // l'état d'arrivée, et ne peut donc pas interpoler la transition — surtout critique
+      // ici puisque `hidden` (display:none) vient TOUT JUSTE d'être retiré sur la même
+      // ligne, un cas où le navigateur ne peut de toute façon jamais transitionner sans
+      // ce point de passage intermédiaire.
+      void row.offsetWidth;
+      row.classList.remove('row-hidden');
+      row.classList.add('row-appearing');
+    }
+  }
+
   function renderToolbar() {
     var pending = App.History.getPending();
     var info = computeSelectionInfo();
@@ -554,7 +596,7 @@
       // totalement statiques, seul le bouton cliqué passe en "active" ci-dessus). La
       // protection contre un clic sur un AUTRE bouton pendant qu'un mode est déjà engagé
       // se fait au niveau du gestionnaire de clic (voir initToolbar plus bas), pas ici.
-      btn.parentElement.hidden = unusable;
+      setRowVisibility(btn.parentElement, unusable);
 
       // Coche de validation à côté du bouton actif (mode 'expr'/'factor' seulement,
       // les seuls qui ont encore besoin d'une saisie à confirmer) : une seule et même
@@ -686,6 +728,25 @@
 
   function initToolbar() {
     var opButtons = document.getElementById('opButtons');
+    // Écouteurs posés UNE SEULE FOIS par rangée (jamais reconstruite, voir index.html) au
+    // lieu d'être (re)posés à chaque déclenchement dans setRowVisibility : sinon, une
+    // rangée qui bascule visible/masquée plusieurs fois au fil d'une session accumulerait
+    // un listener par bascule (celui d'une transition annulée en cours de route ne se
+    // déclenche jamais, voir "animationcancel"/pas de "transitionend" correspondant).
+    Array.prototype.forEach.call(opButtons.querySelectorAll('.op-row'), function (row) {
+      row.addEventListener('animationend', function (e) {
+        if (e.target === row && e.animationName === 'opRowPopIn') row.classList.remove('row-appearing');
+      });
+      row.addEventListener('transitionend', function (e) {
+        // `row-hidden` encore présent : la ligne n'a pas été rouverte en cours de
+        // transition (voir setRowVisibility) — sans ce test, une réduction annulée en
+        // route poserait quand même `hidden` une fois la transition (désormais inverse)
+        // suivante terminée, faisant disparaître d'un coup une ligne redevenue visible.
+        if (e.target === row && e.propertyName === 'max-height' && row.classList.contains('row-hidden')) {
+          row.hidden = true;
+        }
+      });
+    });
     Array.prototype.forEach.call(opButtons.querySelectorAll('button[data-op]'), function (btn) {
       var op = btn.getAttribute('data-op');
       if (MESSAGES[op]) btn.setAttribute('data-tooltip', MESSAGES[op]);

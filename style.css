@@ -857,7 +857,10 @@ button {
   left: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  /* Plus de `gap` fixe ici : l'espacement vertical vit sur .op-row (margin-top), pour
+     pouvoir se réduire à 0 EN MÊME TEMPS que la ligne se réduit (voir .op-row.row-hidden
+     plus bas) — un `gap` de conteneur, lui, reste appliqué même quand une ligne s'est
+     réduite à une hauteur nulle, laissant un espace résiduel figé au milieu de la fenêtre. */
   padding: 20px;
   /* Plancher = largeur d'un bouton normal (212px, voir #opButtons button plus bas) + le
      padding ci-dessus (40px) : sans ça, quand la SEULE rangée visible est la ligne scindée
@@ -895,6 +898,65 @@ button {
 
 .op-row {
   position: relative; /* ancre l'infobulle (voir [data-tooltip]::after plus bas) */
+  /* Pas d'overflow:hidden ICI (contrairement à .op-row.row-hidden plus bas) : l'infobulle
+     (voir [data-tooltip]::after plus bas) déborde délibérément AU-DESSUS du bouton — un
+     overflow:hidden permanent la tronquerait en permanence, pas seulement pendant une
+     réduction. Il ne doit s'appliquer que pendant/après la réduction elle-même. */
+  max-height: 70px; /* > hauteur réelle d'un bouton (~54px, voir #opButtons .op-confirm-btn) : sert seulement de borne HAUTE à la transition, jamais la vraie taille (voir renderToolbar/setRowVisibility dans toolbar.js) */
+  opacity: 1;
+  transform: scale(1);
+  transform-origin: center left;
+  transition: max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+              margin-top 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.18s ease,
+              transform 0.2s ease;
+}
+/* Remplace le gap de #opButtons (voir son commentaire plus haut) par un margin-top porté
+   par la rangée elle-même, MAIS seulement entre deux .op-row consécutives (jamais avant la
+   toute première) — délibérément PAS ".op-row:first-child" : le premier enfant réel de
+   #opButtons est .op-buttons-arrow (voir index.html), donc AUCUNE .op-row n'est jamais
+   ":first-child" et cette garde n'aurait donc jamais joué, laissant chaque rangée (y
+   compris la première rangée visible) avec un excédent de 10px. Le sélecteur "+" continue
+   par ailleurs de fonctionner correctement même quand la rangée PRÉCÉDENTE est
+   définitivement masquée (`hidden`, display:none) : la correspondance de sélecteur ne
+   dépend que de l'ordre DOM, jamais du rendu — un seul écart de 10px reste donc posé,
+   porté par la première rangée effectivement visible qui suit, exactement comme le
+   faisait le gap du conteneur pour les rangées en display:none de l'ancien code. */
+.op-row + .op-row { margin-top: 10px; }
+
+/* Ligne retirée (bouton devenu indisponible pour la sélection courante, voir
+   renderToolbar) : se réduit à rien (hauteur ET marge, voir le commentaire du gap
+   ci-dessus) tout en rétrécissant/s'effaçant, plutôt que de disparaître d'un coup avec
+   `hidden` — c'est setRowVisibility (toolbar.js) qui pose `hidden` une fois cette
+   transition terminée (voir son écouteur `transitionend` posé une seule fois dans
+   initToolbar), pour ne sauter l'animation ni la scinder en deux réductions successives. */
+.op-row.row-hidden {
+  overflow: hidden; /* écrase visuellement le bouton pendant la réduction, voir .op-row plus haut */
+  max-height: 0;
+  margin-top: 0;
+  opacity: 0;
+  transform: scale(0.82);
+  pointer-events: none;
+}
+
+/* Ligne qui redevient disponible : "pop" avec un léger dépassement (cubic-bezier à
+   rebond) plutôt qu'un simple fade — signale activement l'apparition d'une nouvelle
+   option, alors que la disparition (ci-dessus) reste une transition CSS ordinaire, plus
+   discrète. Une `animation` (et non une simple transition) car elle doit se dérouler UNE
+   fois puis rendre la main à l'état stable de .op-row ci-dessus (transform:scale(1)),
+   sans quoi rejouer indéfiniment la même valeur de départ à chaque re-render. */
+@keyframes opRowPopIn {
+  0% { transform: scale(0.55); opacity: 0; }
+  65% { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.op-row.row-appearing {
+  animation: opRowPopIn 0.32s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .op-row { transition: none; }
+  .op-row.row-appearing { animation: none; }
 }
 
 /* Ligne du mode engagé ('expr'/'factor', voir renderToolbar) : le bouton se scinde en
