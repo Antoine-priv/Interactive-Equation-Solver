@@ -348,11 +348,15 @@
     // Expr.factorAlreadyGroupedNodes) OU d'une somme de ProductGroup partageant un facteur
     // (ex. "(x+1)(x+2)+(x+1)(x+5)" par "(x+1)", voir Expr.factorCommonProductFactor) : la
     // sélection contient des groupes, donc leftClean/rightClean est faux, mais reste
-    // factorisable.
-    var canFactorAlreadyGrouped = (L.length >= 2 && R.length === 0 &&
-        (allNumericFactorGroups(eq.left, L) || allProductGroups(eq.left, L))) ||
-      (R.length >= 2 && L.length === 0 &&
-        (allNumericFactorGroups(eq.right, R) || allProductGroups(eq.right, R)));
+    // factorisable. Utilise getFactorSelectionIndices (L/R fusionnés avec
+    // pending.selectedFactorGroups, voir history.js) plutôt que L/R seuls : un produit
+    // sélectionné facteur par facteur (chaque parenthèse cliquée individuellement) compte
+    // ici exactement comme un produit sélectionné en bloc via son bord/signe.
+    var L2 = App.History.getFactorSelectionIndices('left'), R2 = App.History.getFactorSelectionIndices('right');
+    var canFactorAlreadyGrouped = (L2.length >= 2 && R2.length === 0 &&
+        (allNumericFactorGroups(eq.left, L2) || allProductGroups(eq.left, L2))) ||
+      (R2.length >= 2 && L2.length === 0 &&
+        (allNumericFactorGroups(eq.right, R2) || allProductGroups(eq.right, R2)));
     // Factoriser un terme seul n'a rien à "extraire de commun" : exige au moins 2 termes.
     var canFactor = (L.length >= 2 && R.length === 0 && leftClean) ||
       (R.length >= 2 && L.length === 0 && rightClean) || canFactorGroup || canFactorAlreadyGrouped;
@@ -1081,11 +1085,13 @@
     // déclenche un re-rendu qui détacherait cette cible du DOM.
     document.addEventListener('click', function (e) {
       var pending = App.History.getPending();
-      // pending.selectedFactors (sélection par facteur, voir toggleFactorSelection dans
-      // history.js) fait PARTIE de ce qu'il faut vérifier ici : il ne touche jamais
-      // selectedLeft/Right, donc sans ce test un facteur sélectionné seul (ex. "(x+5)")
-      // n'était jamais désélectionné par un clic en dehors de l'équation.
+      // pending.selectedFactors/selectedFactorGroups (sélection par facteur, voir
+      // toggleFactorSelection dans history.js) font PARTIE de ce qu'il faut vérifier ici :
+      // ils ne touchent jamais selectedLeft/Right, donc sans ce test un facteur
+      // sélectionné seul (ex. "(x+5)"), ou un produit complété facteur par facteur puis
+      // abandonné, n'était jamais désélectionné par un clic en dehors de l'équation.
       if (!pending.opType && !pending.selectedFactors.left && !pending.selectedFactors.right &&
+          pending.selectedFactorGroups.left.length === 0 && pending.selectedFactorGroups.right.length === 0 &&
           pending.selectedLeft.length === 0 && pending.selectedRight.length === 0) return;
       var modalOverlay = document.getElementById('modalOverlay');
       if (modalOverlay && !modalOverlay.hidden) return;

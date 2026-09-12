@@ -1226,10 +1226,15 @@
       };
     }
     if (pending.opType === 'factor' && pending.factorMode === 'common') {
+      // getFactorSelectionIndices (pas selectedLeft/Right seuls) : un produit sélectionné
+      // facteur par facteur (voir toggleFactorSelection/selectedFactorGroups dans
+      // history.js) n'apparaît jamais dans selectedLeft/Right lui-même — sans cette
+      // fusion, le pavé "live" ne trouvait aucun côté avant la première frappe (le champ
+      // partagé restait alors invisible/non focalisable, voir factorTarget).
       var side = (preview.opLeft && preview.opLeft.type === 'factor') ? 'left'
         : (preview.opRight && preview.opRight.type === 'factor') ? 'right'
-        : pending.selectedLeft.length > 0 ? 'left'
-        : pending.selectedRight.length > 0 ? 'right'
+        : App.History.getFactorSelectionIndices('left').length > 0 ? 'left'
+        : App.History.getFactorSelectionIndices('right').length > 0 ? 'right'
         : null;
       return side
         ? { side: side, mirror: false, rawLatex: null, prefixLatex: '\\text{factoriser par }', warnLatex: null }
@@ -1280,8 +1285,14 @@
     var fadeInEl = null;  // ligne qui doit finir AVEC "current" mais est créée sans
     var fadeOutEl = null; // ligne qui doit finir SANS "current" mais est créée avec
 
-    var leftSelected = new Set(pending.selectedLeft);
-    var rightSelected = new Set(pending.selectedRight);
+    // Fusionne avec pending.selectedFactorGroups (produits ENTIERS complétés facteur par
+    // facteur, voir toggleFactorSelection/updateFactorGroupCompletion dans history.js) pour
+    // que ce noeud reste visuellement "selected" même une fois passé à un AUTRE produit
+    // (dont la sélection par facteur, elle, ne retient qu'un produit à la fois — voir
+    // pending.selectedFactors) — purement visuel, n'affecte jamais selectedLeft/Right
+    // lui-même ni topLevelDragCtx.getSelected (qui les relit fraîchement, voir plus bas).
+    var leftSelected = new Set(pending.selectedLeft.concat(pending.selectedFactorGroups.left));
+    var rightSelected = new Set(pending.selectedRight.concat(pending.selectedFactorGroups.right));
     // Sélection libre (opType null) : les deux membres restent sélectionnables sans
     // restriction — Simplifier peut agir sur les deux à la fois, et c'est l'activation
     // des boutons (voir computeSelectionInfo dans toolbar.js), pas la sélection
@@ -1299,8 +1310,8 @@
         leftSelectable = false;
         rightSelectable = false;
       } else {
-        leftSelectable = pending.selectedRight.length === 0;
-        rightSelectable = pending.selectedLeft.length === 0;
+        leftSelectable = pending.selectedRight.length === 0 && pending.selectedFactorGroups.right.length === 0;
+        rightSelectable = pending.selectedLeft.length === 0 && pending.selectedFactorGroups.left.length === 0;
       }
     } else if (pending.drilled) {
       leftSelectable = pending.drilled.side !== 'left';

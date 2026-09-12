@@ -114,6 +114,45 @@ async function clickWholeProductNode(page, side, index) {
   await page.waitForTimeout(80);
   ok('mixed selection (one product + one plain term) does NOT enable Factoriser', await isOpRowEnabled(page, 'factor') === false);
 
+  // Geste alternatif, plus naturel : cliquer chacun des facteurs de CHAQUE produit (au lieu
+  // de viser le bord/signe du noeud entier, voir clickWholeProductNode) — voir
+  // toggleFactorSelection/updateFactorGroupCompletion dans history.js. Un produit rejoint
+  // pending.selectedFactorGroups[side] dès que TOUS ses facteurs sont marqués, et y RESTE
+  // même une fois passé au produit suivant (contrairement à pending.selectedFactors, qui ne
+  // retient qu'un seul produit à la fois — c'est précisément ce que ce test vérifie).
+  await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '(x+1)(x+2)+(x+1)(x+5)=0');
+  await page.waitForTimeout(80);
+  await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-0"]');
+  await page.click('.eq-row.current .side[data-side="left"] [id$="-0-factor-1"]');
+  pending = await page.evaluate(() => window.App.History.getPending());
+  ok('first product fully clicked: recorded in selectedFactorGroups', JSON.stringify(pending.selectedFactorGroups.left) === '[0]');
+
+  await page.click('.eq-row.current .side[data-side="left"] [id$="-1-factor-0"]');
+  await page.click('.eq-row.current .side[data-side="left"] [id$="-1-factor-1"]');
+  pending = await page.evaluate(() => window.App.History.getPending());
+  ok('second product also completed: first one NOT forgotten (unlike selectedFactors, single-slot)',
+    JSON.stringify(pending.selectedFactorGroups.left.slice().sort()) === '[0,1]' &&
+    pending.selectedFactors.left && pending.selectedFactors.left.index === 1);
+  ok('"Factoriser" enabled via per-factor clicks alone', await isOpRowEnabled(page, 'factor'));
+
+  await page.click('button[data-op="factor"]');
+  await page.waitForTimeout(80);
+  await page.click('button.factor-choice-btn[data-factor-choice="common"]');
+  await page.waitForTimeout(150);
+  await page.keyboard.type('x+1');
+  await page.waitForTimeout(80);
+  pending = await page.evaluate(() => window.App.History.getPending());
+  ok('shared math-field actually receives the typed expression (regression: it silently lost focus)',
+    pending.factorLatex === 'x+1');
+  await page.click('[data-key="enter"]');
+  await page.waitForTimeout(150);
+  const perFactorResult = await page.evaluate(() => window.App.History.lastEquation());
+  console.log('resultat via clic facteur par facteur:', JSON.stringify(perFactorResult.left[0]));
+  ok('per-factor-click gesture produces the same factored result', perFactorResult.left[0].factors &&
+    JSON.stringify(perFactorResult.left[0].factors[0].terms) === JSON.stringify([{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }]) &&
+    JSON.stringify(perFactorResult.left[0].factors[1].terms) ===
+      JSON.stringify([{ coeff: 1, pow: 1 }, { coeff: 2, pow: 0 }, { coeff: 1, pow: 1 }, { coeff: 5, pow: 0 }]));
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;

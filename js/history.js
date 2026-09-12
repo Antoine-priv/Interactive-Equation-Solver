@@ -40,6 +40,16 @@
       // mais côté gauche et côté droit restent indépendants — voir computeExpandTargets,
       // qui combine les deux côtés en une seule étape de "Développer").
       selectedFactors: { left: null, right: null },
+      // Indices de ProductGroup à ≥2 facteurs dont TOUS les facteurs ont été marqués via
+      // toggleFactorSelection à un moment donné (voir updateFactorGroupCompletion) : à la
+      // différence de selectedFactors ci-dessus (un seul produit à la fois PAR MEMBRE),
+      // PERSISTE même après être passé à un AUTRE produit — permet à l'élève de
+      // sélectionner facteur par facteur PLUSIEURS produits ENTIERS de l'équation (ex.
+      // "(x+1)(x+2)+(x+1)(x+5)"), pour ensuite les factoriser par un facteur commun partagé
+      // (voir Expr.factorCommonProductFactor), sans avoir à viser le signe/bord du noeud
+      // (voir combinedFactorIndices, qui fusionne ceci avec selectedLeft/Right pour
+      // factorTarget/enterFactorWithSelection/computeSelectionInfo).
+      selectedFactorGroups: { left: [], right: [] },
       // Mode 'factor' (bouton "Factoriser") : 2 étapes à partir d'un choix explicite,
       // plutôt que de deviner automatiquement une identité remarquable à partir d'un
       // simple nombre tapé (ancien comportement) — voir chooseFactorMode.
@@ -198,11 +208,14 @@
     function cancelOp() {
       // Rien à annuler : ne pas redéclencher un rendu (et l'animation de défilement)
       // pour rien, sinon maintenir Échap enfoncé (répétition clavier) fait "sauter" la page.
-      // pending.selectedFactors (voir toggleFactorSelection) fait PARTIE de ce qu'il faut
-      // vérifier ici : il ne touche jamais selectedLeft/Right (voir son commentaire), donc
-      // sans ce test un facteur sélectionné seul restait bloqué (ni Échap, ni clic en
-      // dehors de l'équation ne le désélectionnait, contrairement à un terme classique).
+      // pending.selectedFactors/selectedFactorGroups (voir toggleFactorSelection) font
+      // PARTIE de ce qu'il faut vérifier ici : ils ne touchent jamais selectedLeft/Right
+      // (voir leurs commentaires), donc sans ce test un facteur sélectionné seul (ou un
+      // produit complété facteur par facteur puis abandonné) restait bloqué (ni Échap, ni
+      // clic en dehors de l'équation ne le désélectionnait, contrairement à un terme
+      // classique).
       if (!pending.opType && !pending.drilled && !pending.selectedFactors.left && !pending.selectedFactors.right &&
+          pending.selectedFactorGroups.left.length === 0 && pending.selectedFactorGroups.right.length === 0 &&
           pending.selectedLeft.length === 0 && pending.selectedRight.length === 0) return;
       resetPending();
     }
@@ -328,15 +341,62 @@
       var sel = pending.selectedFactors[side];
       if (!sel || sel.index !== index) {
         pending.selectedFactors[side] = { index: index, branches: [branch] };
-        return;
-      }
-      var i = sel.branches.indexOf(branch);
-      if (i === -1) {
-        sel.branches.push(branch);
       } else {
-        sel.branches.splice(i, 1);
-        if (sel.branches.length === 0) pending.selectedFactors[side] = null;
+        var i = sel.branches.indexOf(branch);
+        if (i === -1) {
+          sel.branches.push(branch);
+        } else {
+          sel.branches.splice(i, 1);
+          if (sel.branches.length === 0) pending.selectedFactors[side] = null;
+        }
       }
+      updateFactorGroupCompletion(side, index);
+    }
+
+    // Tient à jour pending.selectedFactorGroups[side] pour CE `index` précis : y entre dès
+    // que TOUS ses facteurs sont marqués dans pending.selectedFactors[side] (voir
+    // toggleFactorSelection), en ressort si un reclic ultérieur sur UN de ses facteurs (avant
+    // de passer à un autre produit) le rend à nouveau incomplet. Ne touche jamais les
+    // entrées d'autres indices — c'est précisément ce qui permet à ce tableau, contrairement
+    // à pending.selectedFactors[side], de retenir plusieurs produits complétés l'un après
+    // l'autre sur le même membre.
+    function updateFactorGroupCompletion(side, index) {
+      var node = lastEquation()[side][index];
+      var sel = pending.selectedFactors[side];
+      var isComplete = !!node && Expr.isProductGroup(node) && sel && sel.index === index &&
+        sel.branches.length === node.factors.length;
+      var list = pending.selectedFactorGroups[side];
+      var pos = list.indexOf(index);
+      if (isComplete && pos === -1) {
+        list.push(index);
+      } else if (!isComplete && pos !== -1) {
+        list.splice(pos, 1);
+      }
+    }
+
+    // Fusionne selectedLeft/Right (sélection classique) et selectedFactorGroups[side]
+    // (produits complétés facteur par facteur, voir updateFactorGroupCompletion) pour CE
+    // side : vue unifiée consommée par factorTarget/enterFactorWithSelection ainsi que par
+    // App.History.getFactorSelectionIndices (utilisé par computeSelectionInfo dans
+    // toolbar.js) — les deux gestes (clic sur le bord du noeud, ou clic sur chacun de ses
+    // facteurs) doivent compter à l'identique pour "Factoriser".
+    // Retire `index` de pending.selectedFactorGroups[side] s'il y était (voir
+    // drillIntoGroup/drillIntoProductBranch/drillIntoQuotientDenominator, qui l'appellent en
+    // même temps qu'ils retirent ce même index de selectedLeft/Right : "entrer" dans ce
+    // noeud en fait le membre courant du drill, pas une sélection de premier niveau).
+    function removeFromFactorGroups(side, index) {
+      var list = pending.selectedFactorGroups[side];
+      var i = list.indexOf(index);
+      if (i !== -1) list.splice(i, 1);
+    }
+
+    function combinedFactorIndices(side) {
+      var base = side === 'left' ? pending.selectedLeft : pending.selectedRight;
+      var extra = pending.selectedFactorGroups[side];
+      if (!extra || extra.length === 0) return base;
+      var out = base.slice();
+      extra.forEach(function (i) { if (out.indexOf(i) === -1) out.push(i); });
+      return out;
     }
 
     // Entre dans le groupe factorisé sélectionné au premier niveau (double-clic sur un
@@ -359,6 +419,7 @@
       pending.drilled = { side: side, path: [index] };
       pending.selectedInner = [];
       pending.selectedFactors[side] = null;
+      removeFromFactorGroups(side, index);
       pending.error = null;
       notify();
     }
@@ -377,6 +438,7 @@
       pending.drilled = { side: side, path: [index], branch: branch };
       pending.selectedInner = [];
       pending.selectedFactors[side] = null;
+      removeFromFactorGroups(side, index);
       pending.error = null;
       notify();
     }
@@ -398,6 +460,7 @@
       pending.drilled = { side: side, path: [index], part: 'den' };
       pending.selectedInner = [];
       pending.selectedFactors[side] = null;
+      removeFromFactorGroups(side, index);
       pending.error = null;
       notify();
     }
@@ -533,12 +596,17 @@
           apply: function (newArray) { return applyDrilledArray(eq, d, newArray); }
         };
       }
-      var side = pending.selectedLeft.length > 0 ? 'left' : (pending.selectedRight.length > 0 ? 'right' : null);
+      // Fusionne selectedLeft/Right avec selectedFactorGroups[side] (produits complétés
+      // facteur par facteur, voir combinedFactorIndices) : les deux gestes de sélection
+      // d'un produit ENTIER (clic sur son bord/signe, ou clic sur chacun de ses facteurs)
+      // comptent à l'identique ici.
+      var leftIdx = combinedFactorIndices('left'), rightIdx = combinedFactorIndices('right');
+      var side = leftIdx.length > 0 ? 'left' : (rightIdx.length > 0 ? 'right' : null);
       if (!side) return null;
       return {
         side: side,
         array: eq[side],
-        indices: side === 'left' ? pending.selectedLeft : pending.selectedRight,
+        indices: side === 'left' ? leftIdx : rightIdx,
         apply: function (newArray) {
           var out = Eq.cloneEquation(eq);
           out[side] = newArray;
@@ -1161,7 +1229,12 @@
         notify();
         return true;
       }
-      var L = pending.selectedLeft.length, R = pending.selectedRight.length;
+      // combinedFactorIndices (pas selectedLeft/Right seuls) : un produit sélectionné
+      // facteur par facteur (voir toggleFactorSelection/selectedFactorGroups) doit compter
+      // ici exactement comme un produit sélectionné en bloc, sous peine de bloquer
+      // silencieusement l'entrée en mode 'factor' alors même que le bouton est actif (voir
+      // computeSelectionInfo dans toolbar.js, qui utilise la même fusion).
+      var L = combinedFactorIndices('left').length, R = combinedFactorIndices('right').length;
       if (!((L >= 2 && R === 0) || (R >= 2 && L === 0))) return false;
       pending.opType = 'factor';
       pending.factorChoiceFailed = [];
@@ -1751,6 +1824,7 @@
       confirmSimplifySelection: confirmSimplifySelection,
       enterFactorWithSelection: enterFactorWithSelection,
       getFactorTargetShape: getFactorTargetShape,
+      getFactorSelectionIndices: combinedFactorIndices,
       chooseFactorMode: chooseFactorMode,
       goBackToFactorChoice: goBackToFactorChoice,
       setIdentityFocus: setIdentityFocus,
@@ -2053,6 +2127,7 @@
       'exitFactorKeepSelection', 'toggleTermSelection', 'toggleInnerSelection',
       'drillIntoGroup', 'drillIntoProductBranch', 'drillIntoInnerGroup', 'exitDrill',
       'confirmSimplifySelection', 'enterFactorWithSelection', 'getFactorTargetShape',
+      'getFactorSelectionIndices',
       'chooseFactorMode', 'goBackToFactorChoice', 'setIdentityFocus',
       'confirmExpandFullSelection', 'toggleSquareRootArmed', 'setExprChainText',
       'setFactorTermLatex', 'setIdentityFieldLatex', 'parseOperandTerm', 'confirm',
