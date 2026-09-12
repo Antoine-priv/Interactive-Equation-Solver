@@ -1230,11 +1230,16 @@
       // facteur par facteur (voir toggleFactorSelection/selectedFactorGroups dans
       // history.js) n'apparaît jamais dans selectedLeft/Right lui-même — sans cette
       // fusion, le pavé "live" ne trouvait aucun côté avant la première frappe (le champ
-      // partagé restait alors invisible/non focalisable, voir factorTarget).
+      // partagé restait alors invisible/non focalisable, voir factorTarget). pending.drilled
+      // (facteur commun choisi À L'INTÉRIEUR d'un groupe déjà factorisé, voir
+      // enterFactorWithSelection/pending.selectedInner) : ni selectedLeft/Right ni
+      // selectedFactorGroups ne contiennent alors rien, ce membre restant vide tant que
+      // rien n'est tapé — pending.drilled.side donne directement le côté concerné.
       var side = (preview.opLeft && preview.opLeft.type === 'factor') ? 'left'
         : (preview.opRight && preview.opRight.type === 'factor') ? 'right'
         : App.History.getFactorSelectionIndices('left').length > 0 ? 'left'
         : App.History.getFactorSelectionIndices('right').length > 0 ? 'right'
+        : pending.drilled ? pending.drilled.side
         : null;
       return side
         ? { side: side, mirror: false, rawLatex: null, prefixLatex: '\\text{factoriser par }', warnLatex: null }
