@@ -35,6 +35,51 @@
   var factorPanelSig = null;
   var factorFieldBound = false;
 
+  // Derniers arguments reçus par positionPanel (voir plus bas) — mémorisés pour pouvoir
+  // la rappeler NOUS-MÊMES une fois qu'une rangée .op-row a fini de grandir/rétrécir (voir
+  // le `transitionend` posé sur #opButtons dans initToolbar) : positionPanel centre la
+  // fenêtre sur `panelEl.offsetHeight`, or renderAll (render.js) ne l'appelle QU'UNE FOIS
+  // par rendu, juste après que renderToolbar a lancé l'animation d'une rangée — à ce
+  // moment-là, la transition de hauteur vient tout juste de démarrer, donc offsetHeight
+  // vaut encore (presque) l'ANCIENNE hauteur. Sans ce rappel après coup, la fenêtre reste
+  // figée à la position calculée pour cette ancienne hauteur pendant que son contenu réel
+  // continue de rétrécir/grandir sous elle, la faisant dériver loin de l'équation ciblée.
+  var lastPositionArgs = null;
+
+  // rAF id de la boucle de "poursuite" démarrée par trackPanelDuringRowAnimation
+  // ci-dessous (null si aucune boucle en cours) — un id de garde plutôt qu'un simple
+  // booléen : une future évolution qui voudrait pouvoir aussi l'annuler explicitement
+  // (ex. sur un changement d'équation) disposerait déjà de l'id à passer à
+  // cancelAnimationFrame, ce qu'un booléen ne permettrait pas.
+  var repositionRafId = null;
+
+  // Vrai tant qu'au moins une .op-row est en cours de réduction (row-hidden posé mais pas
+  // encore le `hidden` final, voir setRowVisibility) ou d'apparition (row-appearing, voir
+  // son retrait dans l'écouteur `animationend` d'initToolbar) — c'est-à-dire tant que la
+  // hauteur du panneau peut encore changer sous positionPanel.
+  function isAnyRowAnimating(opButtonsEl) {
+    return !!opButtonsEl.querySelector('.op-row.row-hidden:not([hidden]), .op-row.row-appearing');
+  }
+
+  // Repositionne la fenêtre à CHAQUE frame tant qu'une rangée grandit/rétrécit encore
+  // (voir isAnyRowAnimating), plutôt qu'une seule fois à la fin de la transition : sans
+  // ce suivi continu, la fenêtre resterait figée à la position calculée pour l'ANCIENNE
+  // hauteur (voir lastPositionArgs plus haut) pendant toute la durée de l'animation, puis
+  // "sauterait" d'un coup à sa position correcte une fois celle-ci terminée — un
+  // comportement presque aussi perturbant que l'absence totale de correction. Idempotent
+  // (repositionRafId) : renderToolbar peut l'appeler à chaque rendu sans jamais empiler
+  // plusieurs boucles.
+  function trackPanelDuringRowAnimation(opButtonsEl) {
+    if (repositionRafId !== null || !isAnyRowAnimating(opButtonsEl)) return;
+    function step() {
+      if (lastPositionArgs) {
+        positionPanel(lastPositionArgs.anchorRowEl, lastPositionArgs.prevRowEl, lastPositionArgs.hide);
+      }
+      repositionRafId = isAnyRowAnimating(opButtonsEl) ? requestAnimationFrame(step) : null;
+    }
+    repositionRafId = requestAnimationFrame(step);
+  }
+
   // Explication de chaque mode : affichée en infobulle au survol du bouton correspondant
   // (voir initToolbar).
   var MESSAGES = {
@@ -621,6 +666,7 @@
         row.classList.remove('op-row-split');
       }
     });
+    trackPanelDuringRowAnimation(opButtons);
 
     var panel = document.getElementById('controlPanel');
     // Seul "Factoriser" a encore besoin d'un pavé de saisie ici ; "Opération" vit
@@ -673,6 +719,7 @@
   // grisés (seul "Opération" resterait actif, ce qui n'a pas de sens sur un résultat
   // final).
   function positionPanel(anchorRowEl, prevRowEl, hide) {
+    lastPositionArgs = { anchorRowEl: anchorRowEl, prevRowEl: prevRowEl, hide: hide };
     var panelEl = document.getElementById('opButtons');
     if (!panelEl) return;
     if (hide || !anchorRowEl) {
