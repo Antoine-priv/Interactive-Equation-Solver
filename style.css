@@ -905,7 +905,14 @@ button {
   max-height: 70px; /* > hauteur réelle d'un bouton (~54px, voir #opButtons .op-confirm-btn) : sert seulement de borne HAUTE à la transition, jamais la vraie taille (voir renderToolbar/setRowVisibility dans toolbar.js) */
   opacity: 1;
   transform: scale(1);
-  transform-origin: center left;
+  /* Centré (pas "left") : le `transform` ne fait pas grandir la boîte de mise en page de
+     #opButtons (qui reste callée sur sa largeur naturelle, jamais affectée par un
+     transform sur un descendant), donc tout dépassement dû au rebond de
+     .op-row.row-appearing (scale jusqu'à 1.06, voir plus bas) PEINT hors de la fenêtre
+     sans être clippé. Ancré à gauche, ce dépassement était entièrement porté par le bord
+     DROIT (débordait visiblement de la fenêtre) ; centré, il se répartit pour moitié de
+     chaque côté, largement absorbé par le padding (20px) de #opButtons. */
+  transform-origin: center;
   transition: max-height 0.26s cubic-bezier(0.4, 0, 0.2, 1),
               margin-top 0.26s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.18s ease,
