@@ -873,12 +873,46 @@ button {
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   z-index: 41;
+  opacity: 1;
+  transform: scale(1);
+  /* Anime la disparition (.panel-swap-out ci-dessous) quand une VRAIE nouvelle étape
+     remplace l'ancien point d'ancrage (voir swapPanelToNewStep dans toolbar.js) — pas
+     l'apparition, qui "pop" via une @keyframes dédiée (.panel-swap-in), même asymétrie
+     que .op-row/.op-confirm-btn plus bas. */
+  transition: opacity 0.18s ease, transform 0.18s ease;
 }
 /* #opButtons pose déjà son propre display:flex ci-dessus : sans ce rappel, l'attribut
    `hidden` (posé par positionPanel dans toolbar.js une fois l'équation résolue) resterait
    sans effet, une règle d'auteur battant toujours la feuille de style par défaut du
    navigateur quelle que soit la spécificité. */
 #opButtons[hidden] { display: none; }
+
+/* Disparition à l'ancienne position, AVANT que swapPanelToNewStep (toolbar.js) ne
+   déplace la fenêtre vers la nouvelle équation validée — jamais posée en même temps
+   qu'un déplacement (positionPanel change `left`/`top` seulement UNE FOIS cette classe
+   retirée), pour ne jamais glisser d'une équation à l'autre. */
+#opButtons.panel-swap-out {
+  opacity: 0;
+  transform: scale(0.85);
+  pointer-events: none;
+}
+
+/* Apparition à la nouvelle position (voir popPanelIn dans toolbar.js) : même "pop" avec
+   léger rebond que .op-row.row-appearing/.op-confirm-btn.confirm-appearing plus bas —
+   sert aussi bien de suite à .panel-swap-out que de toute première apparition. */
+@keyframes panelPopIn {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+#opButtons.panel-swap-in {
+  animation: panelPopIn 0.26s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #opButtons { transition: none; }
+  #opButtons.panel-swap-in { animation: none; }
+}
 
 /* Petite pointe qui désigne l'équation ciblée par la fenêtre : un carré pivoté à 45°
    dont seul le coin dépasse du bord droit — position verticale posée dynamiquement par

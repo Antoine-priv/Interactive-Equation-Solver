@@ -1945,10 +1945,19 @@
     // dehors" de toute colonne qui masquent déjà son liseré de focus masquent aussi cette
     // fenêtre — ses boutons agissent sur LA colonne focalisée, ça n'a pas de sens de les
     // laisser flotter au-dessus d'une équation qui vient de perdre son focus visuel.
+    // Comparée à lastCenteredStepByEngine (mise à jour plus bas, dans le bloc de
+    // recentrage) : identifie une VRAIE nouvelle étape validée (nouvel objet "step",
+    // jamais recréé pour un simple re-rendu — voir #history plus haut) plutôt qu'un rendu
+    // dû à une sélection/un survol sur la MÊME étape déjà affichée. Calculée ICI (avant le
+    // rAF de positionPanel juste en dessous, qui en a besoin pour choisir entre un saut
+    // instantané et l'animation disparition/pop de swapPanelToNewStep, voir toolbar.js)
+    // plutôt qu'au moment historique un peu plus bas (voir le bloc de recentrage) : les
+    // deux usages partagent maintenant cette même valeur, jamais recalculée deux fois.
+    var isNewStep = scrollTarget && scrollIdentity !== lastCenteredStepByEngine.get(scrollEngine);
     var hidePanel = scrollTargetSolved || (!!branches && !branchOutlineVisible);
     requestAnimationFrame(function () {
       if (isStaleRender()) return;
-      App.Toolbar.positionPanel(scrollTarget, opPrevRowEl, hidePanel);
+      App.Toolbar.positionPanel(scrollTarget, opPrevRowEl, hidePanel, isNewStep);
     });
 
     // Recentre (avec animation) lorsque le résultat encadré change réellement (nouvelle
@@ -1963,7 +1972,6 @@
     // silencieusement le scrollLeft absolu calculé la dernière fois de la position
     // réelle des colonnes à l'écran — non pertinent pour une scission "simple" (pas de
     // scrollLeft explicite à maintenir dans ce cas, voir plus bas).
-    var isNewStep = scrollTarget && scrollIdentity !== lastCenteredStepByEngine.get(scrollEngine);
     var currentScale = App.Canvas.getScale();
     var widthChangedDuringSplit = !!branches && isWideSplit && scroller && lastCenteredWidth !== null &&
       (scroller.clientWidth !== lastCenteredWidth || currentScale !== lastCenteredScale);

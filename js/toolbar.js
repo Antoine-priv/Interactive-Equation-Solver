@@ -784,15 +784,12 @@
   // entière disparaît plutôt que de rester affichée avec ses boutons pour la plupart
   // grisés (seul "Opération" resterait actif, ce qui n'a pas de sens sur un résultat
   // final).
-  function positionPanel(anchorRowEl, prevRowEl, hide) {
-    lastPositionArgs = { anchorRowEl: anchorRowEl, prevRowEl: prevRowEl, hide: hide };
-    var panelEl = document.getElementById('opButtons');
-    if (!panelEl) return;
-    if (hide || !anchorRowEl) {
-      panelEl.hidden = true;
-      return;
-    }
-    panelEl.hidden = false;
+  //
+  // Pur calcul de placement (mesure + `style.left/top`), SANS toucher à hidden/aux classes
+  // d'animation — extrait de positionPanel pour être appelé soit directement (reposition
+  // ordinaire), soit après la disparition de l'ancienne position (voir swapPanelToNewStep
+  // plus bas) : dans les deux cas, c'est exactement le même calcul.
+  function applyPanelPosition(panelEl, anchorRowEl, prevRowEl) {
     var historyScroll = document.getElementById('historyScroll');
     if (!historyScroll) return;
 
@@ -837,6 +834,136 @@
       if (arrowTop > localHeight - margin) arrowTop = localHeight - margin;
       arrowEl.style.top = arrowTop + 'px';
     }
+  }
+
+  // Vrai dès que la fenêtre a été positionnée au moins une fois sur une VRAIE cible (pas
+  // masquée) : distingue une réapparition (rien à faire disparaître avant, juste un pop,
+  // voir positionPanel plus bas) d'un VRAI changement d'étape en cours d'affichage (voir
+  // swapPanelToNewStep, qui la fait d'abord disparaître de son ancienne place).
+  var panelHasAppearedOnce = false;
+  // Vrai pendant la disparition de swapPanelToNewStep (avant que la nouvelle position ne
+  // soit appliquée) — évite d'empiler plusieurs écouteurs `transitionend` si un nouveau
+  // rendu arrive pendant cette fenêtre (voir son utilisation ci-dessous : lastPositionArgs,
+  // déjà tenu à jour à CHAQUE appel de positionPanel, porte alors la cible la plus récente
+  // au moment où LA transition en cours se termine).
+  var panelSwapping = false;
+
+  // "Pop" à la nouvelle position — même langage que .op-row.row-appearing/.confirm-
+  // appearing (voir style.css) : un simple appel, réutilisé aussi bien pour une première
+  // apparition que pour la fin d'un swap (voir swapPanelToNewStep).
+  function popPanelIn(panelEl) {
+    panelEl.classList.remove('panel-swap-in');
+    void panelEl.offsetWidth; // au cas où elle serait déjà présente : force un reflow pour pouvoir la rejouer
+    panelEl.classList.add('panel-swap-in');
+    var cleaned = false;
+    function cleanup() {
+      if (cleaned) return;
+      cleaned = true;
+      panelEl.removeEventListener('animationend', onIn);
+      clearTimeout(safetyTimer);
+      panelEl.classList.remove('panel-swap-in');
+    }
+    function onIn(e) {
+      if (e.target !== panelEl) return;
+      cleanup();
+    }
+    panelEl.addEventListener('animationend', onIn);
+    // Filet de sécurité (voir le même filet dans swapPanelToNewStep) : un `hidden` posé
+    // ailleurs PENDANT ce pop (équation résolue juste après) coupe l'animation sans
+    // déclencher `animationend` — cette classe resterait alors posée indéfiniment sans ce
+    // repli, même si `positionPanel` la retire déjà explicitement dans sa branche `hide`
+    // (ceinture et bretelles : un futur appel direct à popPanelIn qui l'oublierait resterait
+    // couvert).
+    var safetyTimer = setTimeout(cleanup, 320);
+  }
+
+  // Fait disparaître la fenêtre depuis sa position ACTUELLE (l'ancienne équation), puis la
+  // repositionne (invisible, voir .panel-swap-out dans style.css) et la fait réapparaître
+  // ("pop", voir popPanelIn) à la nouvelle — plutôt qu'un simple saut instantané d'une
+  // position à l'autre — quand une VRAIE nouvelle étape vient d'être validée (voir
+  // isNewStep dans render.js). Relit `lastPositionArgs` (pas les paramètres capturés à
+  // l'ouverture) une fois la disparition terminée : un rendu ultérieur a pu survenir
+  // entre-temps (voir panelSwapping ci-dessus) et sa cible est plus à jour que celle qui a
+  // déclenché ce swap.
+  function swapPanelToNewStep(panelEl) {
+    panelSwapping = true;
+    panelEl.classList.remove('panel-swap-in');
+    panelEl.classList.add('panel-swap-out');
+    var finished = false;
+    // Termine la disparition (repositionne + pop, voir plus haut) — appelée par LE
+    // PREMIER des deux déclencheurs ci-dessous à se produire, jamais les deux : `done`
+    // les rend mutuellement exclusifs.
+    function finish() {
+      if (finished) return;
+      finished = true;
+      panelEl.removeEventListener('transitionend', onOut);
+      clearTimeout(safetyTimer);
+      panelEl.classList.remove('panel-swap-out');
+      panelSwapping = false;
+      if (lastPositionArgs.hide || !lastPositionArgs.anchorRowEl) {
+        panelEl.hidden = true;
+        panelHasAppearedOnce = false;
+        return;
+      }
+      applyPanelPosition(panelEl, lastPositionArgs.anchorRowEl, lastPositionArgs.prevRowEl);
+      popPanelIn(panelEl);
+    }
+    function onOut(e) {
+      if (e.target !== panelEl || e.propertyName !== 'opacity') return;
+      finish();
+    }
+    panelEl.addEventListener('transitionend', onOut);
+    // Filet de sécurité : si cette disparition interrompt un pop-in tout juste démarré
+    // (voir popPanelIn) ALORS que son opacité n'avait pas encore eu le temps de s'écarter
+    // de 0 (l'état de départ du @keyframes panelPopIn), la coupure de l'animation ET la
+    // pose de .panel-swap-out (qui cible AUSSI opacity:0) laissent l'opacité déjà à sa
+    // valeur finale — aucune transition ne se produit alors réellement, et `transitionend`
+    // ne se déclenche donc JAMAIS pour "opacity" (observé en pratique : deux rendus
+    // "nouvelle étape" très rapprochés au tout premier chargement d'une équation). Ce
+    // timer, un peu plus long que les 0.18s déclarés, fait avancer la chorégraphie même
+    // dans ce cas plutôt que de rester bloqué indéfiniment en panelSwapping=true.
+    var safetyTimer = setTimeout(finish, 240);
+  }
+
+  function positionPanel(anchorRowEl, prevRowEl, hide, isNewStep) {
+    lastPositionArgs = { anchorRowEl: anchorRowEl, prevRowEl: prevRowEl, hide: hide };
+    var panelEl = document.getElementById('opButtons');
+    if (!panelEl) return;
+    if (hide || !anchorRowEl) {
+      panelEl.hidden = true;
+      panelEl.classList.remove('panel-swap-out', 'panel-swap-in');
+      panelHasAppearedOnce = false;
+      return;
+    }
+    // Une disparition (swapPanelToNewStep) est déjà en cours : elle repositionnera
+    // elle-même la fenêtre une fois terminée (voir son `finish`). Sans ce repli, un
+    // repositionnement "ordinaire" concurrent (ex. le suivi continu des rangées pendant
+    // qu'elles grandissent/rétrécissent, voir trackPanelDuringRowAnimation) glisserait
+    // la fenêtre vers la NOUVELLE équation PENDANT qu'elle est censée simplement
+    // s'effacer sur PLACE à l'ancienne — perçu comme un petit saut au tout début du
+    // fondu plutôt qu'une disparition propre.
+    if (panelSwapping) return;
+    // Une VRAIE nouvelle étape (isNewStep, voir render.js), déjà visible auparavant (donc
+    // quelque chose à faire disparaître) et pas déjà en train de le faire : bascule sur la
+    // chorégraphie disparition -> repositionnement -> pop plutôt que le saut instantané
+    // ci-dessous. `prefersReducedMotion` (voir setRowVisibility plus haut pour la même
+    // logique) : saute directement à l'ancien comportement, un `transitionend` n'ayant
+    // sinon aucune chance de se déclencher sans transition active.
+    if (isNewStep && panelHasAppearedOnce && !panelEl.hidden && !panelSwapping && !prefersReducedMotion) {
+      swapPanelToNewStep(panelEl);
+      return;
+    }
+    panelEl.hidden = false;
+    applyPanelPosition(panelEl, anchorRowEl, prevRowEl);
+    // Première apparition (jamais rien eu à quitter) sur une VRAIE nouvelle étape : un
+    // simple pop direct à la position qui vient d'être calculée, sans disparition
+    // préalable — couvre aussi bien le tout premier rendu que la ré-apparition après un
+    // état masqué (voir panelHasAppearedOnce, remis à false dans la branche `hide` plus
+    // haut).
+    if (isNewStep && !panelHasAppearedOnce && !prefersReducedMotion) {
+      popPanelIn(panelEl);
+    }
+    panelHasAppearedOnce = true;
   }
 
   function initToolbar() {
