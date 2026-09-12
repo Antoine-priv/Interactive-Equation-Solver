@@ -268,6 +268,15 @@
       });
     }
 
+    // Vrai si TOUS les noeuds sélectionnés sont des ProductGroup (ex. "(x+1)(x+2)",
+    // "(x+1)(x+5)") : reste factorisable par un facteur commun EXPRESSION partagé entre eux
+    // (ex. "(x+1)(x+2)+(x+1)(x+5)" par "(x+1)", voir Expr.factorCommonProductFactor) même si
+    // "clean" (ci-dessous) est faux, exactement comme allNumericFactorGroups pour le facteur
+    // commun numérique d'expressions déjà groupées.
+    function allProductGroups(arr, indices) {
+      return indices.length >= 2 && indices.every(function (i) { return App.Expr.isProductGroup(arr[i]); });
+    }
+
     // "Entré" dans un groupe factorisé (voir pending.drilled dans history.js) :
     // Simplifier/Factoriser/Développer portent alors sur SES termes intérieurs (jamais
     // Produit nul, qui ne s'applique qu'à l'équation entière) — Développer un terme
@@ -313,7 +322,8 @@
       return {
         canSimplify: (sel.length >= 2 && innerClean) || (otherSel.length >= 2 && otherClean),
         // Factoriser un terme seul n'a rien à "extraire de commun" : exige au moins 2 termes.
-        canFactor: (sel.length >= 2 && innerClean) || innerCanFactorGroup || allNumericFactorGroups(inner, sel),
+        canFactor: (sel.length >= 2 && innerClean) || innerCanFactorGroup ||
+          allNumericFactorGroups(inner, sel) || allProductGroups(inner, sel),
         canExpand: innerCanExpand,
         canProduitNul: false
       };
@@ -335,10 +345,14 @@
     var canFactorGroup = ((L.length === 2 && R.length === 0) || (R.length === 2 && L.length === 0)) &&
       shape && !!(shape.groupBase || (shape.groupBaseA && shape.groupBaseB));
     // Facteur commun d'expressions déjà factorisées (ex. "2(5x-7)-10(9+3x)" par 2, voir
-    // Expr.factorAlreadyGroupedNodes) : la sélection contient des groupes, donc
-    // leftClean/rightClean est faux, mais reste factorisable.
-    var canFactorAlreadyGrouped = (L.length >= 2 && R.length === 0 && allNumericFactorGroups(eq.left, L)) ||
-      (R.length >= 2 && L.length === 0 && allNumericFactorGroups(eq.right, R));
+    // Expr.factorAlreadyGroupedNodes) OU d'une somme de ProductGroup partageant un facteur
+    // (ex. "(x+1)(x+2)+(x+1)(x+5)" par "(x+1)", voir Expr.factorCommonProductFactor) : la
+    // sélection contient des groupes, donc leftClean/rightClean est faux, mais reste
+    // factorisable.
+    var canFactorAlreadyGrouped = (L.length >= 2 && R.length === 0 &&
+        (allNumericFactorGroups(eq.left, L) || allProductGroups(eq.left, L))) ||
+      (R.length >= 2 && L.length === 0 &&
+        (allNumericFactorGroups(eq.right, R) || allProductGroups(eq.right, R)));
     // Factoriser un terme seul n'a rien à "extraire de commun" : exige au moins 2 termes.
     var canFactor = (L.length >= 2 && R.length === 0 && leftClean) ||
       (R.length >= 2 && L.length === 0 && rightClean) || canFactorGroup || canFactorAlreadyGrouped;

@@ -827,14 +827,35 @@
       return { ops: ops, error: null };
     }
 
+    // Vrai si la sélection actuelle pour factoriser est une SOMME d'au moins 2 ProductGroup
+    // (ex. "(x+1)(x+2)+(x+1)(x+5)") : le facteur commun à saisir y est alors une EXPRESSION
+    // quelconque (ex. "x+1"), jamais un simple nombre/coefficient de x — voir
+    // parseOperandTerm ci-dessous et Expr.factorCommonProductFactor.
+    function isProductFactorSelection(target) {
+      return !!target && target.indices.length >= 2 &&
+        target.indices.every(function (i) { return Expr.isProductGroup(target.array[i]); });
+    }
+
     // Terme du facteur commun (mode 'factor', factorMode==='common') : pending.factorLatex,
     // alimenté par setFactorTermLatex — analysé via le même pont LaTeX que "Opération" et
-    // la modale "Nouvelle équation" (App.Parser.parseLatexSide). Doit se réduire à un SEUL
-    // terme plat (pas un groupe, pas une somme) de degré 0 ou 1 : un facteur commun est
-    // toujours un simple nombre ou un coefficient de x (jamais x², jamais une expression).
-    // Renvoie null si vide ou si la forme ne convient pas (voir confirm(), qui choisit le
-    // message d'erreur adapté selon lequel des deux cas c'est).
+    // la modale "Nouvelle équation" (App.Parser.parseLatexSide). Cas normal : doit se
+    // réduire à un SEUL terme plat (pas un groupe, pas une somme) de degré 0 ou 1, un
+    // facteur commun étant alors un simple nombre ou un coefficient de x (jamais x², jamais
+    // une expression). Cas d'une sélection de ProductGroup (voir isProductFactorSelection) :
+    // le facteur commun est au contraire une expression quelconque, renvoyée comme Side
+    // (Node[]) plutôt que comme Term — Expr.factorNodes distingue les deux via
+    // Array.isArray. Renvoie null si vide ou si la forme ne convient pas (voir confirm(),
+    // qui choisit le message d'erreur adapté selon lequel des deux cas c'est).
     function parseOperandTerm() {
+      if (isProductFactorSelection(factorTarget(lastEquation()))) {
+        if (!pending.factorLatex || !pending.factorLatex.trim()) return null;
+        try {
+          var parsedSide = App.Parser.parseLatexSide(pending.factorLatex);
+          return (parsedSide && parsedSide.length > 0) ? parsedSide : null;
+        } catch (eSide) {
+          return null;
+        }
+      }
       var t = singleFlatTerm(pending.factorLatex);
       if (!t || t.pow > 1) return null;
       return t;
@@ -960,7 +981,9 @@
           if (!factorTerm) {
             pending.error = pending.factorLatex.trim() === ''
               ? 'Saisissez le facteur commun.'
-              : 'Le facteur commun doit être un simple nombre ou un coefficient de x.';
+              : (isProductFactorSelection(target)
+                ? 'Le facteur commun doit être une expression valide.'
+                : 'Le facteur commun doit être un simple nombre ou un coefficient de x.');
             notify();
             return false;
           }
@@ -1566,7 +1589,7 @@
         } else if (p.factorMode === 'common') {
           var factorTerm = parseOperandTerm();
           try {
-            if (factorTerm && Expr.roundClean(factorTerm.coeff) !== 0) {
+            if (factorTerm && (Array.isArray(factorTerm) || Expr.roundClean(factorTerm.coeff) !== 0)) {
               previewEqF = pTarget.apply(Expr.factorNodes(pTarget.array, pTarget.indices, factorTerm));
               previewDesc = { type: 'factor', factor: factorTerm };
             } else {

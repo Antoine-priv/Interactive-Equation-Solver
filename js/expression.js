@@ -627,14 +627,85 @@
     return out;
   }
 
+  // Facteur commun quand la sélection est une SOMME de ProductGroup partageant un même
+  // facteur (ex. "(x+1)(x+2)+(x+1)(x+5)" factorisé par "x+1" donne "(x+1)[(x+2)+(x+5)]") :
+  // `factorSide` est ici une EXPRESSION (Side), pas un simple Term — voir parseOperandTerm
+  // dans history.js, qui bascule sur App.Parser.parseLatexSide au lieu d'un terme unique dès
+  // que la sélection est entièrement des ProductGroup. Chaque noeud sélectionné doit
+  // contenir, parmi ses facteurs, un facteur structurellement égal (sidesEquivalent) à
+  // `factorSide` ; une seule puissance en est retirée (même principe que wrapSideInQuotient
+  // lors d'une division par une expression), le reste de ce produit devenant un terme du
+  // nouveau groupe. Un reste réduit à un seul facteur d'exposant 1 rejoint directement les
+  // termes du nouveau groupe (signe distribué terme à terme via scaleNode) plutôt que d'être
+  // ré-enveloppé dans des parenthèses redondantes — même principe que
+  // factorAlreadyGroupedNodes quand le facteur restant vaut 1.
+  function factorCommonProductFactor(side, indices, factorSide) {
+    var idxSet = indices.slice().sort(function (a, b) { return a - b; });
+    var selectedNodes = idxSet.map(function (i) { return side[i]; });
+    if (!factorSide || factorSide.length === 0) {
+      throw new Error('Saisissez le facteur commun.');
+    }
+    var innerTerms = [];
+    selectedNodes.forEach(function (n) {
+      if (!isProductGroup(n)) {
+        throw new Error('Tous les termes sélectionnés doivent être des produits de facteurs.');
+      }
+      var matchIdx = -1;
+      for (var i = 0; i < n.factors.length; i++) {
+        if (sidesEquivalent(n.factors[i].terms, factorSide)) {
+          matchIdx = i;
+          break;
+        }
+      }
+      if (matchIdx === -1) {
+        throw new Error('Tous les termes sélectionnés doivent contenir ce facteur pour factoriser par lui.');
+      }
+      var matched = n.factors[matchIdx];
+      var remaining = matched.exponent === 1
+        ? n.factors.filter(function (_, fi) { return fi !== matchIdx; }).map(cloneFactor)
+        : n.factors.map(function (f, fi) {
+          return fi === matchIdx ? { terms: cloneSide(f.terms), exponent: f.exponent - 1 } : cloneFactor(f);
+        });
+      if (remaining.length === 0) {
+        innerTerms.push({ coeff: n.sign, pow: 0 });
+      } else if (remaining.length === 1 && remaining[0].exponent === 1) {
+        remaining[0].terms.forEach(function (t) { innerTerms.push(scaleNode(t, n.sign)); });
+      } else {
+        innerTerms.push({ sign: n.sign, factors: remaining });
+      }
+    });
+    var group = {
+      sign: 1,
+      factors: [
+        { terms: cloneSide(factorSide), exponent: 1 },
+        { terms: innerTerms, exponent: 1 }
+      ]
+    };
+    var out = [];
+    side.forEach(function (n, i) {
+      if (i === idxSet[0]) {
+        out.push(group);
+      } else if (idxSet.indexOf(i) !== -1) {
+        // skip
+      } else {
+        out.push(cloneNode(n));
+      }
+    });
+    return out;
+  }
+
   // Factorise les noeuds aux indices `indices` par `factorTerm` : soit tous des Term
   // (chaque terme intérieur ressort avec un degré diminué de celui du facteur — ex.
   // factoriser "x²+5x" par "x" donne les termes intérieurs x et 1 ; une sélection
   // contenant un terme de degré inférieur à celui du facteur est invalide, ex. factoriser
   // une constante par "x"), soit tous des FactorGroup numériques déjà factorisés (voir
-  // factorAlreadyGroupedNodes ci-dessus) ; un mélange des deux, ou un ProductGroup dans la
-  // sélection, reste invalide.
+  // factorAlreadyGroupedNodes ci-dessus), soit tous des ProductGroup partageant un facteur
+  // commun (voir factorCommonProductFactor ci-dessus, sélectionné en passant un Side comme
+  // `factorTerm` plutôt qu'un Term) ; un mélange de ces cas reste invalide.
   function factorNodes(side, indices, factorTerm) {
+    if (Array.isArray(factorTerm)) {
+      return factorCommonProductFactor(side, indices, factorTerm);
+    }
     var idxSet = indices.slice().sort(function (a, b) { return a - b; });
     var selectedNodes = idxSet.map(function (i) { return side[i]; });
     if (selectedNodes.every(function (n) { return isFactorGroup(n) && !n.isDivision; })) {

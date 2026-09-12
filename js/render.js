@@ -207,7 +207,13 @@
       return '\\sqrt{\\phantom{x}}';
     }
     if (desc.type === 'factor') {
-      return desc.factor ? '\\text{factoriser par }' + Expr.operandLatex(desc.factor) : '\\text{factoriser}';
+      if (!desc.factor) return '\\text{factoriser}';
+      // Facteur commun d'une somme de ProductGroup (voir Expr.factorCommonProductFactor) :
+      // desc.factor est alors une EXPRESSION (Side), pas un simple Term — groupSlotLatex
+      // l'entoure de parenthèses si elle compte plusieurs termes, comme un facteur normal
+      // de ProductGroup.
+      var factorBody = Array.isArray(desc.factor) ? Expr.groupSlotLatex(desc.factor) : Expr.operandLatex(desc.factor);
+      return '\\text{factoriser par }' + factorBody;
     }
     if (desc.type === 'factorIdentity') {
       // Identité remarquable choisie explicitement (voir chooseFactorMode dans
