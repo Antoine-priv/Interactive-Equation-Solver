@@ -1256,6 +1256,10 @@ button {
   transform: translateX(-50%);
   width: max-content;
   max-width: 260px;
+  /* Le bouton porte "white-space: nowrap" (voir #opButtons button plus haut), hérité par
+     défaut sur ce pseudo-élément : sans le réinitialiser ici, un texte plus long que
+     max-width déborderait de la bulle au lieu de passer à la ligne. */
+  white-space: normal;
   background: var(--tooltip-bg);
   color: var(--tooltip-text);
   font-size: 0.85rem;

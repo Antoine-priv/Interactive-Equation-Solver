@@ -83,11 +83,11 @@
   // Explication de chaque mode : affichée en infobulle au survol du bouton correspondant
   // (voir initToolbar).
   var MESSAGES = {
-    simplify: 'Sélectionnez au moins 2 termes à combiner.',
-    factor: 'Sélectionnez les termes à factoriser, puis saisissez le facteur commun.',
-    expand: 'Sélectionnez un groupe factorisé (parenthèse ou fraction) entier pour le développer.',
+    simplify: 'Combine les termes sélectionnés.',
+    factor: 'Factorise les termes sélectionnés par un facteur commun ou une identité remarquable.',
+    expand: 'Développe un groupe factorisé ou une fraction.',
     expr: 'Composez librement une suite d\'opérations.',
-    produitnul: 'Sélectionnez le produit (...)(...) pour résoudre chaque facteur séparément.'
+    produitnul: 'Sépare l\'équation pour résoudre chaque facteur individuellement.'
   };
 
   // Caractère "←" (utilisé pour la flèche retour, voir buildFactorBackRow) : selon la
