@@ -58,9 +58,9 @@
       overlay.classList.add('modal-overlay-hiding');
       void overlay.offsetWidth;
       overlay.classList.remove('modal-overlay-hiding');
-      // "Pop" de la boîte elle-même (rebond, voir @keyframes modalPopIn) — classe retirée
-      // avant d'être reposée pour permettre de rejouer l'animation même si elle était déjà
-      // présente (ouverture/fermeture/réouverture rapides).
+      // "Pop" de la boîte elle-même (grossissement + fondu, voir @keyframes modalPopIn) —
+      // classe retirée avant d'être reposée pour permettre de rejouer l'animation même si
+      // elle était déjà présente (ouverture/fermeture/réouverture rapides).
       box.classList.remove('modal-pop-in');
       void box.offsetWidth;
       box.classList.add('modal-pop-in');

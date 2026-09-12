@@ -267,6 +267,18 @@ button {
      du viewport) dérive silencieusement.
   */
   transform-origin: 0 0;
+  /* PERMANENT (pas seulement pendant .canvas-panning-animated ci-dessous) : promeut
+     #canvasLayer sur son propre calque de composition dès le chargement, une fois pour
+     toutes. Sans ça, chaque nouveau panoramique "smooth" (posé/retiré par
+     App.Canvas.scrollTo, voir canvas.js) forcerait Chromium à CRÉER ce calque au moment
+     même où la transition démarre — et la frame de création d'un calque de composition est
+     précisément celle où les flèches SVG (dessinées via <marker>, voir .arrows-overlay
+     plus bas), descendantes de #canvasLayer mais peintes sur un calque séparé, peuvent
+     rater un repaint et clignoter une frame. Un calque déjà stable AVANT que la transition
+     ne commence élimine cette re-création répétée. Inoffensif au repos (aucun scale/
+     translate supplémentaire, will-change ne fait qu'indiquer une intention au
+     compositeur). */
+  will-change: transform;
 }
 /* Posée temporairement par App.Canvas.scrollTo({behavior:'smooth'}) le temps d'une seule
    transition (retirée ensuite, voir stopAnimated dans canvas.js) : jamais présente en
@@ -1557,8 +1569,10 @@ button {
   transform: scale(1);
   /* Anime seulement la DISPARITION (.modal-vanish, posée par js/newEquationModal.js juste
      avant le `hidden` final) — même asymétrie que #opButtons/.panel-swap-out : l'apparition
-     "pop" via une @keyframes dédiée (.modal-pop-in ci-dessous) avec un léger rebond, une
-     simple transition ne rendrait pas ce rebond. */
+     passe par une @keyframes dédiée (.modal-pop-in ci-dessous) plutôt que cette transition,
+     pour pouvoir démarrer d'un état "juste retiré du `hidden`" (voir la parade de reflow
+     forcé dans open(), newEquationModal.js) sans dépendre de la valeur PRÉCÉDENTE d'opacity/
+     transform sur cet élément. */
   transition: opacity 0.16s ease, transform 0.16s ease;
 }
 .modal-box.modal-vanish {
@@ -1566,13 +1580,15 @@ button {
   transform: scale(0.92);
   pointer-events: none;
 }
+/* Pas de rebond (courbe "ease-out" pure, jamais de dépassement au-delà de 1) : une fenêtre
+   modale n'est pas un élément ludique comme .panel-swap-in/.op-row.row-appearing plus haut,
+   un simple grossissement/fondu suffit à signaler son apparition. */
 @keyframes modalPopIn {
-  0% { transform: scale(0.85); opacity: 0; }
-  60% { transform: scale(1.03); opacity: 1; }
+  0% { transform: scale(0.94); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
 .modal-box.modal-pop-in {
-  animation: modalPopIn 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: modalPopIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1669,8 +1685,8 @@ button {
   opacity: 1;
   transform: scale(1) translateY(0);
   /* Anime seulement la DISPARITION (.keypad-vanish, posée par setPanelHidden dans
-     mathKeypad.js juste avant le `hidden` final) — même asymétrie que .modal-box plus haut :
-     l'apparition "pop" via .keypad-pop-in ci-dessous, avec un léger rebond. */
+     mathKeypad.js juste avant le `hidden` final) — même asymétrie que .modal-box plus haut,
+     pour la même raison (voir son commentaire). */
   transition: opacity 0.16s ease, transform 0.16s ease;
 }
 .math-keypad-panel[hidden] { display: none; }
@@ -1679,13 +1695,14 @@ button {
   transform: scale(0.94) translateY(8px);
   pointer-events: none;
 }
+/* Pas de rebond (voir @keyframes modalPopIn plus haut pour la même raison) : simple
+   glissement + fondu depuis juste sous son ancrage bas-droite. */
 @keyframes keypadPopIn {
-  0% { transform: scale(0.9) translateY(14px); opacity: 0; }
-  60% { transform: scale(1.02) translateY(-2px); opacity: 1; }
+  0% { transform: scale(0.95) translateY(10px); opacity: 0; }
   100% { transform: scale(1) translateY(0); opacity: 1; }
 }
 .math-keypad-panel.keypad-pop-in {
-  animation: keypadPopIn 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: keypadPopIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
