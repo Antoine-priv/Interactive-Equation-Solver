@@ -24,7 +24,8 @@ function ok(label, cond) {
   const generators = [
     'generateLinearEquation', 'generateSimplifyFirstLinear', 'generateFactorableQuadratic',
     'generateSquareRootEquation', 'generateProductEquation', 'generateGroupedCommonFactor',
-    'generateSquareMinusConstant', 'generateDiffOfTwoSquaredExpr'
+    'generateSquareMinusConstant', 'generateDiffOfTwoSquaredExpr',
+    'generateFractionEquation', 'generateIdentityPlusProduct', 'generateTrinomialMinusSquareGroup'
   ];
 
   for (const name of generators) {
@@ -105,6 +106,41 @@ function ok(label, cond) {
       window.App.History.toggleTermSelection('left', 1);
       var shape5 = window.App.History.getFactorTargetShape();
       if (!shape5 || !shape5.groupBaseA || !shape5.groupBaseB) fails.push({ gen: 'diff-of-two-squares', eq: JSON.stringify(eq5), shape: JSON.stringify(shape5) });
+
+      // La fraction s'annule proprement en tapant "×d" (l'Opération unique), voir le cas
+      // ajouté à Expr.wrapSideInFactor : le membre gauche redevient de simples termes.
+      var eq6 = window.App.Generator.generateFractionEquation();
+      window.App.History.startNewEquation(eq6);
+      var d6 = eq6.left[0].factor.coeff;
+      window.App.History.selectOp('expr');
+      window.App.History.setExprChainText('\\times' + d6);
+      window.App.History.confirm();
+      var afterEq6 = window.App.History.lastEquation();
+      if (afterEq6.left.some(function (n) { return n.isDivision; })) {
+        fails.push({ gen: 'fraction-equation (still a fraction after ×d)', eq: JSON.stringify(eq6), after: JSON.stringify(afterEq6) });
+      }
+
+      // Forme "identité + produit" : un ProductGroup à 2 facteurs vient s'ajouter à une
+      // différence de carrés non factorisée.
+      var eq7 = window.App.Generator.generateIdentityPlusProduct();
+      window.App.History.startNewEquation(eq7);
+      var last7 = eq7.left[eq7.left.length - 1];
+      if (!window.App.Expr.isProductGroup(last7) || last7.factors.length !== 2) {
+        fails.push({ gen: 'identity-plus-product (no trailing 2-factor ProductGroup)', eq: JSON.stringify(eq7) });
+      }
+
+      // Forme "trinôme - carré" : Factoriser le trinôme (identité 1 ou 2) doit redonner un
+      // carré de signe +, prêt pour Expr.factorDifferenceOfTwoSquareGroups avec le carré de
+      // signe - déjà présent (voir generateTrinomialMinusSquareGroup).
+      var eq8 = window.App.Generator.generateTrinomialMinusSquareGroup();
+      window.App.History.startNewEquation(eq8);
+      window.App.History.toggleTermSelection('left', 0);
+      window.App.History.toggleTermSelection('left', 1);
+      window.App.History.toggleTermSelection('left', 2);
+      var shape8 = window.App.History.getFactorTargetShape();
+      if (!shape8) {
+        fails.push({ gen: 'trinomial-minus-square (trinomial not recognized as identity)', eq: JSON.stringify(eq8), shape: JSON.stringify(shape8) });
+      }
     }
     return fails;
   });

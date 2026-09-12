@@ -22,6 +22,12 @@
   var POW_SUFFIX = '(?:x\\^[0-9]+|x²|x)?';
   var TOKEN_RE = new RegExp('[+-]?(?:' + FRAC + POW_SUFFIX + '|' + NUM + POW_SUFFIX + '|x\\^[0-9]+|x²|x)', 'y');
   var FRAC_BODY_RE = new RegExp('^\\\\frac\\{(' + FRAC_NUMER + ')\\}\\{(-?' + NUM + ')\\}$');
+  // Numérateur "simple" (nombre ou x seul) : celui déjà pris en charge par FRAC/TOKEN_RE
+  // ci-dessus comme un COEFFICIENT décimal ("\frac{1}{2}x" = 0,5x). Sert à distinguer ce
+  // cas du numérateur QUELCONQUE ci-dessous (voir GENERAL_FRAC_DEN_RE), qui reste un
+  // FactorGroup isDivision affiché en fraction plutôt qu'un nombre replié.
+  var SIMPLE_FRAC_NUMER_RE = new RegExp('^' + FRAC_NUMER + '$');
+  var GENERAL_FRAC_DEN_RE = new RegExp('^\\{(-?' + NUM + ')\\}');
   // Coefficient explicite devant une parenthèse ouvrante, ex. "2(" dans "2(5x-7)" : permet
   // de taper directement un FactorGroup déjà factorisé (voir plus bas dans parseSide),
   // plutôt que de ne reconnaître QUE l'équation développée.
@@ -47,6 +53,20 @@
     for (var i = openIdx; i < s.length; i++) {
       if (s[i] === '(') depth++;
       else if (s[i] === ')') {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  // Même principe que findMatchingParen mais pour une accolade "{" déjà ouverte en
+  // `openIdx` (voir le numérateur QUELCONQUE d'un "\frac{...}{...}" ci-dessous).
+  function findMatchingBrace(s, openIdx) {
+    var depth = 0;
+    for (var i = openIdx; i < s.length; i++) {
+      if (s[i] === '{') depth++;
+      else if (s[i] === '}') {
         depth--;
         if (depth === 0) return i;
       }
@@ -166,6 +186,32 @@
         nodes.push({ sign: sign, factors: App.Expr.canonicalizeFactors(factorsV) });
         pos = curPosV;
         continue;
+      }
+
+      // "\frac{...}{d}" dont le numérateur n'est PAS un simple nombre/x (ex.
+      // "\frac{7x-3}{5}") : un FactorGroup isDivision, numérateur analysé RÉCURSIVEMENT via
+      // parseSide (même principe que readParenFactor pour "(...)"). Le cas simple
+      // ("\frac{1}{2}", "\frac{x}{2}" — un coefficient décimal, PAS une fraction affichée)
+      // reste géré plus bas par TOKEN_RE/FRAC_BODY_RE, inchangé : on ne l'intercepte pas ici.
+      if (s.slice(afterSign, afterSign + 6) === '\\frac{') {
+        var numOpen = afterSign + 5;
+        var numClose = findMatchingBrace(s, numOpen);
+        if (numClose === -1) throw new Error('Fraction non fermée près de "' + s.slice(afterSign) + '".');
+        var numerContent = s.slice(numOpen + 1, numClose);
+        if (!SIMPLE_FRAC_NUMER_RE.test(numerContent)) {
+          var denMatch = GENERAL_FRAC_DEN_RE.exec(s.slice(numClose + 1));
+          if (!denMatch) throw new Error('Fraction invalide près de "' + s.slice(afterSign) + '".');
+          var denVal = parseFloat(denMatch[1].replace(',', '.'));
+          if (denVal === 0) throw new Error('Division par zéro dans une fraction.');
+          nodes.push({
+            sign: sign * (denVal < 0 ? -1 : 1),
+            factor: { coeff: Math.abs(denVal), pow: 0 },
+            innerTerms: parseSide(numerContent),
+            isDivision: true
+          });
+          pos = numClose + 1 + denMatch[0].length;
+          continue;
+        }
       }
 
       if (s[afterSign] === '(') {

@@ -362,6 +362,16 @@
         factors: [{ terms: [{ coeff: multiplier, pow: 0 }], exponent: 1 }].concat(node.factors.map(cloneFactor))
       }];
     }
+    // Membre déjà UNE fraction ("(...)/d", voir wrapSideInFraction) par CE MÊME
+    // dénominateur d : annule la fraction plutôt que de la multiplier en place, qui
+    // laisserait un dénominateur figé à 1 (ex. "\frac{2x+6}{1}") — exactement ce qu'un
+    // élève ferait à la main, symétrique à l'annulation déjà en place dans
+    // wrapSideInQuotient pour la division par une expression.
+    if (side.length === 1 && isFactorGroup(side[0]) && side[0].isDivision && !side[0].factorTerms &&
+      side[0].factor.coeff === multiplier) {
+      var fracNode = side[0];
+      return fracNode.sign < 0 ? fracNode.innerTerms.map(function (t) { return scaleNode(t, -1); }) : cloneSide(fracNode.innerTerms);
+    }
     if (side.length === 1) {
       return [scaleNode(side[0], multiplier)];
     }
