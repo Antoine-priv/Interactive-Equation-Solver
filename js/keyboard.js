@@ -40,6 +40,11 @@
       }
       if (key === 'Enter') { App.History.confirm(); e.preventDefault(); return; }
       if (key === 'Escape') { App.History.cancelOp(); e.preventDefault(); return; }
+      if ((e.ctrlKey || e.metaKey) && (key === 'z' || key === 'Z')) {
+        if (App.History.canUndo()) App.History.undo();
+        e.preventDefault();
+        return;
+      }
     });
   }
 
