@@ -55,6 +55,11 @@ function ok(label, cond) {
   await page.waitForTimeout(150);
   await page.click('.eq-row.current .side[data-side="left"] [data-index="0"]'); // le groupe 2(x+3)
   await page.click('button[data-op="expand"]');
+  // "Développer" agit immédiatement (pas de confirm() séparé) : le curseur reste ensuite
+  // posé sur le bouton, qui déclenche un aperçu au survol (voir shouldShowLivePreview dans
+  // render.js) — sans ce déplacement, une ligne "pending" fantôme identique à l'étape
+  // confirmée resterait affichée indéfiniment, doublant à tort le compte de flèches.
+  await page.mouse.move(20, 20);
   await page.waitForTimeout(200);
   const arrowCountAfterExpand = await page.evaluate(() => document.querySelectorAll('svg.arrows-overlay path.arrow-path').length);
   // A ce stade : 2 transitions confirmees (initial->factor, factor->expand), chacune

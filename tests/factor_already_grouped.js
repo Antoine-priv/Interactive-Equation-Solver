@@ -7,6 +7,18 @@ function ok(label, cond) {
   if (!cond) process.exitCode = 1;
 }
 
+// L'apparition/disparition d'une .op-row est désormais animée (voir setRowVisibility dans
+// toolbar.js) : `hidden` n'est posé qu'à la fin de la transition ("row-hidden" est posé
+// immédiatement, "hidden" suit au "transitionend"). Une fois le panneau déjà montré/masqué
+// une première fois dans la session, vérifier seulement `.hidden` est donc sujet à une
+// course avec cette transition — il faut aussi tenir compte de "row-hidden".
+function isOpRowEnabled(page, op) {
+  return page.evaluate((op) => {
+    const row = document.querySelector('button[data-op="' + op + '"]').closest('.op-row');
+    return !row.hidden && !row.classList.contains('row-hidden');
+  }, op);
+}
+
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
@@ -26,7 +38,7 @@ function ok(label, cond) {
   await page.click('.eq-row.current .side[data-side="left"] .term[data-index="1"]');
   await page.waitForTimeout(80);
 
-  const factorBtnEnabled = await page.evaluate(() => !document.querySelector('button[data-op="factor"]').closest('.op-row').hidden);
+  const factorBtnEnabled = await isOpRowEnabled(page, 'factor');
   ok('"Factoriser" button enabled', factorBtnEnabled);
 
   await page.click('button[data-op="factor"]');
@@ -75,7 +87,7 @@ function ok(label, cond) {
   await page.click('.eq-row.current .side[data-side="left"] .term[data-index="0"]');
   await page.click('.eq-row.current .side[data-side="left"] .term[data-index="1"]');
   await page.waitForTimeout(80);
-  const mixedFactorEnabled = await page.evaluate(() => !document.querySelector('button[data-op="factor"]').closest('.op-row').hidden);
+  const mixedFactorEnabled = await isOpRowEnabled(page, 'factor');
   ok('mixed selection (grouped + plain) does NOT enable Factoriser', mixedFactorEnabled === false);
 
   console.log('--- erreurs JS ---');
