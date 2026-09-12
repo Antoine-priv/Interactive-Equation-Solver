@@ -1451,6 +1451,13 @@
         ? { equation: lastEq, opLeft: null, opRight: null }
         : engine.computePreview();
       var pendingRow = createRow(preview.equation, { pending: true, solved: false });
+      // "Pop" à l'apparition (voir .preview-pop-in dans style.css) : la ligne "pending"
+      // est entièrement reconstruite à chaque rendu (jamais réutilisée, voir plus haut),
+      // donc cette classe posée à la création rejoue l'animation exactement quand
+      // l'aperçu apparaît (survol démarré/nouvelle étape engagée) — jamais en boucle,
+      // puisque renderAll lui-même n'est pas rappelé en continu pendant un survol figé
+      // (seulement mouseenter/mouseleave, voir initToolbar).
+      pendingRow.classList.add('preview-pop-in');
       container.appendChild(pendingRow);
       autoFitRowFont(pendingRow);
       // Quel(s) côté(s) doi(ven)t recevoir une flèche même sans étiquette (voir
@@ -1744,6 +1751,7 @@
       // même étiquette √ des deux côtés).
       if (previewEquations && previewEquations.length === 1 && previewLabel === '\\sqrt{\\phantom{x}}') {
         var soleRowEl = createRow(previewEquations[0], { pending: true, solved: false, current: false });
+        soleRowEl.classList.add('preview-pop-in');
         history.appendChild(soleRowEl);
         var soleLabel = formatOpLabel({ type: 'sqrt' });
         res.rowsData.push({ el: soleRowEl, opLeft: soleLabel, opRight: soleLabel, pending: true });
@@ -1754,7 +1762,7 @@
         // éphémère et doit juste apparaître centré là où il est, sans logique de
         // défilement dédiée) : mise en page simple et indépendante, voir style.css.
         var previewWrap = document.createElement('div');
-        previewWrap.className = 'produit-nul-preview';
+        previewWrap.className = 'produit-nul-preview preview-pop-in';
         history.appendChild(previewWrap);
         previewCols = previewEquations.map(function (eqPrev) {
           var col = document.createElement('div');
@@ -1774,7 +1782,10 @@
         if (previewCols) {
           var lastEqSign = res.rowsData.length
             ? res.rowsData[res.rowsData.length - 1].el.querySelector('.eq-sign') : null;
-          drawOpts.fork = { from: lastEqSign, to: previewCols, label: previewLabel };
+          // preview:true (voir drawFork dans arrows.js) : SEULE cette fourche, purement
+          // visuelle et éphémère, doit se tracer progressivement — la vraie scission
+          // confirmée (autre appel à drawAll, ailleurs dans ce fichier) reste instantanée.
+          drawOpts.fork = { from: lastEqSign, to: previewCols, label: previewLabel, preview: true };
         }
         if (res.liveInfo) drawOpts.live = res.liveInfo;
         App.Arrows.drawAll(history, res.rowsData, drawOpts);

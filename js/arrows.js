@@ -148,10 +148,28 @@
     };
   }
 
+  // Tracé progressif ("grandit de la base vers la pointe") d'une flèche qui vient
+  // d'apparaître — jamais une flèche déjà confirmée, voir le flag `grow` posé par les
+  // appelants (drawAll : rows[i].pending / drawFork : fork.preview). stroke-dasharray et
+  // --arrow-len sont posés à la longueur RÉELLE du chemin (getTotalLength, seule façon
+  // d'obtenir un tracé qui avance à vitesse régulière — un dasharray arbitrairement plus
+  // grand que le chemin ne révèlerait le trait qu'en toute fin d'animation, le reste du
+  // temps invisible) ; le reste (stroke-dashoffset: var(--arrow-len) -> 0) est purement
+  // déclaratif, voir @keyframes arrowGrow dans style.css.
+  function markGrowingPath(path) {
+    var len = path.getTotalLength();
+    path.style.setProperty('--arrow-len', len);
+    path.style.strokeDasharray = len;
+  }
+
   // constrainLabels : recale l'étiquette pour rester DANS `historyRect` plutôt que dans
   // la fenêtre entière — nécessaire dans une colonne "produit nul" (étroite, à côté
   // d'une autre équation) pour ne jamais empiéter sur la colonne voisine.
-  function drawSide(svg, history, historyRect, topEl, botEl, label, warn, dir, markerId, constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect) {
+  // grow/growMarkerId : voir markGrowingPath ci-dessus — growMarkerId pointe vers un
+  // second <marker> dédié (voir drawAll), jamais celui, partagé, des flèches confirmées :
+  // sa propre pointe peut ainsi "apparaître" avec un léger délai (voir .arrowhead-fill-
+  // grow dans style.css) sans affecter les pointes, déjà là, de ces autres flèches.
+  function drawSide(svg, history, historyRect, topEl, botEl, label, warn, dir, markerId, constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect, grow, growMarkerId) {
     var geom = computeSideGeometry(historyRect, topEl, botEl, dir);
     // geom (voir computeSideGeometry) est en repère ÉCRAN, alors que `svg` et `el`
     // ci-dessous vivent tous deux dans le repère LOCAL de `history` (descendants du même
@@ -161,9 +179,10 @@
 
     var path = document.createElementNS(SVG_NS, 'path');
     path.setAttribute('d', buildPathD(geom.topX / scale, geom.topY / scale, geom.botX / scale, geom.botY / scale, geom.bulge / scale));
-    path.setAttribute('class', 'arrow-path');
-    path.setAttribute('marker-end', 'url(#' + markerId + ')');
+    path.setAttribute('class', 'arrow-path' + (grow ? ' arrow-path-grow' : ''));
+    path.setAttribute('marker-end', 'url(#' + (grow ? growMarkerId : markerId) + ')');
     svg.appendChild(path);
+    if (grow) markGrowingPath(path);
 
     if (!label) return;
     var anchor = computeLabelAnchor(geom, dir);
@@ -389,8 +408,10 @@
   // colonnes ci-dessous — pas vers l'équation elle-même, et sans jamais toucher ce bord
   // (petite marge). Distincte du système de flèches classique (une origine, une seule
   // destination) : une origine, plusieurs destinations, dessinée dans le MÊME svg que les
-  // flèches de la chaîne principale (voir drawAll).
-  function drawFork(svg, history, historyRect, markerId, fromEl, toEls, labelText, placedLabels, equationRects) {
+  // flèches de la chaîne principale (voir drawAll). grow/growMarkerId : voir drawSide —
+  // seule la fourche d'APERÇU (opts.fork.preview dans drawAll) se trace progressivement,
+  // jamais la vraie scission confirmée (même fonction, réutilisée pour les deux).
+  function drawFork(svg, history, historyRect, markerId, fromEl, toEls, labelText, placedLabels, equationRects, grow, growMarkerId) {
     var fromRect = fromEl.getBoundingClientRect();
     var originY = fromRect.bottom - historyRect.top + 10;
 
@@ -437,9 +458,10 @@
     destinations.forEach(function (d) {
       var path = document.createElementNS(SVG_NS, 'path');
       path.setAttribute('d', buildForkBranchD(originX / scale, originY / scale, d.x / scale, d.y / scale));
-      path.setAttribute('class', 'arrow-path');
-      path.setAttribute('marker-end', 'url(#' + markerId + ')');
+      path.setAttribute('class', 'arrow-path' + (grow ? ' arrow-path-grow' : ''));
+      path.setAttribute('marker-end', 'url(#' + (grow ? growMarkerId : markerId) + ')');
       svg.appendChild(path);
+      if (grow) markGrowingPath(path);
     });
 
     // Étiquette placée EN DESSOUS du point de scission (pas au-dessus, sur le tronc
@@ -488,6 +510,11 @@
 
     overlaySeq += 1;
     var markerId = 'arrowhead-' + overlaySeq;
+    // Second marqueur, dédié aux flèches "en train de se tracer" (voir markGrowingPath/
+    // drawSide) : sa pointe (.arrowhead-fill-grow) porte sa PROPRE animation d'apparition
+    // retardée (voir style.css), un simple `id` partagé avec les flèches déjà confirmées
+    // ferait rejouer cette animation sur LEURS pointes aussi à chaque rendu.
+    var growMarkerId = markerId + '-grow';
 
     var historyRect = history.getBoundingClientRect();
     var svg = document.createElementNS(SVG_NS, 'svg');
@@ -498,7 +525,9 @@
     var defs = document.createElementNS(SVG_NS, 'defs');
     defs.innerHTML =
       '<marker id="' + markerId + '" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">' +
-      '<path d="M0,0 L9,5 L0,10 Z" class="arrowhead-fill"/></marker>';
+      '<path d="M0,0 L9,5 L0,10 Z" class="arrowhead-fill"/></marker>' +
+      '<marker id="' + growMarkerId + '" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto">' +
+      '<path d="M0,0 L9,5 L0,10 Z" class="arrowhead-fill arrowhead-fill-grow"/></marker>';
     svg.appendChild(defs);
     history.appendChild(svg);
 
@@ -525,6 +554,13 @@
         // pas de flèche du tout pour ce membre.
         var isPendingLeftArrow = !!rows[i].pending && !!rows[i].pendingForceLeft;
         var isPendingRightArrow = !!rows[i].pending && !!rows[i].pendingForceRight;
+        // Se trace progressivement (voir markGrowingPath) dès que la ligne DESTINATION est
+        // la ligne "pending"/aperçu — plus large que isPendingLeftArrow/isPendingRightArrow
+        // ci-dessus (qui ne couvrent que le besoin d'une flèche SANS étiquette) : l'aperçu
+        // racine carrée à une seule ligne, par exemple, garde ses étiquettes "√" normales
+        // (rows[i].opLeft/opRight) sans jamais poser pendingForceLeft/Right, mais sa flèche
+        // reste bien celle d'un aperçu qui vient d'apparaître.
+        var isGrowingArrow = !!rows[i].pending;
         // opts.live (voir computeLiveOpInfo dans render.js) : SEULE la ligne "pending" peut
         // héberger le pavé "live" (le <math-field> partagé), jamais une étape déjà
         // confirmée — sur CE côté, le pill statique habituel (drawSide) est remplacé par
@@ -547,31 +583,31 @@
         var ownBotRect = equationRects[i];
         if (topLeft && botLeft && (isPendingLeftArrow || rows[i].opLeft)) {
           if (liveSide === 'left') {
-            drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
+            drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect, isGrowingArrow, growMarkerId);
             positionLiveField(historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.warnLatex, opts.live.prefixLatex, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
           } else if (mirrorSide === 'left') {
-            drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
+            drawSide(svg, history, historyRect, topLeft, botLeft, null, false, -1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect, isGrowingArrow, growMarkerId);
             drawMirrorField(history, historyRect, topLeft, botLeft, -1, rows[i].opLeftWarn, opts.live.rawLatex, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
           } else {
-            drawSide(svg, history, historyRect, topLeft, botLeft, rows[i].opLeft, rows[i].opLeftWarn, -1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
+            drawSide(svg, history, historyRect, topLeft, botLeft, rows[i].opLeft, rows[i].opLeftWarn, -1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect, isGrowingArrow, growMarkerId);
           }
         }
         if (topRight && botRight && (isPendingRightArrow || rows[i].opRight)) {
           if (liveSide === 'right') {
-            drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
+            drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect, isGrowingArrow, growMarkerId);
             positionLiveField(historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.warnLatex, opts.live.prefixLatex, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
           } else if (mirrorSide === 'right') {
-            drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
+            drawSide(svg, history, historyRect, topRight, botRight, null, false, 1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect, isGrowingArrow, growMarkerId);
             drawMirrorField(history, historyRect, topRight, botRight, 1, rows[i].opRightWarn, opts.live.rawLatex, opts.live.warnLatex, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
           } else {
-            drawSide(svg, history, historyRect, topRight, botRight, rows[i].opRight, rows[i].opRightWarn, 1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect);
+            drawSide(svg, history, historyRect, topRight, botRight, rows[i].opRight, rows[i].opRightWarn, 1, markerId, opts.constrainLabels, placedLabels, equationRects, ownTopRect, ownBotRect, isGrowingArrow, growMarkerId);
           }
         }
       }
     }
 
     if (hasFork) {
-      drawFork(svg, history, historyRect, markerId, fork.from, fork.to, fork.label, placedLabels, equationRects);
+      drawFork(svg, history, historyRect, markerId, fork.from, fork.to, fork.label, placedLabels, equationRects, fork.preview, growMarkerId);
     }
   }
 
