@@ -15,8 +15,10 @@
   var MAX_SCALE = 2.5;
   // Molette : un pas continu (par petit incrément de deltaY) plutôt qu'un facteur fixe par
   // "cran", pour rester fluide aussi bien avec une molette de souris classique (gros pas
-  // discrets) qu'un trackpad (deltaY fin et continu).
-  var WHEEL_RATE = 1.0015;
+  // discrets) qu'un trackpad (deltaY fin et continu). Un pincement trackpad envoie des
+  // deltaY bien plus petits qu'un cran de molette physique : ce taux doit rester assez
+  // élevé pour qu'un pincement reste perceptible sans avoir à répéter le geste.
+  var WHEEL_RATE = 1.003;
 
   var zoomInBtn = null, zoomOutBtn = null;
 
