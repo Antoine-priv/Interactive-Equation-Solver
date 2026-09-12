@@ -73,6 +73,11 @@
   // logique, pas qu'un artefact de test.
   var renderSeq = 0;
 
+  // Même logique que son homonyme dans toolbar.js (chaque fichier lit sa propre valeur,
+  // pas de couplage entre les deux) : passe directement au comportement final sans le
+  // fondu ci-dessous quand l'utilisateur a demandé de réduire les animations.
+  var prefersReducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
   // Etiquette d'opération en LaTeX (comme les équations) : mêmes x, mêmes signes,
   // même police, plutôt que la police système du texte brut.
   var OP_SYMBOL_LATEX = { '+': '+', '-': '-', '×': '\\times\\,', '÷': '\\div\\,' };
@@ -1228,6 +1233,18 @@
     var pending = engine.getPending();
     var rowsData = [];
 
+    // Vraie nouvelle étape validée pour CE moteur (même comparaison que `isNewStep` plus
+    // bas dans renderAll, juste faite plus tôt : `lastCenteredStepByEngine` n'est mis à
+    // jour que dans le bloc de recentrage, bien après le retour de cet appel, donc la lire
+    // ici renvoie encore la valeur d'avant ce rendu) : sert à faire glisser l'encadré bleu
+    // "current" (voir .eq-row.current .eq-line dans style.css) de l'ancienne ligne vers la
+    // nouvelle avec un fondu, plutôt que le saut instantané qu'on aurait sinon (voir plus
+    // bas dans cette fonction, après la boucle steps.forEach, pour le mécanisme).
+    var fadeNewStep = !prefersReducedMotion && steps.length > 0 &&
+      steps[steps.length - 1] !== lastCenteredStepByEngine.get(engine);
+    var fadeInEl = null;  // ligne qui doit finir AVEC "current" mais est créée sans
+    var fadeOutEl = null; // ligne qui doit finir SANS "current" mais est créée avec
+
     var leftSelected = new Set(pending.selectedLeft);
     var rightSelected = new Set(pending.selectedRight);
     // Sélection libre (opType null) : les deux membres restent sélectionnables sans
@@ -1355,6 +1372,19 @@
       // L'équation encadrée est celle qui vient d'être obtenue (le dernier résultat),
       // pas la ligne "pending" du dessous qui reste, elle, à construire.
       var current = isLastConfirmed && !solved;
+      // Nouvelle étape à animer (voir fadeNewStep plus haut) : crée ces deux lignes-là
+      // avec la classe "current" INVERSÉE par rapport à sa valeur réelle — l'ancienne
+      // apparence (bleu sur l'avant-dernière étape, pas sur la dernière) — le temps que
+      // autoFitRowFont (juste plus bas) force sa mise en page et "committe" ainsi cette
+      // apparence auprès du moteur de style ; le vrai basculement vers l'apparence finale
+      // n'a lieu qu'après la boucle entière, une fois cette valeur bien commise — c'est CE
+      // changement, relatif à un état déjà résolu par le navigateur, que la transition CSS
+      // déclarée sur .eq-line (background/box-shadow) détecte et anime. Un simple retrait/
+      // ajout synchrone SANS ce commit intermédiaire (ex. juste après container.
+      // appendChild) ne suffit pas : un élément flambant neuf n'a alors encore jamais eu de
+      // style résolu par le navigateur auquel comparer un changement (vérifié en pratique).
+      if (fadeNewStep && isLastConfirmed && current) current = false;
+      if (fadeNewStep && i === steps.length - 2) current = true;
       // C'est sur cette équation encadrée (la dernière obtenue) que les termes se
       // sélectionnent pour simplifier/factoriser/développer, pas sur la ligne "pending".
       var rowOpts = { pending: false, solved: solved, current: current };
@@ -1379,6 +1409,12 @@
       container.appendChild(row);
       autoFitRowFont(row);
       if (isLastConfirmed) { framedRowEl = row; framedSolved = solved; }
+      // Repère les deux lignes dont la classe "current" vient d'être délibérément inversée
+      // ci-dessus (voir fadeNewStep) : `row` porte encore l'apparence "d'avant" à cet
+      // instant (autoFitRowFont vient tout juste de la faire résoudre par le moteur de
+      // style), le vrai basculement est fait juste après la fin de cette boucle.
+      if (fadeNewStep && isLastConfirmed && !solved) fadeInEl = row;
+      if (fadeNewStep && i === steps.length - 2) fadeOutEl = row;
       rowsData.push({
         el: row,
         opLeft: formatOpLabel(step.opLeft),
@@ -1388,6 +1424,12 @@
         pending: false
       });
     });
+
+    // Bascule vers l'apparence RÉELLE, maintenant que autoFitRowFont a fait résoudre
+    // l'apparence inversée ci-dessus par le moteur de style (voir fadeNewStep plus haut) :
+    // ce changement de classe déclenche la transition CSS déclarée sur .eq-line.
+    if (fadeInEl) fadeInEl.classList.add('current');
+    if (fadeOutEl) fadeOutEl.classList.remove('current');
 
     var lastEq = engine.lastEquation();
 
