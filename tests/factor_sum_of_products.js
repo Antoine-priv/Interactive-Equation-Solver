@@ -99,6 +99,15 @@ async function clickWholeProductNode(page, side, index) {
   await page.waitForTimeout(150);
   await page.keyboard.type('x+9');
   await page.waitForTimeout(80);
+  // Retour en direct : l'étiquette "factoriser par ..." doit refléter ce qui est tapé même
+  // si ça ne correspond à AUCUN facteur commun réel (voir computePreview dans history.js) —
+  // l'élève ne doit jamais voir l'étiquette disparaître pendant qu'il tape.
+  const mismatchPreview = await page.evaluate(() => window.App.History.computePreview());
+  ok('live label shows the mismatched typed factor before confirming',
+    mismatchPreview.opLeft && mismatchPreview.opLeft.type === 'factor' &&
+    JSON.stringify(mismatchPreview.opLeft.factor) === JSON.stringify([{ coeff: 1, pow: 1 }, { coeff: 9, pow: 0 }]));
+  ok('...while the equation itself stays unfactored (nothing valid to apply yet)',
+    mismatchPreview.equation.left.length === 2 && mismatchPreview.equation.left.every(n => n.factors));
   const stepsBefore = await page.evaluate(() => window.App.History.getSteps().length);
   await page.click('[data-key="enter"]');
   await page.waitForTimeout(150);

@@ -1661,19 +1661,36 @@
           }
         } else if (p.factorMode === 'common') {
           var factorTerm = parseOperandTerm();
-          try {
-            if (factorTerm && (Array.isArray(factorTerm) || Expr.roundClean(factorTerm.coeff) !== 0)) {
+          var hasFactorTerm = !!factorTerm && (Array.isArray(factorTerm) || Expr.roundClean(factorTerm.coeff) !== 0);
+          if (hasFactorTerm) {
+            try {
               previewEqF = pTarget.apply(Expr.factorNodes(pTarget.array, pTarget.indices, factorTerm));
-              previewDesc = { type: 'factor', factor: factorTerm };
-            } else {
-              // Facteur commun pas encore saisi : parenthèses seules, comme si c'était 1.
-              previewEqF = pTarget.apply(Expr.factorNodesRaw(pTarget.array, pTarget.indices));
+            } catch (e3) {
+              // Le facteur tapé ne s'applique pas ENCORE (ex. "x+1" en cours de frappe sur
+              // une sélection de ProductGroup — voir Expr.factorCommonProductFactor, qui
+              // exige une correspondance structurelle EXACTE — ou un nombre qui ne divise
+              // rien de la sélection) : on retombe sur un simple groupement entre
+              // parenthèses quand c'est possible (termes plats, voir factorNodesRaw), ou
+              // sinon sur l'équation INCHANGÉE (une sélection de groupes déjà factorisés/
+              // ProductGroup ne peut de toute façon pas se grouper entre parenthèses
+              // davantage — factorNodesRaw refuse tout noeud déjà groupe). Dans tous les
+              // cas, l'étiquette "factoriser par ..." ci-dessous doit malgré tout refléter
+              // ce qui est tapé EN DIRECT (retour visuel immédiat pour l'élève), plutôt que
+              // de disparaître tant que ça ne "matche" pas exactement.
+              try {
+                previewEqF = pTarget.apply(Expr.factorNodesRaw(pTarget.array, pTarget.indices));
+              } catch (e3b) {
+                previewEqF = Eq.cloneEquation(last);
+              }
             }
-          } catch (e3) {
+            previewDesc = { type: 'factor', factor: factorTerm };
+          } else {
+            // Facteur commun pas encore saisi : parenthèses seules si possible (comme si
+            // c'était 1), sinon l'équation inchangée (voir commentaire ci-dessus).
             try {
               previewEqF = pTarget.apply(Expr.factorNodesRaw(pTarget.array, pTarget.indices));
-            } catch (e3b) {
-              return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
+            } catch (e3c) {
+              previewEqF = Eq.cloneEquation(last);
             }
           }
         } else {
