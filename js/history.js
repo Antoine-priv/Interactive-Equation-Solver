@@ -2232,12 +2232,14 @@
       // voir splitIntoBranches) : reste une étape normale de la chaîne de CE noeud, à deux
       // flèches identiques (gauche ET droite, comme pour "÷2" ou toute autre opération
       // portant sur les deux membres à la fois) — voir pushStep plus haut dans createEngine.
+      // Étiquetée "simplifier" (pas "√", voir formatOpLabel dans render.js), puisque c'est
+      // désormais ce bouton qui déclenche cette étape.
       if (rootVal === 0) {
-        leaf.pushStep(soleEquation, { type: 'sqrt' });
+        leaf.pushStep(soleEquation, { type: 'simplify' });
         return true;
       }
       var equations = [soleEquation, { left: Expr.cloneSide(detected.base), right: [{ coeff: -rootVal, pow: 0 }] }];
-      splitIntoBranches(equations, '\\sqrt{\\phantom{x}}');
+      splitIntoBranches(equations, '\\text{simplifier}');
       return true;
     }
 

@@ -1852,31 +1852,35 @@
       // Disparaît tout seul au prochain rendu dès que la condition n'est plus remplie.
       var previewEquations = null;
       var previewLabel = null;
+      // "sqrt-family" (envelopper à l'étape 1, simplifier à l'étape 2) : un aperçu à UNE
+      // seule équation (constante nulle, voir confirmSquareRoot/pushStep dans history.js)
+      // doit s'effondrer en ligne "pending" normale plutôt qu'en "fourche" à une seule
+      // branche — contrairement à "Produit nul", qui garde sa mise en page en colonnes
+      // même pour un seul facteur distinct (voir plus bas).
+      var previewCollapsible = false;
       if (App.Toolbar.getHoveredOp() === 'produitnul') {
         previewEquations = Hist.previewProduitNul();
         previewLabel = '\\text{produit nul}';
       } else if (Hist.getPending().opType === 'expr' && Hist.getPending().sqrtArmed) {
         previewEquations = Hist.previewSquareRoot();
         previewLabel = '\\sqrt{\\phantom{x}}';
+        previewCollapsible = true;
       } else if (App.Toolbar.getHoveredOp() === 'simplify' && Hist.squareRootStage() === 'simplify') {
         // Survol de "Simplifier" une fois l'étape 2 de "Racine carrée" disponible (voir
-        // computeSelectionInfo dans toolbar.js) : même aperçu ± scindé que l'ancien
-        // ré-armement de la touche "√", juste déclenché par ce bouton-ci désormais.
+        // computeSelectionInfo dans toolbar.js) : même aperçu ± scindé que l'étape 1
+        // ci-dessus, mais étiqueté "simplifier" (voir confirmSquareRoot dans history.js,
+        // qui utilise ce même libellé pour l'étape confirmée) plutôt que le symbole "√",
+        // puisque c'est désormais ce bouton-ci qui la déclenche.
         previewEquations = Hist.previewSquareRoot();
-        previewLabel = '\\sqrt{\\phantom{x}}';
+        previewLabel = '\\text{simplifier}';
+        previewCollapsible = true;
       }
       var previewCols = null;
-      // Racine carrée dont l'aperçu ne donne qu'UNE équation (constante nulle, voir
-      // confirmSquareRoot/pushStep dans history.js) : même principe que la confirmation
-      // réelle — jamais de fourche/colonnes à une seule branche, juste une ligne "pending"
-      // normale de plus dans la chaîne, avec ses deux flèches ordinaires (gauche/droite,
-      // même étiquette √ des deux côtés).
-      if (previewEquations && previewEquations.length === 1 && previewLabel === '\\sqrt{\\phantom{x}}') {
+      if (previewEquations && previewEquations.length === 1 && previewCollapsible) {
         var soleRowEl = createRow(previewEquations[0], { pending: true, solved: false, current: false });
         soleRowEl.classList.add('preview-pop-in');
         history.appendChild(soleRowEl);
-        var soleLabel = formatOpLabel({ type: 'sqrt' });
-        res.rowsData.push({ el: soleRowEl, opLeft: soleLabel, opRight: soleLabel, pending: true });
+        res.rowsData.push({ el: soleRowEl, opLeft: previewLabel, opRight: previewLabel, pending: true });
       } else if (previewEquations) {
         // PAS .produit-nul-split (dont le padding de 50vw sert uniquement à permettre,
         // une fois une VRAIE scission confirmée, de défiler assez loin pour recentrer

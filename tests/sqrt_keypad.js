@@ -61,28 +61,38 @@ function ok(label, cond) {
   console.log('etat apres Valider (etape 1):', JSON.stringify(wrappedState));
   ok('stage 1 confirm wraps both sides without creating branches yet', wrappedState.branches === null && wrappedState.isWrapped === true);
 
-  // Étape 2 : ré-armer sur l'équation déjà enveloppée simplifie réellement et scinde en 2.
+  // Étape 2 : le bouton "Simplifier" habituel (pas un second armement de la touche "√",
+  // voir toolbar.js) simplifie réellement et scinde en 2 — re-ouvrir "Opération" montre que
+  // la touche "√" elle-même reste désactivée (stage 1 déjà fait, plus rien à envelopper).
   await page.click('button[data-op="expr"]');
   await page.waitForTimeout(80);
-  await page.click('[data-key="sqrt"]');
-  await page.waitForTimeout(150);
-  await page.click('#mathKeypadPanel .panel-confirm-cell');
+  const sqrtKeyStillDisabled = await page.evaluate(() => {
+    var rootBtn = document.querySelector('[data-key="sqrt"]');
+    return rootBtn ? rootBtn.disabled : null;
+  });
+  ok('sqrt key stays disabled once wrapped (stage 2 only reachable via Simplifier)', sqrtKeyStillDisabled === true);
+  await page.click('button[data-op="expr"]'); // referme "Opération", inutile pour Simplifier
+  await page.waitForTimeout(80);
+
+  await page.click('button[data-op="simplify"]');
   await page.waitForTimeout(150);
 
   const branches = await page.evaluate(() => {
     var bs = window.App.History.getBranches();
     return bs ? bs.map((b) => b.lastEquation()) : null;
   });
-  console.log('branches apres avoir clique sur Valider (etape 2):', JSON.stringify(branches));
+  console.log('branches apres avoir clique sur Simplifier (etape 2):', JSON.stringify(branches));
   ok('stage 2 confirm splits into 2 real branches', branches && branches.length === 2);
 
-  // Etiquette de la fleche : symbole mathematique, pas le texte "racine carree".
+  // Etiquette de la fleche : le mot "simplifier" (l'action réellement déclenchée), pas le
+  // symbole racine carrée ni le mot "racine".
   const labelLatexSource = await page.evaluate(() => {
     var el = document.querySelector('.arrow-label-fork annotation');
     return el ? el.textContent : null;
   });
   console.log('source LaTeX de l etiquette:', JSON.stringify(labelLatexSource));
-  ok('fork label uses a math symbol (contains \\sqrt), not the word "racine"', /\\sqrt/.test(labelLatexSource || '') && !/racine/i.test(labelLatexSource || ''));
+  ok('fork label reads "simplifier", not the sqrt symbol or the word "racine"',
+    /simplifier/.test(labelLatexSource || '') && !/\\sqrt/.test(labelLatexSource || '') && !/racine/i.test(labelLatexSource || ''));
 
   await page.screenshot({ path: `${SCRATCH}/sqrt_keypad_after.png` });
 
