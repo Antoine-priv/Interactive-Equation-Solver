@@ -511,6 +511,30 @@
     return ' ' + sign + ' ' + body;
   }
 
+  // Rendu "drillé" du RADICAND d'une racine carrée (SqrtGroup, pending.drilled.part
+  // ==='sqrt', voir drillIntoSqrt dans history.js) : même principe que
+  // drilledQuotientDenominatorLatex (une seule profondeur, ses termes reçoivent chacun leur
+  // "-inner-j", le tout enveloppé d'un "-exit" pour ressortir) mais sur node.radicand — pas
+  // de "numérateur" à côté, le "\sqrt{...}" entier EST le contenu drillé. Pas de champ
+  // `sign` propre (voir Expr.nodeSign) : toujours rendu sans "-" devant.
+  function drilledSqrtLatex(node, idPrefix, topIdx, isFirst) {
+    var activeLatex = node.radicand.map(function (t, j) {
+      return '\\htmlId{' + idPrefix + '-' + topIdx + '-inner-' + j + '}{' + Expr.nodeLatex(t, j === 0) + '}';
+    }).join('');
+    var body = '\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{\\sqrt{' + activeLatex + '}}';
+    return isFirst ? body : ' + ' + body;
+  }
+
+  // Variante de drilledSqrtLatex utilisée PENDANT un glisser en cours dans le radicand (voir
+  // buildInnerDragLatex plus bas) : même principe que drilledQuotientDenominatorLatexForOrder.
+  function drilledSqrtLatexForOrder(node, orderedLeaf, isFirst) {
+    var activeLatex = orderedLeaf.map(function (t, j) {
+      return '\\htmlId{dragpv-' + j + '}{' + Expr.nodeLatex(t, j === 0) + '}';
+    }).join('');
+    var body = '\\sqrt{' + activeLatex + '}';
+    return isFirst ? body : ' + ' + body;
+  }
+
   // Variante de productGroupBranchesLatex utilisée PENDANT un glisser en cours réordonnant
   // les FACTEURS eux-mêmes d'un ProductGroup de PREMIER NIVEAU, PAS drillé (voir
   // setFactorOrder dans history.js et escalateFactorDragToTopLevel plus bas) : chaque
@@ -595,6 +619,9 @@
         if (drilled.part === 'den') {
           return drilledQuotientDenominatorLatex(node, idPrefix, idx, idx === 0);
         }
+        if (drilled.part === 'sqrt') {
+          return drilledSqrtLatex(node, idPrefix, idx, idx === 0);
+        }
         // `branch` niché à plus d'un cran (ex. "(x+9)²(x-8)" trouvé dans un numérateur déjà
         // drillé, voir drillIntoNestedProductBranch dans history.js) : `node` ici n'est
         // PAS directement le ProductGroup, il faut descendre via drilledGroupLatex jusqu'à
@@ -630,6 +657,7 @@
         return side.map(function (node, idx) {
           if (idx !== topIdx) return Expr.nodeLatex(node, idx === 0);
           if (drilled.part === 'den') return drilledQuotientDenominatorLatexForOrder(node, orderedLeaf, idx === 0);
+          if (drilled.part === 'sqrt') return drilledSqrtLatexForOrder(node, orderedLeaf, idx === 0);
           if (typeof drilled.branch === 'number' && drilled.path.length === 1) {
             return drilledProductBranchLatexForOrder(node, drilled.branch, orderedLeaf, idx === 0);
           }

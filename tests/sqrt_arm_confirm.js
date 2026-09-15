@@ -11,6 +11,11 @@ function findSqrtKey(page) {
   return page.$('[data-key="sqrt"]');
 }
 
+// "Racine carrée" est maintenant en 2 étapes : armer+valider enveloppe D'ABORD les deux
+// membres entiers dans "√(...)" (aucune branche, un pas normal de la chaîne) ; il faut
+// ENSUITE re-armer+re-valider (la touche redevient disponible, cette fois pour "simplifier")
+// pour annuler racine+carré et scinder en ± — voir squareRootStage/confirmSquareRoot dans
+// history.js.
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
@@ -34,21 +39,23 @@ function findSqrtKey(page) {
   ok('no sqrt preview columns before arming', state.previewCount === 0);
   ok('generic pending echo row still shows normally (nothing armed yet)', state.pendingRowCount === 1);
 
-  // 2) Clique sur "V" (arme la racine carree) : preview colonnes visible, PAS de ligne pending generique en double.
+  // 2) Clique sur "√" (arme la racine carree, étape 1 = envelopper) : PAS de preview
+  // colonnes (une seule équation enveloppée, pas de scission), PAS de ligne pending
+  // générique en double.
   const sqrtKey = await findSqrtKey(page);
   await sqrtKey.evaluate((el) => el.click());
   await page.waitForTimeout(150);
   state = await page.evaluate(() => ({
     branches: window.App.History.getBranches(),
-    previewCount: document.querySelectorAll('.produit-nul-preview .produit-nul-branch').length,
+    previewColumnCount: document.querySelectorAll('.produit-nul-preview .produit-nul-branch').length,
     pendingRowCount: document.querySelectorAll('.eq-row.pending').length,
     sqrtArmed: window.App.History.getPending().sqrtArmed
   }));
-  console.log('apres avoir clique sur la touche racine carree (armee):', JSON.stringify(state));
+  console.log('apres avoir clique sur la touche racine carree (armee, etape 1):', JSON.stringify(state));
   ok('sqrtArmed is true', state.sqrtArmed === true);
   ok('still no real branches (armed, not confirmed)', state.branches === null);
-  ok('sqrt preview columns now visible (2 columns)', state.previewCount === 2);
-  ok('no duplicate generic pending echo row while armed (no "preview of a preview")', state.pendingRowCount === 0);
+  ok('stage 1 preview is a single wrapped equation, no fork columns', state.previewColumnCount === 0);
+  ok('no duplicate generic pending echo row while armed (no "preview of a preview")', state.pendingRowCount === 1);
 
   await page.screenshot({ path: `${SCRATCH}/sqrt_armed.png` });
 
@@ -59,14 +66,45 @@ function findSqrtKey(page) {
   });
   ok('other keys (e.g. digit 7) disabled while sqrt is armed', digitDisabled === true);
 
-  // 4) Clique sur "Valider" : la scission se produit REELLEMENT maintenant.
+  // 4) Clique sur "Valider" : l'enveloppement (étape 1) se produit REELLEMENT maintenant —
+  // toujours pas de branches, juste un pas normal de plus dans la chaîne.
+  await page.click('#mathKeypadPanel .panel-confirm-cell');
+  await page.waitForTimeout(300);
+  state = await page.evaluate(() => ({
+    branches: window.App.History.getBranches(),
+    lastEquation: window.App.History.lastEquation()
+  }));
+  console.log('apres avoir clique sur Valider (etape 1):', JSON.stringify(state));
+  ok('stage 1 confirm does NOT create branches yet', state.branches === null);
+  ok('both sides are now wrapped in a SqrtGroup', JSON.stringify(state.lastEquation) ===
+    JSON.stringify({ left: [{ radicand: [{ sign: 1, factors: [{ terms: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], exponent: 2 }] }] }], right: [{ radicand: [{ coeff: 9, pow: 0 }] }] }));
+
+  await page.screenshot({ path: `${SCRATCH}/sqrt_wrapped.png` });
+
+  // 5) Ré-ouvrir "Opération" et re-cliquer "√" : cette fois, l'étape 2 (simplifier) est
+  // disponible — armer puis valider annule racine+carré et scinde REELLEMENT en 2 branches.
+  await page.click('button[data-op="expr"]');
+  await page.waitForTimeout(80);
+  const sqrtKey2 = await findSqrtKey(page);
+  await sqrtKey2.evaluate((el) => el.click());
+  await page.waitForTimeout(150);
+  const stage2ArmedState = await page.evaluate(() => ({
+    sqrtArmed: window.App.History.getPending().sqrtArmed,
+    previewColumnCount: document.querySelectorAll('.produit-nul-preview .produit-nul-branch').length
+  }));
+  ok('stage 2 arming shows the real ± fork preview (2 columns)', stage2ArmedState.sqrtArmed === true && stage2ArmedState.previewColumnCount === 2);
+
   await page.click('#mathKeypadPanel .panel-confirm-cell');
   await page.waitForTimeout(300);
   state = await page.evaluate(() => ({
     branches: window.App.History.getBranches() ? window.App.History.getBranches().map((b) => b.lastEquation()) : null
   }));
-  console.log('apres avoir clique sur Valider:', JSON.stringify(state));
-  ok('confirming with "Valider" actually creates the branches', state.branches && state.branches.length === 2);
+  console.log('apres avoir clique sur Valider (etape 2):', JSON.stringify(state));
+  ok('stage 2 confirm actually creates the ± branches', state.branches && state.branches.length === 2);
+  ok('branch 0 is x+3=3', state.branches && JSON.stringify(state.branches[0]) ===
+    JSON.stringify({ left: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], right: [{ coeff: 3, pow: 0 }] }));
+  ok('branch 1 is x+3=-3', state.branches && JSON.stringify(state.branches[1]) ===
+    JSON.stringify({ left: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], right: [{ coeff: -3, pow: 0 }] }));
 
   await page.screenshot({ path: `${SCRATCH}/sqrt_confirmed.png` });
 

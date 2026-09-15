@@ -30,8 +30,20 @@
    exponent>=2 (un carré/cube/... isolé, rien d'autre multiplié). Ni `exponent` ni le degré
    des termes bruts (Term.pow, voir ci-dessus) ne sont plafonnés : "(x+2)(x+3)(x+4)" se
    développe normalement en x³+..., voir expandProductGroup.
-   Node = Term | FactorGroup | ProductGroup (un groupe peut contenir un autre groupe
-   imbriqué, ex. "2(-9x+3(-2))" produit par une multiplication qui enveloppe tout un membre)
+   SqrtGroup = { radicand: Node[] }
+   Représente "√(radicand)" — produit UNIQUEMENT par "Racine carrée" (pavé "Opération",
+   voir detectSquareRootUnwrapped/confirmSquareRoot dans history.js) pour envelopper
+   l'INTÉGRALITÉ d'un membre entier (jamais une simple partie) : toujours le seul noeud de
+   son Side ("[{radicand:...}]"), jamais mélangé à d'autres termes. Pas de champ `sign`
+   (toujours positif — voir nodeSign) ni de coefficient devant, contrairement à FactorGroup.
+   Une seule profondeur de "drilled" (voir pending.drilled.part==='sqrt' dans history.js,
+   même principe que le dénominateur-expression d'une fraction ci-dessus) : ses termes sont
+   librement simplifiables/factorisables/développables, mais pas descendus plus loin — la
+   forme attendue juste après l'enveloppement ("(expr)²" ou une constante nue) n'en a de
+   toute façon jamais besoin.
+   Node = Term | FactorGroup | ProductGroup | SqrtGroup (un groupe peut contenir un autre
+   groupe imbriqué, ex. "2(-9x+3(-2))" produit par une multiplication qui enveloppe tout un
+   membre)
    Side (membre d'une équation) = Array<Node>
 */
 (function (App) {
@@ -45,6 +57,10 @@
     return node && Object.prototype.hasOwnProperty.call(node, 'factors');
   }
 
+  function isSqrtGroup(node) {
+    return node && Object.prototype.hasOwnProperty.call(node, 'radicand');
+  }
+
   // Un ProductGroup "carré isolé" ("(...)²", rien d'autre multiplié) : remplace l'ancien
   // booléen isSquare — voir le commentaire de modèle de données en tête de fichier.
   function isSquareFactorGroup(node) {
@@ -52,9 +68,10 @@
   }
 
   // Un noeud "groupe" (par opposition à un Term plat) : ni simplifiable, ni factorisable
-  // directement, il faut d'abord le développer.
+  // directement, il faut d'abord le développer (ou, pour SqrtGroup, entrer dedans/le
+  // résoudre via "Racine carrée" — voir history.js).
   function isGroup(node) {
-    return isFactorGroup(node) || isProductGroup(node);
+    return isFactorGroup(node) || isProductGroup(node) || isSqrtGroup(node);
   }
 
   // Une division par une EXPRESSION (ex. "(...)/(x+5)", voir wrapSideInQuotient), pas par
@@ -78,13 +95,20 @@
     if (isProductGroup(node)) {
       return node.factors.some(function (f) { return sideHasVariable(f.terms); });
     }
+    if (isSqrtGroup(node)) {
+      return sideHasVariable(node.radicand);
+    }
     return node.pow !== 0;
   }
   function sideHasVariable(side) {
     return side.some(nodeHasVariable);
   }
 
+  // SqrtGroup n'a pas de champ `sign` propre (toujours positif — voir le commentaire de
+  // modèle de données en tête de fichier) : cas à part avant le `isGroup` générique
+  // ci-dessous, qui suppose sinon toujours ce champ présent.
   function nodeSign(node) {
+    if (isSqrtGroup(node)) return 1;
     if (isGroup(node)) return node.sign;
     return node.coeff < 0 ? -1 : 1;
   }
@@ -100,6 +124,9 @@
   function cloneNode(node) {
     if (isProductGroup(node)) {
       return { sign: node.sign, factors: node.factors.map(cloneFactor) };
+    }
+    if (isSqrtGroup(node)) {
+      return { radicand: node.radicand.map(cloneNode) };
     }
     if (isFactorGroup(node)) {
       // Ordre des clés préservé (sign, factor[Terms], innerTerms, isDivision) : plusieurs
@@ -217,9 +244,16 @@
     return '\\left(' + innerTermsLatex(side) + '\\right)';
   }
 
-  // Latex d'un noeud (Term, FactorGroup ou ProductGroup), en incluant son signe.
+  // Latex d'un noeud (Term, FactorGroup, ProductGroup ou SqrtGroup), en incluant son signe.
   // isFirst = premier noeud du membre (pas d'espace avant, signe seulement si négatif).
   function nodeLatex(node, isFirst) {
+    if (isSqrtGroup(node)) {
+      // Toujours positif (pas de champ `sign`, voir nodeSign) : un SqrtGroup n'est jamais
+      // précédé de "-" dans ce modèle, voir le commentaire de modèle de données en tête de
+      // fichier — en pratique toujours isFirst===true (seul noeud de son Side).
+      var bodySqrt = '\\sqrt{' + innerTermsLatex(node.radicand) + '}';
+      return isFirst ? bodySqrt : ' + ' + bodySqrt;
+    }
     if (isProductGroup(node)) {
       var ALNUM_END_RE = /[0-9A-Za-z]$/;
       var bodyP = node.factors.reduce(function (acc, f) {
@@ -1251,16 +1285,28 @@
     });
   }
 
+  // Remplace le radicand du SqrtGroup situé à `path` (toujours de longueur 1, même
+  // principe que withQuotientDenominatorAtPath ci-dessus — voir pending.drilled.part
+  // ==='sqrt' dans history.js : une seule profondeur, jamais imbriqué plus loin).
+  function withSqrtRadicandAtPath(side, path, newRadicand) {
+    return side.map(function (n, i) {
+      if (i !== path[0]) return cloneNode(n);
+      return { radicand: newRadicand.map(cloneNode) };
+    });
+  }
+
   // Résout, pour un `pending.drilled` (history.js) donné, quel tableau de Node[] est
   // actuellement "en cours d'édition" une fois `groupNode` déjà résolu via nodeAtPath :
   // l'intérieur d'un FactorGroup classique (innerTerms, cas normal), les termes d'UNE
-  // branche de ProductGroup (d.branch, voir withProductBranchAtPath), ou le dénominateur-
-  // expression d'une fraction (d.part==='den', voir withQuotientDenominatorAtPath) — les
-  // trois se comportent identiquement pour Simplifier/Factoriser/Développer/le
-  // glisser-déposer (voir history.js ET toolbar.js, qui utilisent tous deux ceci), seule
-  // la façon de RECONSTITUER le membre ensuite diffère (voir withDrilledArrayAtPath).
+  // branche de ProductGroup (d.branch, voir withProductBranchAtPath), le dénominateur-
+  // expression d'une fraction (d.part==='den', voir withQuotientDenominatorAtPath), ou le
+  // radicand d'un SqrtGroup (d.part==='sqrt', voir withSqrtRadicandAtPath) — les quatre se
+  // comportent identiquement pour Simplifier/Factoriser/Développer/le glisser-déposer (voir
+  // history.js ET toolbar.js, qui utilisent tous deux ceci), seule la façon de RECONSTITUER
+  // le membre ensuite diffère (voir withDrilledArrayAtPath).
   function drilledWorkingArray(groupNode, d) {
     if (d.part === 'den') return groupNode.factorTerms;
+    if (d.part === 'sqrt') return groupNode.radicand;
     if (typeof d.branch === 'number') return groupNode.factors[d.branch].terms;
     return groupNode.innerTerms;
   }
@@ -1269,8 +1315,17 @@
   // (path/branch-ou-part de `d`).
   function withDrilledArrayAtPath(side, d, newArray) {
     if (d.part === 'den') return withQuotientDenominatorAtPath(side, d.path, newArray);
+    if (d.part === 'sqrt') return withSqrtRadicandAtPath(side, d.path, newArray);
     if (typeof d.branch === 'number') return withProductBranchAtPath(side, d.path, d.branch, newArray);
     return withGroupInnerTermsAtPath(side, d.path, newArray);
+  }
+
+  // Enveloppe un membre ENTIER dans une racine carrée (ex. "2x+3" -> "√(2x+3)") — voir
+  // confirmSquareRoot dans history.js, qui l'applique aux DEUX membres à la fois. Toujours
+  // le seul noeud du Side résultant (voir le commentaire de modèle de données en tête de
+  // fichier).
+  function wrapSideInSqrt(side) {
+    return [{ radicand: cloneSide(side) }];
   }
 
   // Remplace les termes du facteur d'INDICE `branch` du ProductGroup situé à `path`
@@ -1314,6 +1369,7 @@
   App.Expr = {
     isFactorGroup: isFactorGroup,
     isProductGroup: isProductGroup,
+    isSqrtGroup: isSqrtGroup,
     isSquareFactorGroup: isSquareFactorGroup,
     isGroup: isGroup,
     isExpressionQuotient: isExpressionQuotient,
@@ -1357,6 +1413,8 @@
     withGroupInnerTermsAtPath: withGroupInnerTermsAtPath,
     withQuotientDenominatorAtPath: withQuotientDenominatorAtPath,
     wrapSideInQuotient: wrapSideInQuotient,
+    withSqrtRadicandAtPath: withSqrtRadicandAtPath,
+    wrapSideInSqrt: wrapSideInSqrt,
     drilledWorkingArray: drilledWorkingArray,
     withDrilledArrayAtPath: withDrilledArrayAtPath
   };

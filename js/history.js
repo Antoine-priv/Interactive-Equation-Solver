@@ -310,6 +310,12 @@
           drillIntoGroup(side, index);
           return; // drillIntoGroup appelle déjà notify()
         }
+        // Double-clic sur une racine carrée (SqrtGroup, voir "Racine carrée" dans le pavé
+        // "Opération") : entre dans son radicand, même principe que drillIntoGroup.
+        if (node && Expr.isSqrtGroup(node)) {
+          drillIntoSqrt(side, index);
+          return; // drillIntoSqrt appelle déjà notify()
+        }
         // (x+2-3)(x+2+3) etc. : double-clic sur UNE parenthèse précise (branchHint) d'un
         // produit entre dedans pour en simplifier l'intérieur — jamais l'autre branche
         // (ambiguë sans branchHint, donc ignorée plutôt que de deviner). Rien pour un carré
@@ -465,10 +471,33 @@
       notify();
     }
 
+    // Même principe, pour le RADICAND d'une racine carrée (SqrtGroup, voir "Racine carrée"
+    // dans le pavé "Opération" / confirmSquareRoot) — ex. double-clic sur "√((x+3)²)" une
+    // fois l'équation enveloppée à l'étape 1. Même restriction qu'un dénominateur-
+    // expression : une seule profondeur, jamais imbriquée plus loin (voir
+    // toggleInnerSelection) — la forme attendue pour l'étape 2 (un carré parfait ou une
+    // constante nue) n'en a de toute façon jamais besoin.
+    function drillIntoSqrt(side, index) {
+      if (pending.opType !== null) return;
+      if (pending.drilled) return;
+      var node = lastEquation()[side][index];
+      if (!node || !Expr.isSqrtGroup(node)) return;
+      var arr = side === 'left' ? pending.selectedLeft : pending.selectedRight;
+      var i = arr.indexOf(index);
+      if (i !== -1) arr.splice(i, 1);
+      pending.drilled = { side: side, path: [index], part: 'sqrt' };
+      pending.selectedInner = [];
+      pending.selectedFactors[side] = null;
+      removeFromFactorGroups(side, index);
+      pending.error = null;
+      notify();
+    }
+
     // Reconstruit l'équation avec `newArray` remis à sa place pour ce `pending.drilled`
     // (voir Expr.drilledWorkingArray/withDrilledArrayAtPath — partagés avec toolbar.js —
     // pour la résolution du tableau Node[] correspondant : intérieur d'un FactorGroup
-    // classique, branche de ProductGroup, ou dénominateur-expression d'une fraction).
+    // classique, branche de ProductGroup, dénominateur-expression d'une fraction, ou
+    // radicand d'une racine carrée).
     function applyDrilledArray(eq, d, newArray) {
       var out = Eq.cloneEquation(eq);
       out[d.side] = Expr.withDrilledArrayAtPath(eq[d.side], d, newArray);
@@ -488,10 +517,11 @@
       else pending.selectedInner.splice(i, 1);
       pending.error = null;
       // Descendre encore d'un niveau (drillIntoInnerGroup) suppose un FactorGroup — une
-      // branche de ProductGroup (pending.drilled.branch) OU un dénominateur-expression
-      // (pending.drilled.part==='den', voir drillIntoQuotientDenominator) sont toujours une
-      // profondeur terminale, leurs termes sont supposés plats.
-      if (isDouble && typeof pending.drilled.branch !== 'number' && pending.drilled.part !== 'den') {
+      // branche de ProductGroup (pending.drilled.branch), un dénominateur-expression
+      // (pending.drilled.part==='den', voir drillIntoQuotientDenominator) OU un radicand de
+      // racine carrée (part==='sqrt', voir drillIntoSqrt) sont toujours une profondeur
+      // terminale, leurs termes sont supposés plats.
+      if (isDouble && typeof pending.drilled.branch !== 'number' && pending.drilled.part !== 'den' && pending.drilled.part !== 'sqrt') {
         var currentNode = Expr.nodeAtPath(lastEquation()[pending.drilled.side], pending.drilled.path);
         var innerNode = currentNode && Expr.drilledWorkingArray(currentNode, pending.drilled)[innerIndex];
         if (innerNode && Expr.isFactorGroup(innerNode)) {
@@ -529,9 +559,9 @@
     function drillIntoNestedProductBranch(innerIndex, branch) {
       if (!pending.drilled) return;
       if (pending.opType !== null) return;
-      // Une branche ou un dénominateur déjà engagés sont des profondeurs terminales (voir
-      // toggleInnerSelection) : jamais de nouvelle descente depuis là.
-      if (typeof pending.drilled.branch === 'number' || pending.drilled.part === 'den') return;
+      // Une branche, un dénominateur ou un radicand déjà engagés sont des profondeurs
+      // terminales (voir toggleInnerSelection) : jamais de nouvelle descente depuis là.
+      if (typeof pending.drilled.branch === 'number' || pending.drilled.part === 'den' || pending.drilled.part === 'sqrt') return;
       var currentNode = Expr.nodeAtPath(lastEquation()[pending.drilled.side], pending.drilled.path);
       var innerNode = currentNode && Expr.drilledWorkingArray(currentNode, pending.drilled)[innerIndex];
       if (!innerNode || !Expr.isProductGroup(innerNode)) return;
@@ -583,11 +613,13 @@
         var d = pending.drilled;
         var groupNode = Expr.nodeAtPath(eq[d.side], d.path);
         if (!groupNode) return null;
-        // Branche d'un ProductGroup, dénominateur-expression d'une fraction, ou intérieur
-        // d'un FactorGroup classique (voir drilledWorkingArray/applyDrilledArray) : même
-        // tableau Node[] dans les trois cas, seule la reconstitution ensuite diffère.
+        // Branche d'un ProductGroup, dénominateur-expression d'une fraction, radicand
+        // d'une racine carrée, ou intérieur d'un FactorGroup classique (voir
+        // drilledWorkingArray/applyDrilledArray) : même tableau Node[] dans les quatre cas,
+        // seule la reconstitution ensuite diffère.
         if (typeof d.branch === 'number' && !Expr.isProductGroup(groupNode)) return null;
         if (d.part === 'den' && !Expr.isExpressionQuotient(groupNode)) return null;
+        if (d.part === 'sqrt' && !Expr.isSqrtGroup(groupNode)) return null;
         if (!d.part && typeof d.branch !== 'number' && !Expr.isFactorGroup(groupNode)) return null;
         return {
           side: d.side,
@@ -1163,7 +1195,8 @@
         var groupNode = Expr.nodeAtPath(eq[d.side], d.path);
         var isBranch = typeof d.branch === 'number' && groupNode && Expr.isProductGroup(groupNode);
         var isDen = d.part === 'den' && groupNode && Expr.isExpressionQuotient(groupNode);
-        if (!groupNode || (!isBranch && !isDen && !Expr.isFactorGroup(groupNode))) return false;
+        var isSqrt = d.part === 'sqrt' && groupNode && Expr.isSqrtGroup(groupNode);
+        if (!groupNode || (!isBranch && !isDen && !isSqrt && !Expr.isFactorGroup(groupNode))) return false;
         var innerArr = Expr.drilledWorkingArray(groupNode, d);
         var innerOk = pending.selectedInner.length >= 2;
         var otherOk = otherIndices.length >= 2;
@@ -1460,10 +1493,12 @@
         var groupNode = Expr.nodeAtPath(eq[d.side], d.path);
         // Une branche de ProductGroup (d.branch) n'atteint jamais ce cas : `groupNode` y est
         // un ProductGroup, jamais un FactorGroup (voir isFactorGroup) — exclue naturellement
-        // ci-dessous, exactement comme avant. Le dénominateur-expression (d.part==='den'),
-        // lui, EST un FactorGroup : ajouté explicitement.
+        // ci-dessous, exactement comme avant. Le dénominateur-expression (d.part==='den') et
+        // le radicand d'une racine carrée (d.part==='sqrt'), eux, sont ajoutés explicitement
+        // (leurs propres termes intérieurs restent développables normalement).
         var isDenExp = d.part === 'den' && groupNode && Expr.isExpressionQuotient(groupNode);
-        if (!groupNode || (!isDenExp && !Expr.isFactorGroup(groupNode)) || pending.selectedInner.length !== 1) return false;
+        var isSqrtExp = d.part === 'sqrt' && groupNode && Expr.isSqrtGroup(groupNode);
+        if (!groupNode || (!isDenExp && !isSqrtExp && !Expr.isFactorGroup(groupNode)) || pending.selectedInner.length !== 1) return false;
         var targetIdx = pending.selectedInner[0];
         var drilledArr = Expr.drilledWorkingArray(groupNode, d);
         var targetNode = drilledArr[targetIdx];
@@ -1530,14 +1565,16 @@
           var groupNodePrev = Expr.nodeAtPath(last[dPrev.side], dPrev.path);
           var isBranchPrev = typeof dPrev.branch === 'number' && groupNodePrev && Expr.isProductGroup(groupNodePrev);
           var isDenPrev = dPrev.part === 'den' && groupNodePrev && Expr.isExpressionQuotient(groupNodePrev);
-          if (!groupNodePrev || (!isBranchPrev && !isDenPrev && !Expr.isFactorGroup(groupNodePrev))) {
+          var isSqrtPrev = dPrev.part === 'sqrt' && groupNodePrev && Expr.isSqrtGroup(groupNodePrev);
+          if (!groupNodePrev || (!isBranchPrev && !isDenPrev && !isSqrtPrev && !Expr.isFactorGroup(groupNodePrev))) {
             return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
           }
           var innerArrPrev = Expr.drilledWorkingArray(groupNodePrev, dPrev);
           // Une branche de ProductGroup n'a jamais de descente plus profonde (voir
           // drillIntoProductBranch/toggleInnerSelection) : pas d'aperçu "Développer" à y
-          // chercher, ses termes sont supposés plats. Un dénominateur-expression, lui, se
-          // comporte comme un FactorGroup classique ici (voir isDenPrev ci-dessus).
+          // chercher, ses termes sont supposés plats. Un dénominateur-expression et un
+          // radicand de racine carrée, eux, se comportent comme un FactorGroup classique
+          // ici (voir isDenPrev/isSqrtPrev ci-dessus).
           if (!isBranchPrev && p.selectedInner.length === 1) {
             var targetIdxPrev = p.selectedInner[0];
             var targetNodePrev = innerArrPrev[targetIdxPrev];
@@ -2057,10 +2094,14 @@
 
     // Détecte si `eq` est de la forme (expr)² = c ou c = (expr)² (un carré parfait d'un
     // côté — soit un ProductGroup.isSquare "(a+bx)²", soit un simple "x²" nu de
-    // coefficient 1 — une constante numérique de l'autre) ; renvoie { base: Side, constant:
-    // number } ou null sinon. `base` est l'expression dont il faudra prendre la racine
-    // (ex. "a+bx", ou "x").
-    function detectSquareRoot(eq) {
+    // coefficient 1 — une constante numérique de l'autre), PAS ENCORE enveloppée dans une
+    // racine : renvoie { base: Side, constant: number } ou null sinon. `base` est
+    // l'expression dont il faudra prendre la racine (ex. "a+bx", ou "x"). Étape 1 de
+    // "Racine carrée" (voir confirmSquareRoot plus bas) : enveloppe l'INTÉGRALITÉ des deux
+    // membres dans un SqrtGroup ("(expr)²=c" -> "√((expr)²)=√(c)"), sans rien résoudre —
+    // voir detectSquareRootWrapped ci-dessous pour l'étape 2 (résoudre CETTE forme
+    // enveloppée).
+    function detectSquareRootUnwrapped(eq) {
       function trySide(sqSide, constSide) {
         var sSide = eq[sqSide], cSide = eq[constSide];
         if (cSide.length !== 1 || Expr.isGroup(cSide[0]) || cSide[0].pow !== 0) return null;
@@ -2079,26 +2120,65 @@
       return trySide('left', 'right') || trySide('right', 'left');
     }
 
+    // Étape 2 de "Racine carrée" : `eq` est-elle déjà de la forme "√((expr)²) = √(c)" (les
+    // DEUX membres réduits à un unique SqrtGroup, produits par l'étape 1 ci-dessus — voir
+    // Expr.wrapSideInSqrt) ET son radicand a-t-il la même forme reconnaissable qu'avant
+    // l'enveloppement (un carré parfait d'un côté, une constante nue de l'autre) ? Renvoie
+    // le même { base, constant } que detectSquareRootUnwrapped sinon (même sémantique :
+    // "voici ce qu'il reste à annuler/calculer"), null si la forme n'est pas (encore)
+    // reconnaissable — ex. le radicand a été développé/modifié entre-temps (voir "drill
+    // inside a square root" dans pending.drilled.part==='sqrt') : il faut alors d'abord le
+    // refactoriser pour retrouver un carré avant que cette étape ne redevienne possible.
+    function detectSquareRootWrapped(eq) {
+      function trySide(sqSide, constSide) {
+        var sSide = eq[sqSide], cSide = eq[constSide];
+        if (sSide.length !== 1 || !Expr.isSqrtGroup(sSide[0])) return null;
+        if (cSide.length !== 1 || !Expr.isSqrtGroup(cSide[0])) return null;
+        var inner = detectSquareRootUnwrapped({ left: sSide[0].radicand, right: cSide[0].radicand });
+        return inner;
+      }
+      return trySide('left', 'right') || trySide('right', 'left');
+    }
+
     // Contrairement à "Produit nul", pas de sélection préalable à faire : "Racine carrée"
     // est une touche du pavé "Opération" (voir mathKeypad.js/bindMathKeypad dans
     // toolbar.js), au même titre que +/-/×/÷ qui, eux non plus, n'exigent aucune
-    // sélection — juste une forme d'équation valide (voir detectSquareRoot). Comme
-    // "Produit nul", scission imbriquée déléguée à l'enfant focalisé (profondeur
-    // arbitraire), jamais interdite.
+    // sélection — juste une forme d'équation valide, à l'une ou l'autre des deux étapes
+    // (voir detectSquareRootUnwrapped/Wrapped ci-dessus). Comme "Produit nul", scission
+    // imbriquée déléguée à l'enfant focalisé (profondeur arbitraire), jamais interdite.
     function canSquareRoot() {
       if (branches) return focusedChild().canSquareRoot();
-      return !!detectSquareRoot(leaf.lastEquation());
+      var eq = leaf.lastEquation();
+      return !!detectSquareRootUnwrapped(eq) || !!detectSquareRootWrapped(eq);
+    }
+
+    // 'wrap' (étape 1 : envelopper) ou 'simplify' (étape 2 : annuler racine+carré et
+    // calculer la racine numérique de l'autre membre) selon la forme actuelle de
+    // l'équation, null si "Racine carrée" n'est pas disponible — voir canSquareRoot.
+    // Utilisé par toolbar.js pour adapter le texte/l'infobulle de la touche "√" à l'étape
+    // réellement en cours, sans dupliquer ici la détection de forme.
+    function squareRootStage() {
+      if (branches) return focusedChild().squareRootStage();
+      var eq = leaf.lastEquation();
+      if (detectSquareRootUnwrapped(eq)) return 'wrap';
+      if (detectSquareRootWrapped(eq)) return 'simplify';
+      return null;
     }
 
     // Aperçu en lecture seule pour "Racine carrée" (voir previewProduitNul ci-dessus pour
     // le même principe côté "Produit nul") : les mêmes équations que confirmSquareRoot
-    // produirait, sans rien modifier. Contrairement à confirmSquareRoot, ne montre RIEN
+    // produirait, sans rien modifier. À l'étape 1 (envelopper), une SEULE équation (jamais
+    // de scission ici — voir confirmSquareRoot). À l'étape 2 (simplifier), ne montre RIEN
     // (renvoie null) quand la constante est négative — l'aperçu n'a pas vocation à montrer
-    // un message d'erreur, seulement une scission valide.
+    // un message d'erreur, seulement un résultat valide.
     function previewSquareRoot() {
       if (branches) return focusedChild().previewSquareRoot();
-      if (!canSquareRoot()) return null;
-      var detected = detectSquareRoot(leaf.lastEquation());
+      var eq = leaf.lastEquation();
+      if (detectSquareRootUnwrapped(eq)) {
+        return [{ left: Expr.wrapSideInSqrt(eq.left), right: Expr.wrapSideInSqrt(eq.right) }];
+      }
+      var detected = detectSquareRootWrapped(eq);
+      if (!detected) return null;
       if (detected.constant < 0) return null;
       var rootVal = Expr.roundClean(Math.sqrt(detected.constant));
       var equations = [{ left: Expr.cloneSide(detected.base), right: [{ coeff: rootVal, pow: 0 }] }];
@@ -2110,7 +2190,23 @@
 
     function confirmSquareRoot() {
       if (branches) return focusedChild().confirmSquareRoot();
-      var detected = detectSquareRoot(leaf.lastEquation());
+      var eq = leaf.lastEquation();
+      // Étape 1 : enveloppe l'INTÉGRALITÉ des deux membres dans une racine carrée — une
+      // étape normale de la chaîne (deux flèches "√" identiques, comme "÷2" ou toute autre
+      // opération portant sur les deux membres à la fois), jamais une scission : rien n'est
+      // encore résolu, juste posé (voir Expr.wrapSideInSqrt/pushStep). L'élève peut alors
+      // "entrer" dans chaque racine (pending.drilled.part==='sqrt', voir drillIntoSqrt plus
+      // bas) pour y simplifier/factoriser/développer avant de revenir ici pour l'étape 2.
+      if (detectSquareRootUnwrapped(eq)) {
+        var wrapped = { left: Expr.wrapSideInSqrt(eq.left), right: Expr.wrapSideInSqrt(eq.right) };
+        leaf.pushStep(wrapped, { type: 'sqrt' });
+        return true;
+      }
+      // Étape 2 : les deux membres sont déjà "√(...)" (étape 1 déjà passée) et leur radicand
+      // a retrouvé la forme voulue (carré parfait / constante nue, éventuellement après un
+      // détour par "drill inside a square root") — annule racine+carré d'un côté et calcule
+      // la racine numérique de l'autre, en scindant en ± comme avant.
+      var detected = detectSquareRootWrapped(eq);
       if (!detected) return false;
       if (detected.constant < 0) {
         // Pas de scission : juste un message d'erreur, comme un choix d'identité
@@ -2182,6 +2278,7 @@
       previewProduitNul: previewProduitNul,
       confirmProduitNul: confirmProduitNul,
       canSquareRoot: canSquareRoot,
+      squareRootStage: squareRootStage,
       previewSquareRoot: previewSquareRoot,
       confirmSquareRoot: confirmSquareRoot
     };

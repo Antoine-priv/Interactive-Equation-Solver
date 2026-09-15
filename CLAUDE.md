@@ -57,9 +57,20 @@ Equations are `{ left: Side, right: Side }`. A `Side` is `Array<Node>`. A `Node`
 - `ProductGroup = { sign: 1|-1, factors: Array<{ terms: Node[], exponent: number }> }` —
   represents a product of N factors, e.g. `(x+2)(x+3)` is 2 factors of exponent 1 each;
   `(x+3)²` is a SINGLE factor of exponent 2.
+- `SqrtGroup = { radicand: Node[] }` — represents `√(radicand)`. Produced only by "Racine
+  carrée" (the √ key in the Opération pad) wrapping an ENTIRE side at once (`Expr.wrapSideInSqrt`),
+  never by manual `\sqrt{...}` input (which still folds to a plain number, see
+  `foldSqrt`/parser.js, unchanged). "Racine carrée" is two steps: applying it first wraps
+  both full sides in `√(...)` as a normal chain step (no branching yet — see
+  `detectSquareRootUnwrapped`/`confirmSquareRoot` in `history.js`); a second application,
+  once each side's radicand is recognizably `(expr)²` vs. a bare constant (see
+  `detectSquareRootWrapped`), cancels the √+square and computes the numeric root, splitting
+  into the usual ± branches. No `sign` field (always positive, see `Expr.nodeSign`). Drillable
+  exactly once (`pending.drilled.part === 'sqrt'`, mirroring the `'den'` quotient-denominator
+  case above) to freely simplify/factor/expand the radicand before resolving it.
 
-`Expr.isGroup(node)` is `isFactorGroup || isProductGroup`; group nodes can't be directly
-simplified/factored (must be expanded first). All mutating operations on a `Side`
+`Expr.isGroup(node)` is `isFactorGroup || isProductGroup || isSqrtGroup`; group nodes can't be
+directly simplified/factored (must be expanded first). All mutating operations on a `Side`
 live in `expression.js` and return new arrays (never mutate in place — always clone via `cloneNode`/`cloneSide`).
 
 ## History engine (`js/history.js`)

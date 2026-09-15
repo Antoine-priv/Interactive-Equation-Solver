@@ -39,7 +39,8 @@ function ok(label, cond) {
 
   // Cliquer sur la touche "√" ARME seulement la racine carrée (ne confirme plus rien
   // elle-même, voir toggleSquareRootArmed dans history.js) : il faut ensuite cliquer
-  // "Valider", comme pour toute autre opération de ce pavé.
+  // "Valider", comme pour toute autre opération de ce pavé. Étape 1 : enveloppe les deux
+  // membres, aucune branche encore.
   await page.click('[data-key="sqrt"]');
   await page.waitForTimeout(150);
 
@@ -47,9 +48,24 @@ function ok(label, cond) {
     sqrtArmed: window.App.History.getPending().sqrtArmed,
     branches: window.App.History.getBranches()
   }));
-  console.log('etat apres clic sur la touche racine carree (armement seul):', JSON.stringify(armedState));
+  console.log('etat apres clic sur la touche racine carree (armement seul, etape 1):', JSON.stringify(armedState));
   ok('clicking the sqrt key only arms it (no branches yet)', armedState.sqrtArmed === true && armedState.branches === null);
 
+  await page.click('#mathKeypadPanel .panel-confirm-cell');
+  await page.waitForTimeout(150);
+
+  const wrappedState = await page.evaluate(() => ({
+    branches: window.App.History.getBranches(),
+    isWrapped: window.App.Expr.isSqrtGroup(window.App.History.lastEquation().left[0])
+  }));
+  console.log('etat apres Valider (etape 1):', JSON.stringify(wrappedState));
+  ok('stage 1 confirm wraps both sides without creating branches yet', wrappedState.branches === null && wrappedState.isWrapped === true);
+
+  // Étape 2 : ré-armer sur l'équation déjà enveloppée simplifie réellement et scinde en 2.
+  await page.click('button[data-op="expr"]');
+  await page.waitForTimeout(80);
+  await page.click('[data-key="sqrt"]');
+  await page.waitForTimeout(150);
   await page.click('#mathKeypadPanel .panel-confirm-cell');
   await page.waitForTimeout(150);
 
@@ -57,8 +73,8 @@ function ok(label, cond) {
     var bs = window.App.History.getBranches();
     return bs ? bs.map((b) => b.lastEquation()) : null;
   });
-  console.log('branches apres avoir clique sur Valider:', JSON.stringify(branches));
-  ok('clicking "Valider" while armed splits into 2 branches', branches && branches.length === 2);
+  console.log('branches apres avoir clique sur Valider (etape 2):', JSON.stringify(branches));
+  ok('stage 2 confirm splits into 2 real branches', branches && branches.length === 2);
 
   // Etiquette de la fleche : symbole mathematique, pas le texte "racine carree".
   const labelLatexSource = await page.evaluate(() => {

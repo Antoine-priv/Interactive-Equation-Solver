@@ -289,11 +289,13 @@
       // drillIntoProductBranch dans history.js) : ses termes sont supposés plats, jamais de
       // Développer dessus (une seule profondeur, voir toggleInnerSelection). Un
       // dénominateur-expression (pending.drilled.part==='den', voir
-      // drillIntoQuotientDenominator), lui, se comporte exactement comme un FactorGroup
-      // classique ici (voir isDen, seul isBranch désactive Développer ci-dessous).
+      // drillIntoQuotientDenominator) et un radicand de racine carrée (part==='sqrt', voir
+      // drillIntoSqrt), eux, se comportent exactement comme un FactorGroup classique ici
+      // (voir isDen/isSqrt, seul isBranch désactive Développer ci-dessous).
       var isBranch = typeof pending.drilled.branch === 'number' && groupNode && App.Expr.isProductGroup(groupNode);
       var isDen = pending.drilled.part === 'den' && groupNode && App.Expr.isExpressionQuotient(groupNode);
-      if (!groupNode || (!isBranch && !isDen && !App.Expr.isFactorGroup(groupNode))) {
+      var isSqrt = pending.drilled.part === 'sqrt' && groupNode && App.Expr.isSqrtGroup(groupNode);
+      if (!groupNode || (!isBranch && !isDen && !isSqrt && !App.Expr.isFactorGroup(groupNode))) {
         return { canSimplify: false, canFactor: false, canExpand: false, canProduitNul: false };
       }
       var inner = App.Expr.drilledWorkingArray(groupNode, pending.drilled);
@@ -369,8 +371,12 @@
     // Une fraction dont le dénominateur est une expression (isExpressionQuotient) ne se
     // développe pas "en entier" au premier niveau (voir computeExpandTargets dans
     // history.js) — son numérateur/dénominateur restent développables séparément en
-    // "entrant" dedans (pending.drilled).
-    function isFullyExpandableGroup(n) { return isGroup(n) && !App.Expr.isExpressionQuotient(n); }
+    // "entrant" dedans (pending.drilled). Une racine carrée (isSqrtGroup) non plus : "√"
+    // n'a rien à distribuer, contrairement à "k(...)"/"(...)(...)" — son radicand, lui,
+    // reste librement développable en "entrant" dedans (voir drillIntoSqrt).
+    function isFullyExpandableGroup(n) {
+      return isGroup(n) && !App.Expr.isExpressionQuotient(n) && !App.Expr.isSqrtGroup(n);
+    }
     var groupCount = L.filter(function (i) { return isFullyExpandableGroup(eq.left[i]); }).length +
       R.filter(function (i) { return isFullyExpandableGroup(eq.right[i]); }).length;
     var canExpand = groupCount >= 1;
@@ -445,21 +451,28 @@
       App.MathKeypad.setError(errMsg);
 
       // Touche "√" (voir opts.onSqrt ci-dessus) : dépend de la FORME de l'équation (voir
-      // canSquareRoot/detectSquareRoot dans history.js) ET de l'absence d'une autre
-      // composition déjà en cours (une chaîne non vide dans le champ) — sauf si déjà
-      // armée, où elle doit rester cliquable pour pouvoir la désarmer ; définitivement
-      // grisée après un échec (pending.sqrtFailed), jusqu'à sortie/réentrée du mode.
+      // canSquareRoot/squareRootStage/detectSquareRootUnwrapped/Wrapped dans history.js) ET
+      // de l'absence d'une autre composition déjà en cours (une chaîne non vide dans le
+      // champ) — sauf si déjà armée, où elle doit rester cliquable pour pouvoir la
+      // désarmer ; définitivement grisée après un échec (pending.sqrtFailed), jusqu'à
+      // sortie/réentrée du mode. Le libellé distingue les deux étapes : 'wrap' (envelopper
+      // les deux membres, pas encore résolu) de 'simplify' (annuler racine+carré et
+      // calculer la racine numérique de l'autre membre, une fois déjà enveloppée — voir
+      // squareRootStage).
+      var stage = App.History.squareRootStage();
       var sqrtTitle, sqrtDisabled, sqrtPressed = false;
       if (pending.sqrtFailed) {
         sqrtTitle = 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.';
         sqrtDisabled = true;
       } else if (pending.sqrtArmed) {
-        sqrtTitle = 'Racine carrée armée : cliquez "↵" pour scinder, ou re-cliquez ici pour annuler.';
+        sqrtTitle = stage === 'simplify'
+          ? 'Racine carrée armée : cliquez "↵" pour simplifier, ou re-cliquez ici pour annuler.'
+          : 'Racine carrée armée : cliquez "↵" pour appliquer, ou re-cliquez ici pour annuler.';
         sqrtDisabled = false;
         sqrtPressed = true;
       } else {
-        sqrtTitle = 'Racine carrée des deux membres';
-        sqrtDisabled = !App.History.canSquareRoot() || pending.exprLatex !== '';
+        sqrtTitle = stage === 'simplify' ? 'Simplifier la racine carrée' : 'Racine carrée des deux membres';
+        sqrtDisabled = !stage || pending.exprLatex !== '';
       }
       // "√" armée : plus rien d'autre à composer avec (voir toggleSquareRootArmed dans
       // history.js) — seul un second clic sur "√" (pour la désarmer) ou "↵" (pour

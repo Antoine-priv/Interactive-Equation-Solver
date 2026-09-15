@@ -24,13 +24,15 @@ async function typeEquation(page, raw) {
   const browser = await chromium.launch();
   let anyErr = [];
 
-  // --- 1) Racine carrée : (x+3)^2 = 9 -> 2 branches x+3=3 / x+3=-3 ---
+  // --- 1) Racine carrée : (x+3)^2 = 9 -> (étape 1) enveloppe, (étape 2) 2 branches
+  // x+3=3 / x+3=-3 ---
   {
     const { page, errs } = await freshPage(browser);
     await typeEquation(page, '(x+3)^2=9');
     await page.evaluate(() => {
       window.App.History.toggleTermSelection('left', 0);
-      window.App.History.confirmSquareRoot();
+      window.App.History.confirmSquareRoot(); // étape 1 : enveloppe, pas de branches
+      window.App.History.confirmSquareRoot(); // étape 2 : simplifie et scinde
     });
     await page.waitForTimeout(100);
     const branches = await page.evaluate(() => {
@@ -48,13 +50,15 @@ async function typeEquation(page, raw) {
 
   // --- 2) Racine carrée : (x+3)^2 = 0 -> UN SEUL résultat, donc jamais une "fourche" à
   // une seule branche (voir pushStep dans history.js) : reste une étape normale de la
-  // chaîne principale (branches === null), pas les colonnes "Produit nul"/"Racine carrée".
+  // chaîne principale (branches === null), pas les colonnes "Produit nul"/"Racine carrée",
+  // même une fois les deux étapes (envelopper puis simplifier) passées.
   {
     const { page, errs } = await freshPage(browser);
     await typeEquation(page, '(x+3)^2=0');
     await page.evaluate(() => {
       window.App.History.toggleTermSelection('left', 0);
-      window.App.History.confirmSquareRoot();
+      window.App.History.confirmSquareRoot(); // étape 1 : enveloppe
+      window.App.History.confirmSquareRoot(); // étape 2 : simplifie (racine de 0, pas de scission)
     });
     await page.waitForTimeout(100);
     const branches = await page.evaluate(() => window.App.History.getBranches());
@@ -67,13 +71,21 @@ async function typeEquation(page, raw) {
     await page.close();
   }
 
-  // --- 3) Racine carrée : (x+3)^2 = -4 -> pas de scission, erreur ---
+  // --- 3) Racine carrée : (x+3)^2 = -4 -> l'étape 1 (envelopper) réussit toujours (rien à
+  // calculer), c'est l'étape 2 (simplifier, calculer la racine numérique) qui échoue :
+  // pas de scission, erreur.
   {
     const { page, errs } = await freshPage(browser);
     await typeEquation(page, '(x+3)^2=-4');
     await page.evaluate(() => {
       window.App.History.toggleTermSelection('left', 0);
-      window.App.History.confirmSquareRoot();
+      window.App.History.confirmSquareRoot(); // étape 1 : enveloppe (réussit)
+    });
+    await page.waitForTimeout(100);
+    const wrappedOk = await page.evaluate(() => !!window.App.History.getBranches() === false && window.App.Expr.isSqrtGroup(window.App.History.lastEquation().left[0]));
+    ok('3) stage 1 (wrap) succeeds even for a negative constant', wrappedOk);
+    await page.evaluate(() => {
+      window.App.History.confirmSquareRoot(); // étape 2 : simplifie (échoue, constante négative)
     });
     await page.waitForTimeout(100);
     const state = await page.evaluate(() => ({
@@ -92,13 +104,14 @@ async function typeEquation(page, raw) {
     await page.close();
   }
 
-  // --- 4) Racine carrée sur x^2 nu : x^2 = 16 -> x=4 / x=-4 ---
+  // --- 4) Racine carrée sur x^2 nu : x^2 = 16 -> (étape 1) enveloppe, (étape 2) x=4 / x=-4 ---
   {
     const { page, errs } = await freshPage(browser);
     await typeEquation(page, 'x^2=16');
     await page.evaluate(() => {
       window.App.History.toggleTermSelection('left', 0);
-      window.App.History.confirmSquareRoot();
+      window.App.History.confirmSquareRoot(); // étape 1 : enveloppe
+      window.App.History.confirmSquareRoot(); // étape 2 : simplifie et scinde
     });
     await page.waitForTimeout(100);
     const branches = await page.evaluate(() => {

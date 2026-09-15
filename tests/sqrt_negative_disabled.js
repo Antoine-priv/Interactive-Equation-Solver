@@ -11,10 +11,13 @@ function findSqrtKey(page) {
   return page.$('[data-key="sqrt"]');
 }
 
-// Racine carrée d'un nombre négatif : la touche reste cliquable AVANT validation (l'élève
-// doit pouvoir essayer), mais "Valider" affiche un message rouge précis et grise
-// durablement la touche (pending.sqrtFailed) — jusqu'à ce que le mode "Opération" soit
-// quitté/rouvert (seule échappatoire, la touche elle-même restant désactivée).
+// Racine carrée d'un nombre négatif : l'étape 1 (envelopper les deux membres) réussit
+// toujours, rien à calculer encore. C'est l'étape 2 (simplifier : annuler racine+carré,
+// calculer la racine numérique) qui échoue une fois l'équation déjà enveloppée — la touche
+// reste cliquable AVANT validation (l'élève doit pouvoir essayer), mais "Valider" affiche
+// alors un message rouge précis et grise durablement la touche (pending.sqrtFailed) —
+// jusqu'à ce que le mode "Opération" soit quitté/rouvert (seule échappatoire, la touche
+// elle-même restant désactivée).
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
@@ -31,6 +34,22 @@ function findSqrtKey(page) {
   const beforeState = await sqrtKey.evaluate((el) => el.disabled);
   ok('sqrt key is clickable even for a negative-constant equation', beforeState === false);
 
+  // Étape 1 (envelopper) : réussit sans condition, rien à calculer encore.
+  await sqrtKey.evaluate((el) => el.click());
+  await page.waitForTimeout(80);
+  await page.click('#mathKeypadPanel .panel-confirm-cell');
+  await page.waitForTimeout(120);
+  const afterWrap = await page.evaluate(() => ({
+    branches: window.App.History.getBranches(),
+    isWrapped: window.App.Expr.isSqrtGroup(window.App.History.lastEquation().left[0])
+  }));
+  ok('stage 1 (wrap) succeeds even for a negative constant', afterWrap.branches === null && afterWrap.isWrapped === true);
+
+  // Étape 2 (simplifier) : échoue, l'équation est déjà enveloppée et son radicand est
+  // reconnaissable (carré parfait / constante nue), mais la constante est négative.
+  await page.click('button[data-op="expr"]');
+  await page.waitForTimeout(80);
+  sqrtKey = await findSqrtKey(page);
   await sqrtKey.evaluate((el) => el.click());
   await page.waitForTimeout(80);
   await page.click('#mathKeypadPanel .panel-confirm-cell');
