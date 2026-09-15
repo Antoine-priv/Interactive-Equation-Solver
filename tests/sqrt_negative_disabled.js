@@ -11,13 +11,14 @@ function findSqrtKey(page) {
   return page.$('[data-key="sqrt"]');
 }
 
-// Racine carrée d'un nombre négatif : l'étape 1 (envelopper les deux membres) réussit
-// toujours, rien à calculer encore. C'est l'étape 2 (simplifier : annuler racine+carré,
-// calculer la racine numérique) qui échoue une fois l'équation déjà enveloppée — la touche
-// reste cliquable AVANT validation (l'élève doit pouvoir essayer), mais "Valider" affiche
-// alors un message rouge précis et grise durablement la touche (pending.sqrtFailed) —
-// jusqu'à ce que le mode "Opération" soit quitté/rouvert (seule échappatoire, la touche
-// elle-même restant désactivée).
+// Racine carrée d'un nombre négatif : l'étape 1 (envelopper les deux membres, via la
+// touche "√" du pavé "Opération") réussit toujours, rien à calculer encore. C'est l'étape
+// 2 (simplifier : annuler racine+carré, calculer la racine numérique) — désormais portée
+// par le bouton "Simplifier" habituel, pas un second armement de la touche "√" — qui
+// échoue une fois l'équation déjà enveloppée : un message rouge précis s'affiche dans le
+// panneau flottant générique (comme un choix d'identité remarquable invalide), et
+// "Simplifier" reste cliquable (un réessai reproduirait juste la même erreur ; la seule
+// vraie issue est de revenir en arrière jusqu'à une équation différente).
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
@@ -30,7 +31,7 @@ function findSqrtKey(page) {
   await page.click('button[data-op="expr"]');
   await page.waitForTimeout(80);
 
-  let sqrtKey = await findSqrtKey(page);
+  const sqrtKey = await findSqrtKey(page);
   const beforeState = await sqrtKey.evaluate((el) => el.disabled);
   ok('sqrt key is clickable even for a negative-constant equation', beforeState === false);
 
@@ -45,51 +46,38 @@ function findSqrtKey(page) {
   }));
   ok('stage 1 (wrap) succeeds even for a negative constant', afterWrap.branches === null && afterWrap.isWrapped === true);
 
+  // "Opération" (et sa touche "√") ne joue plus aucun rôle à ce stade : "Simplifier" est
+  // déjà l'action attendue pour l'étape 2.
+  const simplifyBtn = await page.$('button[data-op="simplify"]');
+  const simplifyAvailable = await simplifyBtn.evaluate((el) => !el.disabled && !el.closest('.op-row').hidden);
+  ok('"Simplifier" is available on the wrapped (still unresolved) equation', simplifyAvailable);
+
   // Étape 2 (simplifier) : échoue, l'équation est déjà enveloppée et son radicand est
   // reconnaissable (carré parfait / constante nue), mais la constante est négative.
-  await page.click('button[data-op="expr"]');
-  await page.waitForTimeout(80);
-  sqrtKey = await findSqrtKey(page);
-  await sqrtKey.evaluate((el) => el.click());
-  await page.waitForTimeout(80);
-  await page.click('#mathKeypadPanel .panel-confirm-cell');
+  await simplifyBtn.click();
   await page.waitForTimeout(120);
 
   const afterFail = await page.evaluate(() => ({
-    sqrtFailed: window.App.History.getPending().sqrtFailed,
     branches: window.App.History.getBranches(),
-    panelErrorText: (document.querySelector('.math-keypad-error') || {}).textContent || null
+    panelErrorText: (document.querySelector('#controlPanel .panel-error') || {}).textContent || null
   }));
-  ok('exact red error message shown', afterFail.panelErrorText === 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.');
-  ok('sqrtFailed flag set', afterFail.sqrtFailed === true);
+  ok('exact red error message shown in the floating panel', afterFail.panelErrorText === 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.');
   ok('no branches created (confirm rejected)', afterFail.branches === null);
 
-  sqrtKey = await findSqrtKey(page);
-  ok('sqrt key is actually disabled (greyed) after failing', await sqrtKey.evaluate((el) => el.disabled) === true);
-
-  // Message persists even if pending.error alone gets cleared by an unrelated action.
-  await page.evaluate(() => { window.App.History.getPending().error = null; App.Render.renderAll(); });
-  await page.waitForTimeout(60);
-  const afterClearing = await page.evaluate(() => (document.querySelector('.math-keypad-error') || {}).textContent || null);
-  ok('red message persists via sqrtFailed fallback even after pending.error is cleared',
-    afterClearing === 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.');
-
-  // Clicking the disabled key must have no effect (still stuck armed+failed).
-  sqrtKey = await findSqrtKey(page);
-  await sqrtKey.evaluate((el) => el.click());
-  await page.waitForTimeout(80);
-  const afterDisabledClick = await page.evaluate(() => window.App.History.getPending());
-  ok('clicking the disabled sqrt key has no effect (still armed+failed)',
-    afterDisabledClick.sqrtArmed === true && afterDisabledClick.sqrtFailed === true);
-
-  // The only escape hatch: re-clicking the top-level "Opération" toggle (always enabled).
-  await page.click('button[data-op="expr"]');
-  await page.waitForTimeout(80);
-  const afterEscape = await page.evaluate(() => window.App.History.getPending());
-  ok('clicking "Opération" again resets sqrtArmed/sqrtFailed (not stuck)',
-    afterEscape.sqrtArmed === false && afterEscape.sqrtFailed === false);
-
   await page.screenshot({ path: `${SCRATCH}/sqrt_negative_disabled.png` });
+
+  // "Simplifier" stays clickable (no permanent disabling à la sqrtFailed) : a retry just
+  // reproduces the same error rather than getting silently stuck.
+  const stillAvailable = await simplifyBtn.evaluate((el) => !el.disabled && !el.closest('.op-row').hidden);
+  ok('"Simplifier" remains clickable after failing (no permanent lock)', stillAvailable);
+  await simplifyBtn.click();
+  await page.waitForTimeout(120);
+  const afterRetry = await page.evaluate(() => ({
+    branches: window.App.History.getBranches(),
+    panelErrorText: (document.querySelector('#controlPanel .panel-error') || {}).textContent || null
+  }));
+  ok('retrying reproduces the same error, still no branches', afterRetry.branches === null &&
+    afterRetry.panelErrorText === 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.');
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');

@@ -1288,6 +1288,10 @@
     var hovered = App.Toolbar.getHoveredOp();
     if (!hovered) return false;
     if (hovered === 'expr') return true;
+    // Survol de "Simplifier" alors que l'étape 2 de "Racine carrée" est disponible (voir
+    // squareRootStage dans history.js) : même raison que sqrtArmed ci-dessus, l'aperçu
+    // dédié (colonnes ± scindées, voir renderAll) la remplace déjà.
+    if (hovered === 'simplify' && App.History.squareRootStage() === 'simplify') return false;
     var info = App.Toolbar.computeSelectionInfo();
     if (hovered === 'expand') return info.canExpand;
     if (hovered === 'simplify') return info.canSimplify;
@@ -1852,6 +1856,12 @@
         previewEquations = Hist.previewProduitNul();
         previewLabel = '\\text{produit nul}';
       } else if (Hist.getPending().opType === 'expr' && Hist.getPending().sqrtArmed) {
+        previewEquations = Hist.previewSquareRoot();
+        previewLabel = '\\sqrt{\\phantom{x}}';
+      } else if (App.Toolbar.getHoveredOp() === 'simplify' && Hist.squareRootStage() === 'simplify') {
+        // Survol de "Simplifier" une fois l'étape 2 de "Racine carrée" disponible (voir
+        // computeSelectionInfo dans toolbar.js) : même aperçu ± scindé que l'ancien
+        // ré-armement de la touche "√", juste déclenché par ce bouton-ci désormais.
         previewEquations = Hist.previewSquareRoot();
         previewLabel = '\\sqrt{\\phantom{x}}';
       }

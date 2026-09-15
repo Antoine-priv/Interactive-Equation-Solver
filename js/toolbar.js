@@ -339,7 +339,14 @@
     var leftClean = sideClean('left', L);
     var rightClean = sideClean('right', R);
 
-    var canSimplify = (L.length >= 2 && leftClean) || (R.length >= 2 && rightClean);
+    // "Simplifier" porte aussi l'étape 2 de "Racine carrée" (annuler racine+carré et
+    // calculer la racine numérique de l'autre membre) une fois les deux membres déjà
+    // enveloppés dans "√(...)" et leur radicand reconnaissable (voir squareRootStage/
+    // confirmSquareRoot dans history.js) — sans aucune sélection à faire, comme "Produit
+    // nul" ci-dessous : le clic (data-op="simplify" dans toolbar.js) délègue alors à
+    // confirmSquareRoot plutôt qu'à confirmSimplifySelection.
+    var canSimplify = (L.length >= 2 && leftClean) || (R.length >= 2 && rightClean) ||
+      App.History.squareRootStage() === 'simplify';
     // Cas particulier "(expr)²-constante" (ex. (x+8)²-4, voir getFactorTargetShape dans
     // history.js) : la sélection contient un groupe (le carré), donc leftClean/rightClean
     // est faux, mais reste factorisable via l'identité 3 avec a=l'expression du carré.
@@ -444,35 +451,24 @@
         mathKeypadBound = true;
         mathKeypadBoundSide = exprLiveSide;
       }
-      var errMsg = pending.error;
-      if (!errMsg && pending.sqrtFailed) {
-        errMsg = 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.';
-      }
-      App.MathKeypad.setError(errMsg);
+      App.MathKeypad.setError(pending.error);
 
-      // Touche "√" (voir opts.onSqrt ci-dessus) : dépend de la FORME de l'équation (voir
-      // canSquareRoot/squareRootStage/detectSquareRootUnwrapped/Wrapped dans history.js) ET
-      // de l'absence d'une autre composition déjà en cours (une chaîne non vide dans le
-      // champ) — sauf si déjà armée, où elle doit rester cliquable pour pouvoir la
-      // désarmer ; définitivement grisée après un échec (pending.sqrtFailed), jusqu'à
-      // sortie/réentrée du mode. Le libellé distingue les deux étapes : 'wrap' (envelopper
-      // les deux membres, pas encore résolu) de 'simplify' (annuler racine+carré et
-      // calculer la racine numérique de l'autre membre, une fois déjà enveloppée — voir
-      // squareRootStage).
+      // Touche "√" (voir opts.onSqrt ci-dessus) : UNIQUEMENT l'étape 1 de "Racine carrée"
+      // (envelopper les deux membres, voir squareRootStage/detectSquareRootUnwrapped dans
+      // history.js) — l'étape 2 (simplifier) se fait désormais via le bouton "Simplifier"
+      // habituel (voir computeSelectionInfo/le clic sur data-op="simplify"), jamais en
+      // ré-armant cette même touche. Dépend donc de la forme de l'équation ET de l'absence
+      // d'une autre composition déjà en cours (une chaîne non vide dans le champ) — sauf si
+      // déjà armée, où elle doit rester cliquable pour pouvoir la désarmer.
       var stage = App.History.squareRootStage();
       var sqrtTitle, sqrtDisabled, sqrtPressed = false;
-      if (pending.sqrtFailed) {
-        sqrtTitle = 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.';
-        sqrtDisabled = true;
-      } else if (pending.sqrtArmed) {
-        sqrtTitle = stage === 'simplify'
-          ? 'Racine carrée armée : cliquez "↵" pour simplifier, ou re-cliquez ici pour annuler.'
-          : 'Racine carrée armée : cliquez "↵" pour appliquer, ou re-cliquez ici pour annuler.';
+      if (pending.sqrtArmed) {
+        sqrtTitle = 'Racine carrée armée : cliquez "↵" pour appliquer, ou re-cliquez ici pour annuler.';
         sqrtDisabled = false;
         sqrtPressed = true;
       } else {
-        sqrtTitle = stage === 'simplify' ? 'Simplifier la racine carrée' : 'Racine carrée des deux membres';
-        sqrtDisabled = !stage || pending.exprLatex !== '';
+        sqrtTitle = 'Racine carrée des deux membres';
+        sqrtDisabled = stage !== 'wrap' || pending.exprLatex !== '';
       }
       // "√" armée : plus rien d'autre à composer avec (voir toggleSquareRootArmed dans
       // history.js) — seul un second clic sur "√" (pour la désarmer) ou "↵" (pour
@@ -1070,8 +1066,12 @@
           if (pending.opType === 'expr') App.History.cancelOp();
           else App.History.selectOp('expr');
         } else if (op === 'simplify') {
-          // Agit immédiatement sur la sélection déjà faite (pas d'étape à confirmer).
-          App.History.confirmSimplifySelection();
+          // Agit immédiatement sur la sélection déjà faite (pas d'étape à confirmer) — OU,
+          // une fois les deux membres déjà enveloppés par "Racine carrée" (voir
+          // squareRootStage dans history.js), directement sur cette forme-là, sans aucune
+          // sélection : voir le commentaire de canSimplify dans computeSelectionInfo.
+          if (App.History.squareRootStage() === 'simplify') App.History.confirmSquareRoot();
+          else App.History.confirmSimplifySelection();
         } else if (op === 'factor') {
           // Encore besoin d'un nombre (le facteur commun) : passe en mode 'factor' sans
           // perdre la sélection, pour afficher son clavier. Re-cliquer sur CE bouton

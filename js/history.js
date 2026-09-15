@@ -103,22 +103,18 @@
       // pas caractère par caractère comme l'ancien tampon exprRaw.
       exprLatex: '',
       // Touche "√" du pavé "Opération" (voir opts.onSqrt câblé par bindMathKeypad dans
-      // toolbar.js) : contrairement
-      // à +/-/×/÷, aucun opérande à composer — cliquer dessus "arme" juste la racine
-      // carrée (comme un +/-/×/÷ tout juste pressé), incompatible avec toute AUTRE
-      // opération en cours (voir hasCurrentDraft) puisqu'elle scinde en
-      // branches plutôt que de transformer l'équation en place. Il faut ensuite cliquer
-      // "↵" comme pour toute autre opération de ce pavé (voir bindMathKeypad dans
-      // toolbar.js) pour l'exécuter réellement (confirmSquareRoot dans history.js) —
-      // jamais exécutée au simple clic sur la touche elle-même.
+      // toolbar.js) : uniquement l'étape 1 de "Racine carrée" (envelopper les deux
+      // membres, voir squareRootStage dans history.js) — l'étape 2 (simplifier : annuler
+      // racine+carré et calculer la racine numérique) se fait désormais directement via le
+      // bouton "Simplifier" habituel, plus intuitif qu'un second armement de cette même
+      // touche (voir computeSelectionInfo/le clic sur data-op="simplify" dans toolbar.js).
+      // Contrairement à +/-/×/÷, aucun opérande à composer — cliquer dessus "arme" juste la
+      // racine carrée (comme un +/-/×/÷ tout juste pressé), incompatible avec toute AUTRE
+      // opération en cours (voir hasCurrentDraft). Il faut ensuite cliquer "↵" comme pour
+      // toute autre opération de ce pavé (voir bindMathKeypad dans toolbar.js) pour
+      // l'exécuter réellement (confirmSquareRoot dans history.js) — jamais exécutée au
+      // simple clic sur la touche elle-même.
       sqrtArmed: false,
-      // Une tentative de racine carrée a échoué (constante négative, voir
-      // confirmSquareRoot) : persiste indépendamment de pending.error (que d'autres
-      // actions peuvent effacer entre-temps, voir needsPanel/displayError dans
-      // toolbar.js) pour griser durablement la touche "√" — même principe que
-      // pending.factorChoiceFailed pour les identités remarquables. Remis à false en
-      // quittant/rouvrant le mode "Opération" (voir emptyPending) ou en désarmant "√".
-      sqrtFailed: false,
       error: null
     };
   }
@@ -663,7 +659,6 @@
       if (pending.opType !== 'expr') return;
       if (!pending.sqrtArmed && hasCurrentDraft(pending)) return;
       pending.sqrtArmed = !pending.sqrtArmed;
-      pending.sqrtFailed = false;
       pending.error = null;
       notify();
     }
@@ -2188,6 +2183,13 @@
       return equations;
     }
 
+    // Étape 1 (envelopper) : appelée par la touche "√" du pavé "Opération" (armée puis
+    // validée, voir confirmExprOrSqrt dans toolbar.js). Étape 2 (simplifier) : appelée
+    // directement par le bouton "Simplifier" habituel une fois l'équation déjà enveloppée
+    // (voir computeSelectionInfo/le clic sur data-op="simplify" dans toolbar.js) — pas de
+    // second armement de la touche "√", jugé peu clair (même geste répété pour un effet
+    // complètement différent) : "Simplifier" annuler racine+carré et calculer une racine
+    // numérique EST une simplification, familière du reste de l'appli.
     function confirmSquareRoot() {
       if (branches) return focusedChild().confirmSquareRoot();
       var eq = leaf.lastEquation();
@@ -2196,7 +2198,8 @@
       // opération portant sur les deux membres à la fois), jamais une scission : rien n'est
       // encore résolu, juste posé (voir Expr.wrapSideInSqrt/pushStep). L'élève peut alors
       // "entrer" dans chaque racine (pending.drilled.part==='sqrt', voir drillIntoSqrt plus
-      // bas) pour y simplifier/factoriser/développer avant de revenir ici pour l'étape 2.
+      // bas) pour y simplifier/factoriser/développer avant de cliquer "Simplifier" pour
+      // l'étape 2.
       if (detectSquareRootUnwrapped(eq)) {
         var wrapped = { left: Expr.wrapSideInSqrt(eq.left), right: Expr.wrapSideInSqrt(eq.right) };
         leaf.pushStep(wrapped, { type: 'sqrt' });
@@ -2212,12 +2215,12 @@
         // Pas de scission : juste un message d'erreur, comme un choix d'identité
         // remarquable qui ne correspond pas (voir chooseFactorMode) — le panneau flottant
         // l'affiche dès que pending.error est posé, même sans opType engagé (voir
-        // needsPanel dans toolbar.js). sqrtFailed (persistant, voir emptyPending) grise
-        // durablement la touche "√" tant que cette équation reste ainsi — même principe
-        // que pending.factorChoiceFailed pour les identités remarquables.
+        // needsPanel dans toolbar.js). Rien à griser durablement ici (contrairement à
+        // l'ancien pending.sqrtFailed) : "Simplifier" reste cliquable, un réessai
+        // reproduirait juste la même erreur — la seule vraie issue est de revenir en
+        // arrière (undo) jusqu'à une équation différente.
         var pFail = leaf.getPending();
         pFail.error = 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.';
-        pFail.sqrtFailed = true;
         notify();
         return false;
       }

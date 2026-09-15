@@ -81,20 +81,22 @@ function findSqrtKey(page) {
 
   await page.screenshot({ path: `${SCRATCH}/sqrt_wrapped.png` });
 
-  // 5) Ré-ouvrir "Opération" et re-cliquer "√" : cette fois, l'étape 2 (simplifier) est
-  // disponible — armer puis valider annule racine+carré et scinde REELLEMENT en 2 branches.
-  await page.click('button[data-op="expr"]');
-  await page.waitForTimeout(80);
-  const sqrtKey2 = await findSqrtKey(page);
-  await sqrtKey2.evaluate((el) => el.click());
+  // 5) L'étape 2 (simplifier) n'utilise plus la touche "√" (ré-armer une seconde fois pour
+  // un effet complètement différent n'était pas clair) : c'est désormais le bouton
+  // "Simplifier" habituel qui la porte — survoler affiche le vrai aperçu ± scindé, cliquer
+  // l'exécute directement (pas d'armement à deux clics).
+  const simplifyBtn = await page.$('button[data-op="simplify"]');
+  const simplifyDisabledBefore = await simplifyBtn.evaluate((el) => el.disabled || el.closest('.op-row').hidden);
+  ok('"Simplifier" is available once the equation is wrapped', simplifyDisabledBefore === false);
+
+  await simplifyBtn.hover();
   await page.waitForTimeout(150);
-  const stage2ArmedState = await page.evaluate(() => ({
-    sqrtArmed: window.App.History.getPending().sqrtArmed,
+  const stage2HoverState = await page.evaluate(() => ({
     previewColumnCount: document.querySelectorAll('.produit-nul-preview .produit-nul-branch').length
   }));
-  ok('stage 2 arming shows the real ± fork preview (2 columns)', stage2ArmedState.sqrtArmed === true && stage2ArmedState.previewColumnCount === 2);
+  ok('hovering "Simplifier" shows the real ± fork preview (2 columns)', stage2HoverState.previewColumnCount === 2);
 
-  await page.click('#mathKeypadPanel .panel-confirm-cell');
+  await simplifyBtn.click();
   await page.waitForTimeout(300);
   state = await page.evaluate(() => ({
     branches: window.App.History.getBranches() ? window.App.History.getBranches().map((b) => b.lastEquation()) : null

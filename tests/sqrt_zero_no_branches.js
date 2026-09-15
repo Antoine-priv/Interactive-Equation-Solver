@@ -57,11 +57,10 @@ function findSqrtKey(page) {
   }));
   ok('stage 1 confirm: no branches created, both sides wrapped', wrappedState.branches === null && wrappedState.isWrapped === true);
 
-  // Étape 2 : simplifier — re-armer sur l'équation déjà enveloppée.
-  await page.click('button[data-op="expr"]');
-  await page.waitForTimeout(80);
-  const sqrtKeyStage2 = await findSqrtKey(page);
-  await sqrtKeyStage2.evaluate((el) => el.click());
+  // Étape 2 : simplifier — via le bouton "Simplifier" (pas la touche "√", voir
+  // sqrt_arm_confirm.js).
+  const simplifyBtn = await page.$('button[data-op="simplify"]');
+  await simplifyBtn.hover();
   await page.waitForTimeout(150);
   const stage2PreviewState = await page.evaluate(() => ({
     branches: window.App.History.getBranches(),
@@ -69,7 +68,7 @@ function findSqrtKey(page) {
   }));
   ok('preview (stage 2, racine de 0): still no fork columns', stage2PreviewState.branches === null && stage2PreviewState.oldStyleColumns === 0);
 
-  await page.click('#mathKeypadPanel .panel-confirm-cell');
+  await simplifyBtn.click();
   await page.waitForTimeout(150);
 
   const confirmedState = await page.evaluate(() => ({
@@ -94,12 +93,7 @@ function findSqrtKey(page) {
   await page.waitForTimeout(80);
   await page.click('#mathKeypadPanel .panel-confirm-cell'); // étape 1 : enveloppe
   await page.waitForTimeout(150);
-  await page.click('button[data-op="expr"]');
-  await page.waitForTimeout(80);
-  const sqrtKey3 = await findSqrtKey(page);
-  await sqrtKey3.evaluate((el) => el.click());
-  await page.waitForTimeout(80);
-  await page.click('#mathKeypadPanel .panel-confirm-cell'); // étape 2 : simplifie et scinde
+  await page.click('button[data-op="simplify"]'); // étape 2 : simplifie et scinde
   await page.waitForTimeout(150);
   const twoRootState = await page.evaluate(() => ({
     branches: window.App.History.getBranches(),
