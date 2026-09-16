@@ -42,6 +42,29 @@ function ok(label, cond) {
       sign: 1, factorTerms: [{ coeff: 1, pow: 1 }, { coeff: 5, pow: 0 }], innerTerms: [{ coeff: 7, pow: 1 }, { coeff: -3, pow: 0 }], isDivision: true
     }));
 
+  // Bug rapporté : coller/rejouer du LaTeX déjà émis par l'appli elle-même (ex. copié
+  // depuis un dénominateur-expression affiché) — App.Expr.sideLatex insère TOUJOURS un
+  // "\htmlData{fracpart=den}{...}" autour d'un tel dénominateur (voir expression.js),
+  // dont le premier argument contient lui-même un "=" ("fracpart=den"). Sans
+  // stripHtmlWrappers/splitTopLevelEquals (parser.js), ce "=" interne était à tort compté
+  // comme un second signe d'équation.
+  r = await parse('-\\frac{x}{\\htmlData{fracpart=den}{3x}}=0');
+  ok('pasting internally-generated LaTeX with a "\\htmlData{fracpart=den}{...}" wrapper parses correctly',
+    r.ok && JSON.stringify(r.eq) === JSON.stringify({
+      left: [{ sign: -1, factorTerms: [{ coeff: 3, pow: 1 }], innerTerms: [{ coeff: 1, pow: 1 }], isDivision: true }],
+      right: [{ coeff: 0, pow: 0 }]
+    }));
+
+  r = await parse('\\frac{-3}{\\htmlData{fracpart=den}{x + 4}}=9'); // note the spaces around "+", as sideLatex actually emits
+  ok('a "\\htmlData{...}" wrapper with spaces inside its content still parses correctly',
+    r.ok && JSON.stringify(r.eq.left[0]) === JSON.stringify({
+      sign: 1, factorTerms: [{ coeff: 1, pow: 1 }, { coeff: 4, pow: 0 }], innerTerms: [{ coeff: -3, pow: 0 }], isDivision: true
+    }));
+
+  r = await parse('\\htmlId{r5-left-0}{x}+3=8'); // a bare \htmlId wrapper (term-level rendering id), not just \htmlData
+  ok('a "\\htmlId{...}{...}" wrapper (not just \\htmlData) is also stripped correctly',
+    r.ok && JSON.stringify(r.eq) === JSON.stringify({ left: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], right: [{ coeff: 8, pow: 0 }] }));
+
   r = await parse('\\frac{5}{x-5+5}=2'); // denominator content that is NOT trivially "0" textually but IS zero-valued after folding constants: x-5+5 -> just "x" (not zero) -- sanity: should NOT throw
   ok('a denominator that folds to a non-zero variable expression does not throw', r.ok);
 

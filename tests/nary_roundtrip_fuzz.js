@@ -27,25 +27,34 @@ function ok(label, cond) {
         return { sign: n.sign, factors: n.factors.map(function (f) { return { terms: f.terms.map(roundNode), exponent: f.exponent }; }) };
       }
       if (App.Expr.isFactorGroup(n)) {
+        // isExpressionQuotient (voir expression.js) : `factorTerms` (un Side) remplace
+        // `factor` entièrement — round-trippe désormais aussi (voir stripHtmlWrappers/
+        // splitTopLevelEquals dans parser.js), donc plus jamais exclu de ce fuzz (voir
+        // plus haut) : sans ce cas, roundNode(undefined) plantait ici.
+        if (n.factorTerms) {
+          return { sign: n.sign, factorTerms: n.factorTerms.map(roundNode), innerTerms: n.innerTerms.map(roundNode) };
+        }
         return { sign: n.sign, factor: roundNode(n.factor), innerTerms: n.innerTerms.map(roundNode) };
       }
       return { coeff: Math.round(n.coeff * 1e6) / 1e6, pow: n.pow };
     }
     function sideEq(a, b) { return JSON.stringify(a.map(roundNode)) === JSON.stringify(b.map(roundNode)); }
 
-    // generateVariableDenominatorEquation/generateVariableRadicandEquation (voir
-    // generator.js/CLAUDE.md) construisent délibérément un FactorGroup.
-    // isExpressionQuotient / un SqrtGroup DIRECTEMENT en AST — les deux SEULES formes que
-    // generateEquation() puisse produire que parser.js ne sait PAS relire (\frac exige
-    // toujours un dénominateur numérique ; \sqrt{...} se replie toujours en nombre, voir
-    // foldSqrt) : hors-sujet pour ce fuzz du round-trip texte, skippées ici plutôt que
-    // comptées en échec (voir aussi generateRoundTrippableEquation dans
-    // newEquationModal.js, qui applique la même exclusion côté "Générer aléatoirement" réel).
+    // generateVariableRadicandEquation (voir generator.js/CLAUDE.md) construit
+    // délibérément un SqrtGroup DIRECTEMENT en AST — la seule forme que generateEquation()
+    // puisse produire que parser.js ne sait toujours PAS relire (\sqrt{...} se replie
+    // toujours en nombre, voir foldSqrt, quel que soit son contenu) : hors-sujet pour ce
+    // fuzz du round-trip texte, skippée ici plutôt que comptée en échec (voir aussi
+    // generateRoundTrippableEquation dans newEquationModal.js, qui applique la même
+    // exclusion côté "Générer aléatoirement" réel). Un dénominateur-expression
+    // (isExpressionQuotient, generateVariableDenominatorEquation), lui, round-trippe
+    // désormais correctement (voir stripHtmlWrappers/splitTopLevelEquals dans parser.js) —
+    // n'est donc plus exclu ici.
     var mismatches = 0, parseFails = 0, tripleCount = 0, skipped = 0, total = 4000;
     var firstFails = [];
     for (var i = 0; i < total; i++) {
       var eq = App.Generator.generateEquation();
-      if (eq.left.concat(eq.right).some(function (n) { return App.Expr.isExpressionQuotient(n) || App.Expr.isSqrtGroup(n); })) {
+      if (eq.left.concat(eq.right).some(function (n) { return App.Expr.isSqrtGroup(n); })) {
         skipped++;
         continue;
       }

@@ -1972,27 +1972,34 @@
       return { group: group, focusedRes: focusedRes };
     }
 
-    // Positionne `group` (le résultat de renderDomainSplit) À CÔTÉ de la dernière ligne de
-    // la chaîne principale (`refRowEl`, ex. res.framedRowEl) plutôt qu'en-dessous : même
-    // conversion écran -> local (diviser par App.Canvas.getScale()) que le recentrage
-    // automatique de renderAll/panToDomainColumn — #history (position:relative) sert
-    // d'ancre pour ce `position:absolute` (voir .domain-group dans style.css). Appelé
-    // depuis un requestAnimationFrame (comme drawAll) : la mise en page (largeur réelle
-    // de `group`, notamment) doit déjà être connue.
-    // `mainHeaderEl` : l'en-tête "Équation" (voir plus bas), pour aligner celui de
-    // "Domaine de définition" à LA MÊME hauteur (donc, les deux en-têtes ayant la même
-    // taille/marge, la toute première ligne de chaque côté s'aligne aussi) — jamais la
-    // ligne "current" (qui bouge d'une étape à l'autre, ce qui ferait "sauter"
-    // verticalement tout le groupe de domaine à chaque nouvelle étape de la chaîne
-    // principale). `mainRowsData` : pour placer le groupe à droite du membre le plus
-    // large réellement affiché (measuré sur `.eq-line`, le contenu visible et centré —
-    // PAS `.eq-row`, qui occupe toujours toute la largeur du conteneur), plutôt qu'à
-    // droite d'une seule ligne arbitraire.
-    function positionDomainGroup(group, historyEl, mainHeaderEl, mainRowsData) {
-      if (!mainHeaderEl || !mainRowsData || !mainRowsData.length) { group.style.visibility = 'hidden'; return; }
+    // Positionne `group` (le résultat de renderDomainSplit) À CÔTÉ de la chaîne
+    // principale : même conversion écran -> local (diviser par App.Canvas.getScale())
+    // que le recentrage automatique de renderAll/panToDomainColumn — #history
+    // (position:relative) sert d'ancre pour ce `position:absolute` (voir .domain-group
+    // dans style.css). Appelé depuis un requestAnimationFrame (comme drawAll) : la mise
+    // en page (largeur réelle de `group`, notamment) doit déjà être connue.
+    //
+    // Alignement vertical : sur la toute PREMIÈRE ligne de chaque côté (`mainRowsData[0]`,
+    // jamais la ligne "current" qui bouge d'une étape à l'autre — ce qui ferait "sauter"
+    // tout le groupe de domaine à chaque nouvelle étape de la chaîne principale), mesuré
+    // directement sur leur ".eq-line" respective plutôt que sur les en-têtes eux-mêmes :
+    // ".domain-branch" (voir .produit-nul-branch dans style.css) porte SON PROPRE padding
+    // interne (24px), que la chaîne principale n'a pas — aligner seulement les en-têtes
+    // laissait donc les équations elles-mêmes légèrement décalées. `group` est déjà en
+    // place dans le DOM (juste invisible, voir .domain-group) : mesurer sa position
+    // "naturelle" (avant de poser left/top) donne l'écart interne EXACT entre son propre
+    // bord haut et sa première équation, à soustraire ensuite pour aligner celle-ci (et
+    // non le groupe lui-même) sur mainFirstLine.
+    function positionDomainGroup(group, historyEl, mainRowsData) {
+      var mainFirstLine = mainRowsData && mainRowsData.length && mainRowsData[0].el.querySelector('.eq-line');
+      var domainFirstLine = group.querySelector('.domain-branch .eq-line');
+      if (!mainFirstLine || !domainFirstLine) { group.style.visibility = 'hidden'; return; }
       var scale = App.Canvas.getScale();
       var historyRect = historyEl.getBoundingClientRect();
-      var headerRect = mainHeaderEl.getBoundingClientRect();
+      var mainLineRect = mainFirstLine.getBoundingClientRect();
+      var groupRectBefore = group.getBoundingClientRect();
+      var domainLineRectBefore = domainFirstLine.getBoundingClientRect();
+      var internalTopOffset = domainLineRectBefore.top - groupRectBefore.top;
       var maxRight = Math.max.apply(null, mainRowsData.map(function (rd) {
         var lineEl = rd.el.querySelector('.eq-line');
         return lineEl ? lineEl.getBoundingClientRect().right : rd.el.getBoundingClientRect().left;
@@ -2003,11 +2010,11 @@
       // panelEl.offsetWidth (~212px, "les 212px habituels") + son propre GAP interne
       // (26px) = ~238px — dont ~46px seulement retombent dans le padding gauche de
       // `.domain-branch` lui-même (voir .produit-nul-branch), le reste (~192px) déborde
-      // bien à GAUCHE de cette colonne. 240 laisse une marge de sécurité confortable
-      // (zoom/police variables) sans coller les deux zones l'une à l'autre pour autant.
-      var GAP = 240;
+      // bien à GAUCHE de cette colonne. Volontairement plus généreux que ce strict
+      // minimum (retours utilisateur successifs à agrandir encore cet espace).
+      var GAP = 420;
       group.style.left = ((maxRight - historyRect.left) / scale + GAP) + 'px';
-      group.style.top = (headerRect.top - historyRect.top) / scale + 'px';
+      group.style.top = ((mainLineRect.top - internalTopOffset - historyRect.top) / scale) + 'px';
       group.style.visibility = 'visible';
     }
 
@@ -2178,7 +2185,7 @@
         var domainGroupEl = domainSplitResult.group;
         requestAnimationFrame(function () {
           if (isStaleRender()) return;
-          positionDomainGroup(domainGroupEl, history, mainHeaderEl, res.rowsData);
+          positionDomainGroup(domainGroupEl, history, res.rowsData);
         });
       }
     } else {

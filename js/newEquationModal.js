@@ -108,17 +108,18 @@
     // qui devra donc pouvoir être RE-analysé par le parseur manuel une fois validé (voir
     // submitManual) — contrairement à App.History.init(App.Generator.generateEquation())
     // au chargement de la page (main.js), qui charge l'AST directement, sans jamais
-    // repasser par le parseur. Ni un dénominateur-expression (isExpressionQuotient, voir
-    // generateVariableDenominatorEquation dans generator.js : parser.js exige toujours un
-    // dénominateur numérique pour "\frac") ni un radicand-expression au premier niveau
-    // (isSqrtGroup, voir generateVariableRadicandEquation : foldSqrt dans parser.js
-    // replie toujours "\sqrt{...}" en un nombre, voir CLAUDE.md) ne sont ré-analysables
-    // ainsi : on retire ces deux formes au hasard ICI, pas dans generateEquation()
-    // lui-même (qui reste le point d'entrée légitime pour le chargement direct de page).
+    // repasser par le parseur. Un dénominateur-expression (isExpressionQuotient, voir
+    // generateVariableDenominatorEquation dans generator.js) round-trippe désormais
+    // correctement (voir stripHtmlWrappers/splitTopLevelEquals dans parser.js — le
+    // \htmlData{fracpart=den}{...} que sideLatex y insère toujours n'est plus un
+    // obstacle). Un radicand-expression au premier niveau (isSqrtGroup, voir
+    // generateVariableRadicandEquation), lui, reste irrécupérable : foldSqrt dans
+    // parser.js replie TOUJOURS "\sqrt{...}" en un nombre, quel que soit son contenu
+    // (voir CLAUDE.md) — on ne retire donc plus que cette seule forme au hasard ICI, pas
+    // dans generateEquation() lui-même (qui reste le point d'entrée légitime pour le
+    // chargement direct de page).
     function hasManualUnparseableNode(eq) {
-      return eq.left.concat(eq.right).some(function (n) {
-        return App.Expr.isExpressionQuotient(n) || App.Expr.isSqrtGroup(n);
-      });
+      return eq.left.concat(eq.right).some(function (n) { return App.Expr.isSqrtGroup(n); });
     }
     function generateRoundTrippableEquation() {
       for (var attempt = 0; attempt < 20; attempt++) {

@@ -74,6 +74,53 @@
     return -1;
   }
 
+  // "\htmlId{...}{CONTENU}"/"\htmlData{...}{CONTENU}" (voir Expr.nodeLatex dans
+  // expression.js, qui les insère systématiquement — pour le rendu interactif ET pour
+  // App.Expr.sideLatex, réutilisé tel quel par "Générer aléatoirement"/equationToLatex
+  // dans newEquationModal.js) : purement décoratifs, sans aucun sens pour ce parseur —
+  // remplacés ici par leur seul second argument (CONTENU), avant toute autre analyse.
+  // Sans ceci, coller/rejouer du LaTeX déjà sorti de l'appli (ex. copié depuis un
+  // dénominateur-expression affiché, "\frac{x}{\htmlData{fracpart=den}{3x}}") échouait
+  // TOUJOURS : le premier argument d'un \htmlData contient lui-même un "=" (ex.
+  // "fracpart=den"), vu à tort comme un second signe "=" par parseEquation/
+  // parseLatexEquation (voir splitTopLevelEquals plus bas, qui n'aurait sinon aucune
+  // raison de l'ignorer).
+  function stripHtmlWrappers(s) {
+    var out = s;
+    var re = /\\html(?:Id|Data)\{/;
+    var m;
+    while ((m = re.exec(out))) {
+      var cmdStart = m.index;
+      var arg1Open = cmdStart + m[0].length - 1;
+      var arg1Close = findMatchingBrace(out, arg1Open);
+      if (arg1Close === -1 || out[arg1Close + 1] !== '{') break; // forme inattendue : abandonne, laissera une autre erreur de parsing plus explicite
+      var arg2Open = arg1Close + 1;
+      var arg2Close = findMatchingBrace(out, arg2Open);
+      if (arg2Close === -1) break;
+      out = out.slice(0, cmdStart) + out.slice(arg2Open + 1, arg2Close) + out.slice(arg2Close + 1);
+    }
+    return out;
+  }
+
+  // Découpe `s` sur son signe "=" de PREMIER NIVEAU (hors de toute accolade) : un "="
+  // niché dans un argument de commande LaTeX (ex. avant stripHtmlWrappers ci-dessus,
+  // "fracpart=den") ne doit jamais compter comme un second signe d'équation. Renvoie
+  // [gauche, droite] ou null (aucun "=" de premier niveau, ou plus d'un).
+  function splitTopLevelEquals(s) {
+    var depth = 0, eqIdx = -1;
+    for (var i = 0; i < s.length; i++) {
+      var c = s[i];
+      if (c === '{') depth++;
+      else if (c === '}') depth--;
+      else if (c === '=' && depth === 0) {
+        if (eqIdx !== -1) return null;
+        eqIdx = i;
+      }
+    }
+    if (eqIdx === -1) return null;
+    return [s.slice(0, eqIdx), s.slice(eqIdx + 1)];
+  }
+
   // Suffixe d'exposant optionnel "^N" (N à un ou plusieurs chiffres) ou "²" (toujours 2)
   // juste après une parenthèse fermante — voir readParenFactor ci-dessous. Pas de suffixe
   // reconnu : exposant implicite 1, position inchangée.
@@ -310,8 +357,8 @@
   }
 
   function parseEquation(str) {
-    var parts = str.split('=');
-    if (parts.length !== 2) {
+    var parts = splitTopLevelEquals(stripHtmlWrappers(str));
+    if (!parts) {
       throw new Error('L\'équation doit contenir exactement un signe =.');
     }
     var left = parseSide(parts[0]);
@@ -466,8 +513,8 @@
   }
 
   function parseLatexEquation(latex) {
-    var parts = String(latex).split('=');
-    if (parts.length !== 2) {
+    var parts = splitTopLevelEquals(stripHtmlWrappers(String(latex)));
+    if (!parts) {
       throw new Error('L\'équation doit contenir exactement un signe =.');
     }
     return { left: parseLatexSide(parts[0]), right: parseLatexSide(parts[1]) };
