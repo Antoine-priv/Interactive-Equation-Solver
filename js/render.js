@@ -1479,13 +1479,16 @@
       // sélectionnent pour simplifier/factoriser/développer, pas sur la ligne "pending".
       var rowOpts = { pending: false, solved: solved, current: current };
       // `step.operator` (moteur en mode inégalité, voir createEngine/currentOperator dans
-      // history.js) prime sur `opts.eqGlyph` (le "≠" fixe du cas dénominateur, Phase 1,
-      // qui lui ne relabellise QUE la ligne finale une fois résolue) : une inégalité
-      // affiche son PROPRE opérateur sur CHAQUE ligne confirmée, pas seulement la
-      // dernière (son sens peut changer d'une étape à l'autre, voir "sens inversé"
-      // ci-dessus).
+      // history.js) prime sur `opts.eqGlyph` (le "≠" fixe du cas dénominateur) : une
+      // inégalité affiche son PROPRE opérateur, qui peut changer d'une étape à l'autre
+      // (voir "sens inversé" ci-dessus). `opts.eqGlyph` seul (jamais de currentOperator
+      // pour ce cas, voir existenceConditionAction dans history.js), lui, s'applique
+      // désormais à TOUTE ligne confirmée de la colonne — pas seulement la dernière une
+      // fois résolue : dès la toute première ligne, "dénominateur=0" se LIT "≠0" (la
+      // valeur cherchée est justement celle à EXCLURE, jamais une simple étape
+      // intermédiaire "=" comme dans une équation normale) — retour utilisateur.
       if (step.operator) rowOpts.eqGlyph = step.operator;
-      else if (isLastConfirmed && solved && opts.eqGlyph) rowOpts.eqGlyph = opts.eqGlyph;
+      else if (opts.eqGlyph) rowOpts.eqGlyph = opts.eqGlyph;
       if (isLastConfirmed && pending.opType !== 'expr') {
         // Pas de glisser-déposer au premier niveau sur le membre où l'on est "entré" (voir
         // pending.drilled) : évite la complexité d'un réordonnancement du membre pendant

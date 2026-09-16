@@ -73,6 +73,11 @@ function ok(label, cond) {
     JSON.stringify(mainStillEditable.right) === JSON.stringify([{ coeff: 2, pow: 0 }]));
 
   // --- Dedup: exit the drill, re-drill the SAME denominator, click again -> pan, no dup ---
+  // Re-center first: spawning the column above already auto-panned the viewport onto it
+  // (bug fix — the view now also pans on a fresh spawn, not just a dedup click), which
+  // can leave the main equation outside the viewport (especially with the wider gap
+  // between the two areas — user feedback).
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
   await page.evaluate(() => window.App.History.exitDrill());
   await page.waitForTimeout(80);
   await page.click(denSel, { force: true });
@@ -123,6 +128,17 @@ function ok(label, cond) {
     window.App.History.selectOp('expr');
     window.App.History.setExprChainText('-3');
     window.App.History.confirm();
+  });
+  await page.waitForTimeout(150);
+  // Bug rapporté : "≠" doit s'afficher sur TOUTE ligne de la colonne (pas seulement la
+  // toute dernière une fois résolue) — dès cette étape intermédiaire, pas encore résolue
+  // ("x+3-3 = 0-3"), le sens est déjà "≠", jamais "=".
+  const intermediateGlyphs = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.domain-branch[data-domain-index="0"] .eq-sign')).map((el) => el.innerHTML));
+  ok('an intermediate (not-yet-solved) row already shows "≠", not "="',
+    intermediateGlyphs.length > 0 && intermediateGlyphs.every((h) => /2260|\\neq/.test(h)));
+
+  await page.evaluate(() => {
     // "-3" only pushes "x+3-3=0-3" (a normal, unsimplified chain step) — merge each side
     // via the usual "Simplifier" flow to actually reach "x=-3".
     window.App.History.toggleTermSelection('left', 1);

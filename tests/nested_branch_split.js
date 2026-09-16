@@ -112,6 +112,20 @@ function applyOpAndSimplify(page, text) {
   await page.click('[data-key="enter"]');
   await page.waitForTimeout(200);
 
+  // "Racine carrée" est désormais 2 étapes séparées (voir CLAUDE.md/git log :
+  // "make 'Simplifier' act per-side, driven by selection") — la touche "√" (ci-dessus)
+  // ne fait plus qu'ENVELOPPER les deux membres ("√((x+3)²)=√16"), sans jamais scinder
+  // toute seule. Il faut maintenant sélectionner les DEUX membres (le carré ET la
+  // constante, mode 'both' de squareRootSimplifyAction) et cliquer "Simplifier" pour
+  // réellement déclencher l'étape 2 (annuler racine+carré, calculer la racine, scinder).
+  await page.evaluate(() => {
+    window.App.History.toggleTermSelection('left', 0);
+    window.App.History.toggleTermSelection('right', 0);
+  });
+  await page.waitForTimeout(80);
+  await page.click('button[data-op="simplify"]');
+  await page.waitForTimeout(200);
+
   // 4) La colonne s'est scindée À SON TOUR (imbriqué) en 2 sous-colonnes.
   const nested = await page.evaluate((idx) => {
     var col = window.App.History.getBranches()[idx];
@@ -190,7 +204,15 @@ function applyOpAndSimplify(page, text) {
     .findIndex((eq) => eq.left.some((n) => n.factors));
   await page.evaluate((idx) => { window.App.History.setFocusedBranch(idx); }, sqIdx2);
   await applyOpAndSimplify(page, '+16');
+  // Étape 1 (envelopper) seule ici encore ; étape 2 (sélectionner les deux membres puis
+  // Simplifier) juste en dessous, même chose que plus haut dans ce fichier.
   await page.evaluate(() => window.App.History.confirmSquareRoot());
+  await page.waitForTimeout(80);
+  await page.evaluate(() => {
+    window.App.History.toggleTermSelection('left', 0);
+    window.App.History.toggleTermSelection('right', 0);
+    window.App.History.confirmSquareRoot();
+  });
   await page.waitForTimeout(80);
 
   const hasNestedBefore = await page.evaluate((idx) => !!window.App.History.getBranches()[idx].getBranches(), sqIdx2);
@@ -204,9 +226,16 @@ function applyOpAndSimplify(page, text) {
     eq: window.App.History.getBranches()[idx].lastEquation()
   }), sqIdx2);
   console.log('etat apres 1er undo:', JSON.stringify(stateAfterFirstUndo));
-  ok('first undo dissolves ONLY the nested split (back to (x+3)^2=16)', !stateAfterFirstUndo.hasNested);
+  // "Racine carrée" étant désormais 2 étapes CONFIRMÉES séparément (envelopper, puis
+  // scinder — voir plus haut dans ce fichier), UN SEUL undo ne défait que la dernière
+  // (la scission), ramenant à l'état intermédiaire ENVELOPPÉ ("√((x+3)²)=√16"), pas
+  // jusqu'à "(x+3)²=16" (qui demanderait un second undo, hors-sujet ici) — seul l'objet
+  // de ce test précis compte : la scission imbriquée a bien disparu SANS toucher à la
+  // scission de premier niveau.
+  ok('first undo dissolves ONLY the nested split (back to the wrapped "√((x+3)²)=√16")', !stateAfterFirstUndo.hasNested);
   ok('the outer split (top-level columns) is untouched by that undo', stateAfterFirstUndo.hasTop);
-  ok('column equation is back to (x+3)^2=16', JSON.stringify(stateAfterFirstUndo.eq.right) === JSON.stringify([{ coeff: 16, pow: 0 }]));
+  ok('column equation is back to the wrapped state (right side is still "√16")',
+    JSON.stringify(stateAfterFirstUndo.eq.right) === JSON.stringify([{ sign: 1, radicand: [{ coeff: 16, pow: 0 }] }]));
 
   // 8) Second bug signalé (repro exacte de la capture d'écran) : "Produit nul" doit
   // aussi être proposé à l'intérieur d'une colonne quand elle atteint un FactorGroup issu

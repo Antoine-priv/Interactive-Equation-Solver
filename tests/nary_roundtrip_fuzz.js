@@ -34,6 +34,22 @@ function ok(label, cond) {
         if (n.factorTerms) {
           return { sign: n.sign, factorTerms: n.factorTerms.map(roundNode), innerTerms: n.innerTerms.map(roundNode) };
         }
+        // "\frac{x}{d}"/"\frac{-x}{d}" (numérateur "simple" — x/-x nu, jamais suivi d'un
+        // coefficient — voir SIMPLE_FRAC_NUMER_RE/parser.js) avec un dénominateur
+        // NUMÉRIQUE : le parseur replie TOUJOURS cette forme précise en un coefficient
+        // décimal, quelle que soit la forme d'origine — generateFractionEquation, lui,
+        // construit TOUJOURS une fraction AFFICHÉE (jamais repliée), y compris quand son
+        // numérateur se trouve être ce cas "simple" (ex. a=±1, b=0 -> juste "x"/"-x").
+        // Les deux round-trippent donc bien vers LA MÊME valeur mathématique, jamais
+        // comptées différentes ici (pré-existant, repéré via `git stash` avant cette
+        // fonctionnalité — pas un problème introduit par elle).
+        if (n.isDivision && n.innerTerms.length === 1 && !App.Expr.isGroup(n.innerTerms[0])) {
+          var only = n.innerTerms[0];
+          var isSimpleNumer = (only.pow === 1 && Math.abs(only.coeff) === 1) || only.pow === 0;
+          if (isSimpleNumer) {
+            return roundNode({ coeff: n.sign * only.coeff / n.factor.coeff, pow: only.pow });
+          }
+        }
         return { sign: n.sign, factor: roundNode(n.factor), innerTerms: n.innerTerms.map(roundNode) };
       }
       return { coeff: Math.round(n.coeff * 1e6) / 1e6, pow: n.pow };
