@@ -408,25 +408,32 @@
     return { left: trinomial.concat([squareTerm]), right: [{ coeff: 0, pow: 0 }] };
   }
 
+  // Une entrée par forme possible, tirée avec une probabilité STRICTEMENT ÉGALE (1/N,
+  // voir randInt ci-dessous) plutôt que des seuils réglés à la main comme avant (certaines
+  // formes cumulaient jusqu'à 15%, d'autres 1% seulement) : chaque type d'équation a
+  // désormais exactement la même chance d'apparaître via "Générer aléatoirement".
+  var GENERATORS = [
+    generateLinearEquation,
+    generateSimplifyFirstLinear,
+    generateFactorableQuadratic,
+    generateSquareRootEquation,
+    generateProductEquation,
+    generateGroupedCommonFactor,
+    generateSquareMinusConstant,
+    generateDiffOfTwoSquaredExpr,
+    generateTripleProductEquation,
+    generateUnfactoredQuadraticProduct,
+    generateSquaredLinearTimesLinear,
+    generateFractionEquation,
+    generateVariableDenominatorEquation,
+    generateVariableRadicandEquation,
+    generateVariableRadicandQuadraticEquation,
+    generateIdentityPlusProduct,
+    generateTrinomialMinusSquareGroup
+  ];
+
   function generateEquation() {
-    var roll = Math.random();
-    if (roll < 0.15) return generateLinearEquation();
-    if (roll < 0.26) return generateSimplifyFirstLinear();
-    if (roll < 0.37) return generateFactorableQuadratic();
-    if (roll < 0.48) return generateSquareRootEquation();
-    if (roll < 0.56) return generateProductEquation();
-    if (roll < 0.62) return generateGroupedCommonFactor();
-    if (roll < 0.66) return generateSquareMinusConstant();
-    if (roll < 0.70) return generateDiffOfTwoSquaredExpr();
-    if (roll < 0.74) return generateTripleProductEquation();
-    if (roll < 0.80) return generateUnfactoredQuadraticProduct();
-    if (roll < 0.84) return generateSquaredLinearTimesLinear();
-    if (roll < 0.90) return generateFractionEquation();
-    if (roll < 0.93) return generateVariableDenominatorEquation();
-    if (roll < 0.96) return generateVariableRadicandEquation();
-    if (roll < 0.98) return generateVariableRadicandQuadraticEquation();
-    if (roll < 0.99) return generateIdentityPlusProduct();
-    return generateTrinomialMinusSquareGroup();
+    return GENERATORS[randInt(0, GENERATORS.length - 1)]();
   }
 
   App.Generator = {
