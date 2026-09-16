@@ -339,14 +339,14 @@
     var leftClean = sideClean('left', L);
     var rightClean = sideClean('right', R);
 
-    // "Simplifier" porte aussi l'étape 2 de "Racine carrée" (annuler racine+carré et
-    // calculer la racine numérique de l'autre membre) une fois les deux membres déjà
-    // enveloppés dans "√(...)" et leur radicand reconnaissable (voir squareRootStage/
-    // confirmSquareRoot dans history.js) — sans aucune sélection à faire, comme "Produit
-    // nul" ci-dessous : le clic (data-op="simplify" dans toolbar.js) délègue alors à
+    // "Simplifier" porte aussi l'étape 2 de "Racine carrée" (annuler racine+carré et/ou
+    // calculer la racine numérique) une fois AU MOINS un membre déjà enveloppé dans
+    // "√(...)" (et son radicand reconnaissable) SÉLECTIONNÉ (voir squareRootSimplifyAction/
+    // confirmSquareRoot dans history.js — jamais automatique, contrairement à "Produit nul"
+    // ci-dessous) : le clic (data-op="simplify" dans toolbar.js) délègue alors à
     // confirmSquareRoot plutôt qu'à confirmSimplifySelection.
     var canSimplify = (L.length >= 2 && leftClean) || (R.length >= 2 && rightClean) ||
-      App.History.squareRootStage() === 'simplify';
+      !!App.History.squareRootAction();
     // Cas particulier "(expr)²-constante" (ex. (x+8)²-4, voir getFactorTargetShape dans
     // history.js) : la sélection contient un groupe (le carré), donc leftClean/rightClean
     // est faux, mais reste factorisable via l'identité 3 avec a=l'expression du carré.
@@ -1067,10 +1067,10 @@
           else App.History.selectOp('expr');
         } else if (op === 'simplify') {
           // Agit immédiatement sur la sélection déjà faite (pas d'étape à confirmer) — OU,
-          // une fois les deux membres déjà enveloppés par "Racine carrée" (voir
-          // squareRootStage dans history.js), directement sur cette forme-là, sans aucune
-          // sélection : voir le commentaire de canSimplify dans computeSelectionInfo.
-          if (App.History.squareRootStage() === 'simplify') App.History.confirmSquareRoot();
+          // si cette sélection cible un/deux membre(s) déjà enveloppé(s) par "Racine
+          // carrée" (voir squareRootSimplifyAction dans history.js), sur cette forme-là :
+          // voir le commentaire de canSimplify dans computeSelectionInfo.
+          if (App.History.squareRootAction()) App.History.confirmSquareRoot();
           else App.History.confirmSimplifySelection();
         } else if (op === 'factor') {
           // Encore besoin d'un nombre (le facteur commun) : passe en mode 'factor' sans

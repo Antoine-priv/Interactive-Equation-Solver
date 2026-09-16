@@ -24,15 +24,17 @@ async function typeEquation(page, raw) {
   const browser = await chromium.launch();
   let anyErr = [];
 
-  // --- 1) Racine carrée : (x+3)^2 = 9 -> (étape 1) enveloppe, (étape 2) 2 branches
-  // x+3=3 / x+3=-3 ---
+  // --- 1) Racine carrée : (x+3)^2 = 9 -> (étape 1) enveloppe, (étape 2, les DEUX membres
+  // sélectionnés = mode 'both') 2 branches x+3=3 / x+3=-3 ---
   {
     const { page, errs } = await freshPage(browser);
     await typeEquation(page, '(x+3)^2=9');
     await page.evaluate(() => {
       window.App.History.toggleTermSelection('left', 0);
       window.App.History.confirmSquareRoot(); // étape 1 : enveloppe, pas de branches
-      window.App.History.confirmSquareRoot(); // étape 2 : simplifie et scinde
+      window.App.History.toggleTermSelection('left', 0);
+      window.App.History.toggleTermSelection('right', 0);
+      window.App.History.confirmSquareRoot(); // étape 2 (mode 'both') : simplifie et scinde
     });
     await page.waitForTimeout(100);
     const branches = await page.evaluate(() => {
@@ -58,7 +60,9 @@ async function typeEquation(page, raw) {
     await page.evaluate(() => {
       window.App.History.toggleTermSelection('left', 0);
       window.App.History.confirmSquareRoot(); // étape 1 : enveloppe
-      window.App.History.confirmSquareRoot(); // étape 2 : simplifie (racine de 0, pas de scission)
+      window.App.History.toggleTermSelection('left', 0);
+      window.App.History.toggleTermSelection('right', 0);
+      window.App.History.confirmSquareRoot(); // étape 2 (mode 'both') : racine de 0, pas de scission
     });
     await page.waitForTimeout(100);
     const branches = await page.evaluate(() => window.App.History.getBranches());
@@ -85,7 +89,9 @@ async function typeEquation(page, raw) {
     const wrappedOk = await page.evaluate(() => !!window.App.History.getBranches() === false && window.App.Expr.isSqrtGroup(window.App.History.lastEquation().left[0]));
     ok('3) stage 1 (wrap) succeeds even for a negative constant', wrappedOk);
     await page.evaluate(() => {
-      window.App.History.confirmSquareRoot(); // étape 2 : simplifie (échoue, constante négative)
+      window.App.History.toggleTermSelection('left', 0);
+      window.App.History.toggleTermSelection('right', 0);
+      window.App.History.confirmSquareRoot(); // étape 2 (mode 'both') : échoue, constante négative
     });
     await page.waitForTimeout(100);
     const state = await page.evaluate(() => ({
@@ -111,7 +117,9 @@ async function typeEquation(page, raw) {
     await page.evaluate(() => {
       window.App.History.toggleTermSelection('left', 0);
       window.App.History.confirmSquareRoot(); // étape 1 : enveloppe
-      window.App.History.confirmSquareRoot(); // étape 2 : simplifie et scinde
+      window.App.History.toggleTermSelection('left', 0);
+      window.App.History.toggleTermSelection('right', 0);
+      window.App.History.confirmSquareRoot(); // étape 2 (mode 'both') : simplifie et scinde
     });
     await page.waitForTimeout(100);
     const branches = await page.evaluate(() => {

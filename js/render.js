@@ -1288,10 +1288,11 @@
     var hovered = App.Toolbar.getHoveredOp();
     if (!hovered) return false;
     if (hovered === 'expr') return true;
-    // Survol de "Simplifier" alors que l'étape 2 de "Racine carrée" est disponible (voir
-    // squareRootStage dans history.js) : même raison que sqrtArmed ci-dessus, l'aperçu
-    // dédié (colonnes ± scindées, voir renderAll) la remplace déjà.
-    if (hovered === 'simplify' && App.History.squareRootStage() === 'simplify') return false;
+    // Survol de "Simplifier" alors que la sélection en cours cible l'étape 2 de "Racine
+    // carrée" (voir squareRootSimplifyAction dans history.js) : même raison que sqrtArmed
+    // ci-dessus, l'aperçu dédié (voir renderAll) la remplace déjà — que ce survol scinde en
+    // ± ou non (mode 'calc', un seul membre).
+    if (hovered === 'simplify' && App.History.squareRootAction()) return false;
     var info = App.Toolbar.computeSelectionInfo();
     if (hovered === 'expand') return info.canExpand;
     if (hovered === 'simplify') return info.canSimplify;
@@ -1858,6 +1859,10 @@
       // branche — contrairement à "Produit nul", qui garde sa mise en page en colonnes
       // même pour un seul facteur distinct (voir plus bas).
       var previewCollapsible = false;
+      // Mode 'calc' de squareRootSimplifyAction (un seul membre sélectionné et calculé,
+      // voir plus bas) : seul CE côté change, l'étiquette ne doit apparaître QUE dessus —
+      // sinon null, comme confirmSquareRoot/pushAsymmetricStep pour l'étape confirmée.
+      var previewOnlySide = null;
       if (App.Toolbar.getHoveredOp() === 'produitnul') {
         previewEquations = Hist.previewProduitNul();
         previewLabel = '\\text{produit nul}';
@@ -1865,22 +1870,30 @@
         previewEquations = Hist.previewSquareRoot();
         previewLabel = '\\sqrt{\\phantom{x}}';
         previewCollapsible = true;
-      } else if (App.Toolbar.getHoveredOp() === 'simplify' && Hist.squareRootStage() === 'simplify') {
-        // Survol de "Simplifier" une fois l'étape 2 de "Racine carrée" disponible (voir
-        // computeSelectionInfo dans toolbar.js) : même aperçu ± scindé que l'étape 1
-        // ci-dessus, mais étiqueté "simplifier" (voir confirmSquareRoot dans history.js,
-        // qui utilise ce même libellé pour l'étape confirmée) plutôt que le symbole "√",
-        // puisque c'est désormais ce bouton-ci qui la déclenche.
-        previewEquations = Hist.previewSquareRoot();
-        previewLabel = '\\text{simplifier}';
-        previewCollapsible = true;
+      } else {
+        var sqrtAction = App.Toolbar.getHoveredOp() === 'simplify' ? Hist.squareRootAction() : null;
+        if (sqrtAction) {
+          // Survol de "Simplifier" alors que la sélection en cours cible l'étape 2 de
+          // "Racine carrée" (voir squareRootSimplifyAction/computeSelectionInfo) : même
+          // aperçu que l'étape 1 ci-dessus (une seule équation en mode 'calc', qui ne
+          // scinde jamais ; ± scindé en mode 'split'/'both'), mais étiqueté "simplifier"
+          // (voir confirmSquareRoot dans history.js, qui utilise ce même libellé pour
+          // l'étape confirmée) plutôt que le symbole "√", puisque c'est désormais ce
+          // bouton-ci qui la déclenche.
+          previewEquations = Hist.previewSquareRoot();
+          previewLabel = '\\text{simplifier}';
+          previewCollapsible = true;
+          if (sqrtAction.mode === 'calc') previewOnlySide = sqrtAction.side;
+        }
       }
       var previewCols = null;
       if (previewEquations && previewEquations.length === 1 && previewCollapsible) {
         var soleRowEl = createRow(previewEquations[0], { pending: true, solved: false, current: false });
         soleRowEl.classList.add('preview-pop-in');
         history.appendChild(soleRowEl);
-        res.rowsData.push({ el: soleRowEl, opLeft: previewLabel, opRight: previewLabel, pending: true });
+        var soleOpLeft = previewOnlySide === 'right' ? null : previewLabel;
+        var soleOpRight = previewOnlySide === 'left' ? null : previewLabel;
+        res.rowsData.push({ el: soleRowEl, opLeft: soleOpLeft, opRight: soleOpRight, pending: true });
       } else if (previewEquations) {
         // PAS .produit-nul-split (dont le padding de 50vw sert uniquement à permettre,
         // une fois une VRAIE scission confirmée, de défiler assez loin pour recentrer

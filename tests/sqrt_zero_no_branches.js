@@ -58,7 +58,13 @@ function findSqrtKey(page) {
   ok('stage 1 confirm: no branches created, both sides wrapped', wrappedState.branches === null && wrappedState.isWrapped === true);
 
   // Étape 2 : simplifier — via le bouton "Simplifier" (pas la touche "√", voir
-  // sqrt_arm_confirm.js).
+  // sqrt_arm_confirm.js), une fois les deux membres sélectionnés (mode 'both', voir
+  // squareRootSimplifyAction dans history.js).
+  await page.evaluate(() => {
+    window.App.History.toggleTermSelection('left', 0);
+    window.App.History.toggleTermSelection('right', 0);
+  });
+  await page.waitForTimeout(80);
   const simplifyBtn = await page.$('button[data-op="simplify"]');
   await simplifyBtn.hover();
   await page.waitForTimeout(150);
@@ -93,7 +99,12 @@ function findSqrtKey(page) {
   await page.waitForTimeout(80);
   await page.click('#mathKeypadPanel .panel-confirm-cell'); // étape 1 : enveloppe
   await page.waitForTimeout(150);
-  await page.click('button[data-op="simplify"]'); // étape 2 : simplifie et scinde
+  await page.evaluate(() => {
+    window.App.History.toggleTermSelection('left', 0);
+    window.App.History.toggleTermSelection('right', 0);
+  });
+  await page.waitForTimeout(80);
+  await page.click('button[data-op="simplify"]'); // étape 2 (mode 'both') : simplifie et scinde
   await page.waitForTimeout(150);
   const twoRootState = await page.evaluate(() => ({
     branches: window.App.History.getBranches(),

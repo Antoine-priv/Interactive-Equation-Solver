@@ -177,6 +177,16 @@
       resetPending();
     }
 
+    // Variante de pushStep pour une opération qui ne porte QUE sur un seul membre (ex.
+    // "Simplifier" appliqué au seul côté "constante" d'une racine carrée déjà enveloppée,
+    // voir squareRootSimplifyAction/confirmSquareRoot dans l'orchestrateur App.History) :
+    // l'autre membre, inchangé, reste muet (opDesc null, pas de flèche étiquetée dessus) —
+    // même principe que confirmSimplifySelection pour une sélection intérieure SEULE.
+    function pushAsymmetricStep(equation, opLeft, opRight) {
+      steps.push({ equation: equation, opLeft: opLeft, opRight: opRight });
+      resetPending();
+    }
+
     function init(equation) {
       steps = [{ equation: equation, opLeft: null, opRight: null }];
       pending = emptyPending();
@@ -1861,6 +1871,7 @@
       getPending: function () { return pending; },
       lastEquation: lastEquation,
       pushStep: pushStep,
+      pushAsymmetricStep: pushAsymmetricStep,
       selectOp: selectOp,
       cancelOp: cancelOp,
       exitFactorKeepSelection: exitFactorKeepSelection,
@@ -2094,8 +2105,8 @@
     // l'expression dont il faudra prendre la racine (ex. "a+bx", ou "x"). Étape 1 de
     // "Racine carrée" (voir confirmSquareRoot plus bas) : enveloppe l'INTÉGRALITÉ des deux
     // membres dans un SqrtGroup ("(expr)²=c" -> "√((expr)²)=√(c)"), sans rien résoudre —
-    // voir detectSquareRootWrapped ci-dessous pour l'étape 2 (résoudre CETTE forme
-    // enveloppée).
+    // voir detectSquareRootSide ci-dessous pour l'étape 2 (résoudre, MEMBRE PAR MEMBRE,
+    // cette forme enveloppée).
     function detectSquareRootUnwrapped(eq) {
       function trySide(sqSide, constSide) {
         var sSide = eq[sqSide], cSide = eq[constSide];
@@ -2115,81 +2126,179 @@
       return trySide('left', 'right') || trySide('right', 'left');
     }
 
-    // Étape 2 de "Racine carrée" : `eq` est-elle déjà de la forme "√((expr)²) = √(c)" (les
-    // DEUX membres réduits à un unique SqrtGroup, produits par l'étape 1 ci-dessus — voir
-    // Expr.wrapSideInSqrt) ET son radicand a-t-il la même forme reconnaissable qu'avant
-    // l'enveloppement (un carré parfait d'un côté, une constante nue de l'autre) ? Renvoie
-    // le même { base, constant } que detectSquareRootUnwrapped sinon (même sémantique :
-    // "voici ce qu'il reste à annuler/calculer"), null si la forme n'est pas (encore)
-    // reconnaissable — ex. le radicand a été développé/modifié entre-temps (voir "drill
-    // inside a square root" dans pending.drilled.part==='sqrt') : il faut alors d'abord le
-    // refactoriser pour retrouver un carré avant que cette étape ne redevienne possible.
-    function detectSquareRootWrapped(eq) {
-      function trySide(sqSide, constSide) {
-        var sSide = eq[sqSide], cSide = eq[constSide];
-        if (sSide.length !== 1 || !Expr.isSqrtGroup(sSide[0])) return null;
-        if (cSide.length !== 1 || !Expr.isSqrtGroup(cSide[0])) return null;
-        var inner = detectSquareRootUnwrapped({ left: sSide[0].radicand, right: cSide[0].radicand });
-        return inner;
+    // Étape 2 de "Racine carrée", vue UN SEUL membre à la fois (contrairement à l'ancienne
+    // detectSquareRootWrapped, qui exigeait les deux ensemble) — voir
+    // squareRootSimplifyAction juste en dessous, qui combine ceci avec la sélection en
+    // cours pour savoir QUOI faire. Ce `side` est-il déjà "√(...)" (produit par l'étape 1
+    // ci-dessus, voir Expr.wrapSideInSqrt) ET son radicand a-t-il une forme exploitable ?
+    // Renvoie { kind: 'square', base: Side } (un carré parfait, ex. "√((x+3)²)" —
+    // annulable, voir mode 'split' plus bas) ou { kind: 'constant', constant: number } (une
+    // constante nue, ex. "√9" — éventuellement déjà SIGNÉE par un 'split' précédent sur
+    // L'AUTRE membre, voir le champ `sign` du SqrtGroup/Expr.multiplySide — annulable, voir
+    // mode 'calc'), ou null si la forme n'est pas (encore) reconnaissable — ex. le radicand
+    // a été développé/modifié entre-temps (voir "drill inside a square root" dans
+    // pending.drilled.part==='sqrt') : il faut alors d'abord le refactoriser pour retrouver
+    // un carré avant que cette étape ne redevienne possible pour ce membre.
+    function detectSquareRootSide(side) {
+      if (side.length !== 1 || !Expr.isSqrtGroup(side[0])) return null;
+      var node = side[0];
+      if (node.radicand.length !== 1) return null;
+      var inner = node.radicand[0];
+      if (Expr.isSquareFactorGroup(inner)) {
+        return { kind: 'square', base: inner.factors[0].terms };
       }
-      return trySide('left', 'right') || trySide('right', 'left');
+      if (!Expr.isGroup(inner) && inner.pow === 2 && Expr.roundClean(inner.coeff) === 1) {
+        return { kind: 'square', base: [{ coeff: 1, pow: 1 }] };
+      }
+      if (!Expr.isGroup(inner) && inner.pow === 0) {
+        // `constant` reste le RADICAND brut (jamais signé) : c'est LUI qui doit être
+        // non-négatif pour que √constant soit calculable, pas le résultat final signé
+        // (ex. "-√9" est parfaitement valide, -3 — seul "√(-9)" serait impossible). Le
+        // signe du SqrtGroup (voir Expr.multiplySide/le 'split' d'un membre voisin plus
+        // haut) s'applique SÉPARÉMENT, une fois la racine calculée — voir resultSign,
+        // utilisé par computeSquareRootSimplify.
+        return { kind: 'constant', constant: Expr.roundClean(inner.coeff), resultSign: node.sign < 0 ? -1 : 1 };
+      }
+      return null;
     }
 
-    // Contrairement à "Produit nul", pas de sélection préalable à faire : "Racine carrée"
-    // est une touche du pavé "Opération" (voir mathKeypad.js/bindMathKeypad dans
-    // toolbar.js), au même titre que +/-/×/÷ qui, eux non plus, n'exigent aucune
-    // sélection — juste une forme d'équation valide, à l'une ou l'autre des deux étapes
-    // (voir detectSquareRootUnwrapped/Wrapped ci-dessus). Comme "Produit nul", scission
-    // imbriquée déléguée à l'enfant focalisé (profondeur arbitraire), jamais interdite.
+    // Touche "√" du pavé "Opération" : ne porte plus jamais que l'étape 1 (envelopper),
+    // toujours disponible sans sélection (comme +/-/×/÷, elle porte sur l'équation ENTIÈRE)
+    // — l'étape 2 dépend désormais de la sélection en cours, voir squareRootSimplifyAction,
+    // jamais vérifiée ici.
     function canSquareRoot() {
       if (branches) return focusedChild().canSquareRoot();
-      var eq = leaf.lastEquation();
-      return !!detectSquareRootUnwrapped(eq) || !!detectSquareRootWrapped(eq);
+      return !!detectSquareRootUnwrapped(leaf.lastEquation());
     }
 
-    // 'wrap' (étape 1 : envelopper) ou 'simplify' (étape 2 : annuler racine+carré et
-    // calculer la racine numérique de l'autre membre) selon la forme actuelle de
-    // l'équation, null si "Racine carrée" n'est pas disponible — voir canSquareRoot.
-    // Utilisé par toolbar.js pour adapter le texte/l'infobulle de la touche "√" à l'étape
-    // réellement en cours, sans dupliquer ici la détection de forme.
+    // 'wrap' (étape 1 disponible) ou null — utilisé par toolbar.js pour la touche "√" ELLE-
+    // MÊME (titre/désactivation) : elle ne porte plus jamais l'étape 2 (voir
+    // squareRootSimplifyAction, portée par "Simplifier" à la place).
     function squareRootStage() {
       if (branches) return focusedChild().squareRootStage();
-      var eq = leaf.lastEquation();
-      if (detectSquareRootUnwrapped(eq)) return 'wrap';
-      if (detectSquareRootWrapped(eq)) return 'simplify';
-      return null;
+      return detectSquareRootUnwrapped(leaf.lastEquation()) ? 'wrap' : null;
+    }
+
+    // Étape 2 ("Simplifier") : que ferait un clic MAINTENANT, d'après la sélection libre en
+    // cours (pending.selectedLeft/Right — un membre déjà enveloppé n'a jamais qu'UN seul
+    // noeud, donc "sélectionné" y équivaut toujours à "cet index unique présent") ? Exige
+    // TOUJOURS au moins un membre sélectionné (contrairement à l'étape 1, jamais
+    // automatique — voir la demande de l'utilisateur : cliquer "Simplifier" sans rien
+    // sélectionner ne doit rien faire de surprenant) :
+    //  - un seul membre sélectionné, "constante" (ex. "√9", ou déjà "-√9" après un 'split'
+    //    précédent sur l'AUTRE membre) -> { mode: 'calc', side } : calcule CE membre seul,
+    //    sans toucher l'autre ni scinder.
+    //  - un seul membre sélectionné, "carré" (ex. "√((x+3)²)") -> { mode: 'split', side } :
+    //    annule racine+carré de CE membre et scinde en ±, SANS calculer l'autre (qui reste
+    //    tel quel — potentiellement encore "√(...)" — dans chaque branche, à simplifier
+    //    plus tard, indépendamment, dans l'une ou l'autre).
+    //  - LES DEUX membres sélectionnés (un "carré", l'autre "constante", n'importe quel
+    //    ordre) -> { mode: 'both' } : les deux à la fois, comme le bouton le faisait sans
+    //    sélection auparavant.
+    // null sinon (rien sélectionné ; une sélection qui ne correspond à aucune forme
+    // exploitable, ex. un membre déjà résolu en simple nombre sélectionné seul ; ou les
+    // deux mêmes membres — même kind des deux côtés — sélectionnés ensemble).
+    function squareRootSimplifyAction(eq, pending) {
+      var leftSel = pending.selectedLeft.length === 1;
+      var rightSel = pending.selectedRight.length === 1;
+      if (!leftSel && !rightSel) return null;
+      var leftInfo = detectSquareRootSide(eq.left);
+      var rightInfo = detectSquareRootSide(eq.right);
+      if (leftSel && rightSel) {
+        if (leftInfo && rightInfo && leftInfo.kind !== rightInfo.kind) return { mode: 'both' };
+        return null;
+      }
+      var side = leftSel ? 'left' : 'right';
+      var info = leftSel ? leftInfo : rightInfo;
+      if (!info) return null;
+      return { mode: info.kind === 'constant' ? 'calc' : 'split', side: side };
+    }
+
+    // Version "publique" de squareRootSimplifyAction (sans arguments, auto-délégation aux
+    // branches comme canSquareRoot/squareRootStage ci-dessus) — utilisée par
+    // toolbar.js/render.js pour savoir CE QUE ferait un clic sur "Simplifier" maintenant
+    // (activation du bouton, aperçu au survol), sans dupliquer ici la détection de forme.
+    function squareRootAction() {
+      if (branches) return focusedChild().squareRootAction();
+      return squareRootSimplifyAction(leaf.lastEquation(), leaf.getPending());
+    }
+
+    // Calcule le résultat de squareRootSimplifyAction SANS rien modifier (voir
+    // previewSquareRoot) ni committer (voir confirmSquareRoot, qui appelle ceci puis pousse
+    // le(s) résultat(s) comme un step normal ou une scission) : { error: true } (constante
+    // négative), ou { equations: [eq] } (résultat unique — 'calc' ne scinde jamais ;
+    // 'split'/'both' seulement si les deux résultats possibles seraient de toute façon
+    // rigoureusement équivalents, ex. l'autre membre valant déjà 0, voir
+    // Expr.sidesEquivalent — même principe que la déduplication de Produit nul), ou
+    // { equations: [eqPos, eqNeg] } (± scindé).
+    function computeSquareRootSimplify(eq, action) {
+      if (action.mode === 'calc') {
+        var infoC = detectSquareRootSide(eq[action.side]);
+        if (infoC.constant < 0) return { error: true };
+        var rootValC = Expr.roundClean(Math.sqrt(infoC.constant)) * infoC.resultSign;
+        var outEq = Eq.cloneEquation(eq);
+        outEq[action.side] = [{ coeff: rootValC, pow: 0 }];
+        return { equations: [outEq] };
+      }
+      var otherSide = action.side === 'left' ? 'right' : 'left';
+      if (action.mode === 'split') {
+        var infoS = detectSquareRootSide(eq[action.side]);
+        var otherPos = Expr.cloneSide(eq[otherSide]);
+        // Négation d'un membre entier (voir Expr.multiplySide, partagé avec "×(-1)" du
+        // pavé "Opération") : gère aussi bien un membre déjà résolu (simple nombre) qu'un
+        // membre encore "√(...)" (SqrtGroup) — ce dernier restera à simplifier plus tard,
+        // indépendamment, dans SA branche (voir Expr.scaleNode).
+        var otherNeg = Expr.multiplySide(eq[otherSide], -1);
+        var eqPosS = {}, eqNegS = {};
+        eqPosS[action.side] = Expr.cloneSide(infoS.base); eqPosS[otherSide] = otherPos;
+        eqNegS[action.side] = Expr.cloneSide(infoS.base); eqNegS[otherSide] = otherNeg;
+        if (Expr.sidesEquivalent(otherPos, otherNeg)) return { equations: [eqPosS] };
+        return { equations: [eqPosS, eqNegS] };
+      }
+      // 'both' : squareRootSimplifyAction n'a gardé qu'un booléen (les deux membres sont de
+      // kind différent) — on redétecte les deux ici pour savoir précisément lequel est le
+      // carré et lequel est la constante.
+      var leftInfoB = detectSquareRootSide(eq.left), rightInfoB = detectSquareRootSide(eq.right);
+      var squareSide = leftInfoB && leftInfoB.kind === 'square' ? 'left' : 'right';
+      var constSide = squareSide === 'left' ? 'right' : 'left';
+      var infoSq = squareSide === 'left' ? leftInfoB : rightInfoB;
+      var infoCn = constSide === 'left' ? leftInfoB : rightInfoB;
+      if (infoCn.constant < 0) return { error: true };
+      var rootValB = Expr.roundClean(Math.sqrt(infoCn.constant)) * infoCn.resultSign;
+      var eqPosB = {}, eqNegB = {};
+      eqPosB[squareSide] = Expr.cloneSide(infoSq.base); eqPosB[constSide] = [{ coeff: rootValB, pow: 0 }];
+      eqNegB[squareSide] = Expr.cloneSide(infoSq.base); eqNegB[constSide] = [{ coeff: -rootValB, pow: 0 }];
+      if (rootValB === 0) return { equations: [eqPosB] };
+      return { equations: [eqPosB, eqNegB] };
     }
 
     // Aperçu en lecture seule pour "Racine carrée" (voir previewProduitNul ci-dessus pour
     // le même principe côté "Produit nul") : les mêmes équations que confirmSquareRoot
     // produirait, sans rien modifier. À l'étape 1 (envelopper), une SEULE équation (jamais
-    // de scission ici — voir confirmSquareRoot). À l'étape 2 (simplifier), ne montre RIEN
-    // (renvoie null) quand la constante est négative — l'aperçu n'a pas vocation à montrer
-    // un message d'erreur, seulement un résultat valide.
+    // de scission ici — voir confirmSquareRoot). À l'étape 2 ("Simplifier"), reflète la
+    // sélection en cours (voir squareRootSimplifyAction) ; ne montre RIEN (renvoie null) si
+    // rien n'est sélectionné, si la sélection ne correspond à aucune forme exploitable, ou
+    // si le calcul échouerait (constante négative) — l'aperçu n'a pas vocation à montrer un
+    // message d'erreur, seulement un résultat valide.
     function previewSquareRoot() {
       if (branches) return focusedChild().previewSquareRoot();
       var eq = leaf.lastEquation();
       if (detectSquareRootUnwrapped(eq)) {
         return [{ left: Expr.wrapSideInSqrt(eq.left), right: Expr.wrapSideInSqrt(eq.right) }];
       }
-      var detected = detectSquareRootWrapped(eq);
-      if (!detected) return null;
-      if (detected.constant < 0) return null;
-      var rootVal = Expr.roundClean(Math.sqrt(detected.constant));
-      var equations = [{ left: Expr.cloneSide(detected.base), right: [{ coeff: rootVal, pow: 0 }] }];
-      if (rootVal !== 0) {
-        equations.push({ left: Expr.cloneSide(detected.base), right: [{ coeff: -rootVal, pow: 0 }] });
-      }
-      return equations;
+      var action = squareRootSimplifyAction(eq, leaf.getPending());
+      if (!action) return null;
+      var result = computeSquareRootSimplify(eq, action);
+      if (result.error) return null;
+      return result.equations;
     }
 
     // Étape 1 (envelopper) : appelée par la touche "√" du pavé "Opération" (armée puis
-    // validée, voir confirmExprOrSqrt dans toolbar.js). Étape 2 (simplifier) : appelée
-    // directement par le bouton "Simplifier" habituel une fois l'équation déjà enveloppée
-    // (voir computeSelectionInfo/le clic sur data-op="simplify" dans toolbar.js) — pas de
-    // second armement de la touche "√", jugé peu clair (même geste répété pour un effet
-    // complètement différent) : "Simplifier" annuler racine+carré et calculer une racine
-    // numérique EST une simplification, familière du reste de l'appli.
+    // validée, voir confirmExprOrSqrt dans toolbar.js), jamais besoin de sélection. Étape 2
+    // ("Simplifier") : appelée directement par le bouton "Simplifier" habituel, une fois AU
+    // MOINS un membre déjà enveloppé sélectionné (voir squareRootSimplifyAction/le clic sur
+    // data-op="simplify" dans toolbar.js) — pas de second armement de la touche "√", jugé
+    // peu clair (même geste répété pour un effet complètement différent).
     function confirmSquareRoot() {
       if (branches) return focusedChild().confirmSquareRoot();
       var eq = leaf.lastEquation();
@@ -2198,20 +2307,20 @@
       // opération portant sur les deux membres à la fois), jamais une scission : rien n'est
       // encore résolu, juste posé (voir Expr.wrapSideInSqrt/pushStep). L'élève peut alors
       // "entrer" dans chaque racine (pending.drilled.part==='sqrt', voir drillIntoSqrt plus
-      // bas) pour y simplifier/factoriser/développer avant de cliquer "Simplifier" pour
-      // l'étape 2.
+      // bas) pour y simplifier/factoriser/développer, puis sélectionner un membre (ou les
+      // deux) et cliquer "Simplifier" pour l'étape 2.
       if (detectSquareRootUnwrapped(eq)) {
         var wrapped = { left: Expr.wrapSideInSqrt(eq.left), right: Expr.wrapSideInSqrt(eq.right) };
         leaf.pushStep(wrapped, { type: 'sqrt' });
         return true;
       }
-      // Étape 2 : les deux membres sont déjà "√(...)" (étape 1 déjà passée) et leur radicand
-      // a retrouvé la forme voulue (carré parfait / constante nue, éventuellement après un
-      // détour par "drill inside a square root") — annule racine+carré d'un côté et calcule
-      // la racine numérique de l'autre, en scindant en ± comme avant.
-      var detected = detectSquareRootWrapped(eq);
-      if (!detected) return false;
-      if (detected.constant < 0) {
+      // Étape 2 : voir squareRootSimplifyAction pour le détail des 3 modes ('calc'/'split'
+      // ne touchent qu'UN membre, 'both' les deux à la fois).
+      var pending = leaf.getPending();
+      var action = squareRootSimplifyAction(eq, pending);
+      if (!action) return false;
+      var result = computeSquareRootSimplify(eq, action);
+      if (result.error) {
         // Pas de scission : juste un message d'erreur, comme un choix d'identité
         // remarquable qui ne correspond pas (voir chooseFactorMode) — le panneau flottant
         // l'affiche dès que pending.error est posé, même sans opType engagé (voir
@@ -2219,26 +2328,29 @@
         // l'ancien pending.sqrtFailed) : "Simplifier" reste cliquable, un réessai
         // reproduirait juste la même erreur — la seule vraie issue est de revenir en
         // arrière (undo) jusqu'à une équation différente.
-        var pFail = leaf.getPending();
-        pFail.error = 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.';
+        pending.error = 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.';
         notify();
         return false;
       }
-      var rootVal = Expr.roundClean(Math.sqrt(detected.constant));
-      var soleEquation = { left: Expr.cloneSide(detected.base), right: [{ coeff: rootVal, pow: 0 }] };
-      // Racine de 0 : +0 et -0 donneraient deux colonnes strictement identiques (même
-      // principe que la déduplication de Produit nul) — un SEUL résultat, donc jamais une
-      // "fourche" à une seule branche (flèche double + colonnes prévues pour plusieurs cas,
-      // voir splitIntoBranches) : reste une étape normale de la chaîne de CE noeud, à deux
-      // flèches identiques (gauche ET droite, comme pour "÷2" ou toute autre opération
-      // portant sur les deux membres à la fois) — voir pushStep plus haut dans createEngine.
-      // Étiquetée "simplifier" (pas "√", voir formatOpLabel dans render.js), puisque c'est
-      // désormais ce bouton qui déclenche cette étape.
-      if (rootVal === 0) {
-        leaf.pushStep(soleEquation, { type: 'simplify' });
+      var equations = result.equations;
+      if (equations.length === 1) {
+        if (action.mode === 'calc') {
+          // Ne touche qu'UN SEUL membre : une seule flèche étiquetée, l'autre muette (voir
+          // pushAsymmetricStep) — exactement comme confirmSimplifySelection pour une
+          // sélection intérieure SEULE (voir plus haut) : les deux flèches "simplifier" à
+          // la fois serait trompeur, l'autre membre n'a, lui, pas bougé.
+          leaf.pushAsymmetricStep(equations[0],
+            action.side === 'left' ? { type: 'simplify' } : null,
+            action.side === 'right' ? { type: 'simplify' } : null);
+          return true;
+        }
+        // 'split'/'both' réduits à un seul résultat (les deux branches auraient été
+        // rigoureusement équivalentes, voir computeSquareRootSimplify) : reste une étape
+        // normale de la chaîne, à deux flèches identiques (comme "÷2") plutôt qu'une
+        // "fourche" à une seule branche.
+        leaf.pushStep(equations[0], { type: 'simplify' });
         return true;
       }
-      var equations = [soleEquation, { left: Expr.cloneSide(detected.base), right: [{ coeff: -rootVal, pow: 0 }] }];
       splitIntoBranches(equations, '\\text{simplifier}');
       return true;
     }
@@ -2284,6 +2396,7 @@
       confirmProduitNul: confirmProduitNul,
       canSquareRoot: canSquareRoot,
       squareRootStage: squareRootStage,
+      squareRootAction: squareRootAction,
       previewSquareRoot: previewSquareRoot,
       confirmSquareRoot: confirmSquareRoot
     };

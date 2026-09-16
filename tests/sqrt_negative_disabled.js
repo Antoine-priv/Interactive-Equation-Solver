@@ -47,10 +47,19 @@ function findSqrtKey(page) {
   ok('stage 1 (wrap) succeeds even for a negative constant', afterWrap.branches === null && afterWrap.isWrapped === true);
 
   // "Opération" (et sa touche "√") ne joue plus aucun rôle à ce stade : "Simplifier" est
-  // déjà l'action attendue pour l'étape 2.
+  // déjà l'action attendue pour l'étape 2 — mais toujours indisponible tant que rien n'est
+  // sélectionné (voir squareRootSimplifyAction dans history.js).
   const simplifyBtn = await page.$('button[data-op="simplify"]');
+  const simplifyBeforeSelection = await simplifyBtn.evaluate((el) => !el.disabled && !el.closest('.op-row').hidden);
+  ok('"Simplifier" stays unavailable with nothing selected, even once wrapped', simplifyBeforeSelection === false);
+
+  await page.evaluate(() => {
+    window.App.History.toggleTermSelection('left', 0);
+    window.App.History.toggleTermSelection('right', 0);
+  });
+  await page.waitForTimeout(80);
   const simplifyAvailable = await simplifyBtn.evaluate((el) => !el.disabled && !el.closest('.op-row').hidden);
-  ok('"Simplifier" is available on the wrapped (still unresolved) equation', simplifyAvailable);
+  ok('"Simplifier" becomes available once both sides are selected', simplifyAvailable);
 
   // Étape 2 (simplifier) : échoue, l'équation est déjà enveloppée et son radicand est
   // reconnaissable (carré parfait / constante nue), mais la constante est négative.

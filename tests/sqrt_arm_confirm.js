@@ -77,17 +77,28 @@ function findSqrtKey(page) {
   console.log('apres avoir clique sur Valider (etape 1):', JSON.stringify(state));
   ok('stage 1 confirm does NOT create branches yet', state.branches === null);
   ok('both sides are now wrapped in a SqrtGroup', JSON.stringify(state.lastEquation) ===
-    JSON.stringify({ left: [{ radicand: [{ sign: 1, factors: [{ terms: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], exponent: 2 }] }] }], right: [{ radicand: [{ coeff: 9, pow: 0 }] }] }));
+    JSON.stringify({ left: [{ sign: 1, radicand: [{ sign: 1, factors: [{ terms: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], exponent: 2 }] }] }], right: [{ sign: 1, radicand: [{ coeff: 9, pow: 0 }] }] }));
 
   await page.screenshot({ path: `${SCRATCH}/sqrt_wrapped.png` });
 
   // 5) L'étape 2 (simplifier) n'utilise plus la touche "√" (ré-armer une seconde fois pour
   // un effet complètement différent n'était pas clair) : c'est désormais le bouton
-  // "Simplifier" habituel qui la porte — survoler affiche le vrai aperçu ± scindé, cliquer
-  // l'exécute directement (pas d'armement à deux clics).
+  // "Simplifier" habituel qui la porte — MAIS seulement une fois au moins un membre
+  // sélectionné (voir squareRootSimplifyAction dans history.js) : rien sélectionné, le
+  // bouton reste indisponible comme n'importe quel autre "Simplifier" sans sélection.
   const simplifyBtn = await page.$('button[data-op="simplify"]');
-  const simplifyDisabledBefore = await simplifyBtn.evaluate((el) => el.disabled || el.closest('.op-row').hidden);
-  ok('"Simplifier" is available once the equation is wrapped', simplifyDisabledBefore === false);
+  const simplifyDisabledNoSelection = await simplifyBtn.evaluate((el) => el.disabled || el.closest('.op-row').hidden);
+  ok('"Simplifier" stays unavailable with nothing selected, even once wrapped', simplifyDisabledNoSelection === true);
+
+  // Sélectionne les DEUX membres (mode 'both', même résultat qu'avant) : clique chaque
+  // "√(...)" de l'équation encadrée.
+  await page.evaluate(() => {
+    window.App.History.toggleTermSelection('left', 0);
+    window.App.History.toggleTermSelection('right', 0);
+  });
+  await page.waitForTimeout(80);
+  const simplifyDisabledAfter = await simplifyBtn.evaluate((el) => el.disabled || el.closest('.op-row').hidden);
+  ok('"Simplifier" becomes available once both sides are selected', simplifyDisabledAfter === false);
 
   await simplifyBtn.hover();
   await page.waitForTimeout(150);

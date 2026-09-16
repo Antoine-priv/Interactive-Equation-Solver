@@ -74,6 +74,14 @@ function ok(label, cond) {
   await page.click('button[data-op="expr"]'); // referme "Opération", inutile pour Simplifier
   await page.waitForTimeout(80);
 
+  // "Simplifier" exige de sélectionner au moins un membre (voir
+  // squareRootSimplifyAction dans history.js) — sélectionne les DEUX (mode 'both').
+  await page.evaluate(() => {
+    window.App.History.toggleTermSelection('left', 0);
+    window.App.History.toggleTermSelection('right', 0);
+  });
+  await page.waitForTimeout(80);
+
   await page.click('button[data-op="simplify"]');
   await page.waitForTimeout(150);
 

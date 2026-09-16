@@ -30,17 +30,22 @@
    exponent>=2 (un carré/cube/... isolé, rien d'autre multiplié). Ni `exponent` ni le degré
    des termes bruts (Term.pow, voir ci-dessus) ne sont plafonnés : "(x+2)(x+3)(x+4)" se
    développe normalement en x³+..., voir expandProductGroup.
-   SqrtGroup = { radicand: Node[] }
-   Représente "√(radicand)" — produit UNIQUEMENT par "Racine carrée" (pavé "Opération",
-   voir detectSquareRootUnwrapped/confirmSquareRoot dans history.js) pour envelopper
-   l'INTÉGRALITÉ d'un membre entier (jamais une simple partie) : toujours le seul noeud de
-   son Side ("[{radicand:...}]"), jamais mélangé à d'autres termes. Pas de champ `sign`
-   (toujours positif — voir nodeSign) ni de coefficient devant, contrairement à FactorGroup.
-   Une seule profondeur de "drilled" (voir pending.drilled.part==='sqrt' dans history.js,
-   même principe que le dénominateur-expression d'une fraction ci-dessus) : ses termes sont
-   librement simplifiables/factorisables/développables, mais pas descendus plus loin — la
-   forme attendue juste après l'enveloppement ("(expr)²" ou une constante nue) n'en a de
-   toute façon jamais besoin.
+   SqrtGroup = { sign: 1|-1, radicand: Node[] }
+   Représente "√(radicand)" (sign 1) ou "-√(radicand)" (sign -1) — produit UNIQUEMENT par
+   "Racine carrée" (pavé "Opération", voir detectSquareRootUnwrapped/confirmSquareRoot dans
+   history.js) pour envelopper l'INTÉGRALITÉ d'un membre entier (jamais une simple partie) :
+   toujours le seul noeud de son Side ("[{sign,radicand:...}]"), jamais mélangé à d'autres
+   termes. Toujours sign:1 juste après l'enveloppement (étape 1) ; sign:-1 apparaît
+   seulement sur le membre NON sélectionné d'un "split" partiel (étape 2, un seul membre
+   sélectionné — voir squareRootSimplifyAction dans history.js, qui annule racine+carré du
+   membre choisi et scinde en ± SANS calculer l'autre, le laissant "√(...)" ou "-√(...)"
+   selon la branche, via Expr.multiplySide/scaleNode) — jamais produit par "Développer" ou
+   toute autre opération générique, comme la plupart des signs négatifs de groupe ailleurs.
+   Pas de coefficient devant, contrairement à FactorGroup. Une seule profondeur de "drilled"
+   (voir pending.drilled.part==='sqrt' dans history.js, même principe que le dénominateur-
+   expression d'une fraction ci-dessus) : ses termes sont librement simplifiables/
+   factorisables/développables, mais pas descendus plus loin — la forme attendue juste après
+   l'enveloppement ("(expr)²" ou une constante nue) n'en a de toute façon jamais besoin.
    Node = Term | FactorGroup | ProductGroup | SqrtGroup (un groupe peut contenir un autre
    groupe imbriqué, ex. "2(-9x+3(-2))" produit par une multiplication qui enveloppe tout un
    membre)
@@ -104,11 +109,7 @@
     return side.some(nodeHasVariable);
   }
 
-  // SqrtGroup n'a pas de champ `sign` propre (toujours positif — voir le commentaire de
-  // modèle de données en tête de fichier) : cas à part avant le `isGroup` générique
-  // ci-dessous, qui suppose sinon toujours ce champ présent.
   function nodeSign(node) {
-    if (isSqrtGroup(node)) return 1;
     if (isGroup(node)) return node.sign;
     return node.coeff < 0 ? -1 : 1;
   }
@@ -126,7 +127,7 @@
       return { sign: node.sign, factors: node.factors.map(cloneFactor) };
     }
     if (isSqrtGroup(node)) {
-      return { radicand: node.radicand.map(cloneNode) };
+      return { sign: node.sign, radicand: node.radicand.map(cloneNode) };
     }
     if (isFactorGroup(node)) {
       // Ordre des clés préservé (sign, factor[Terms], innerTerms, isDivision) : plusieurs
@@ -248,11 +249,13 @@
   // isFirst = premier noeud du membre (pas d'espace avant, signe seulement si négatif).
   function nodeLatex(node, isFirst) {
     if (isSqrtGroup(node)) {
-      // Toujours positif (pas de champ `sign`, voir nodeSign) : un SqrtGroup n'est jamais
-      // précédé de "-" dans ce modèle, voir le commentaire de modèle de données en tête de
-      // fichier — en pratique toujours isFirst===true (seul noeud de son Side).
+      // En pratique toujours isFirst===true (seul noeud de son Side) : même schéma de
+      // signe que les autres groupes malgré tout, pour rester cohérent si jamais mélangé
+      // (voir le commentaire de modèle de données en tête de fichier).
       var bodySqrt = '\\sqrt{' + innerTermsLatex(node.radicand) + '}';
-      return isFirst ? bodySqrt : ' + ' + bodySqrt;
+      var signSqrt = node.sign < 0 ? '-' : '+';
+      if (isFirst) return (signSqrt === '-' ? '-' : '') + bodySqrt;
+      return ' ' + signSqrt + ' ' + bodySqrt;
     }
     if (isProductGroup(node)) {
       var ALNUM_END_RE = /[0-9A-Za-z]$/;
@@ -342,6 +345,26 @@
         newFactors = [{ terms: [{ coeff: factor, pow: 0 }], exponent: 1 }].concat(node.factors.map(cloneFactor));
       }
       return { sign: node.sign, factors: newFactors };
+    }
+    if (isSqrtGroup(node)) {
+      // Pas de coefficient absorbable (pas de champ `factor`, contrairement à FactorGroup
+      // ci-dessous) — seul son `sign` peut directement encaisser un facteur ±1 (ex. la
+      // négation d'un membre entier "√(...)"->"-√(...)", voir multiplySide/
+      // squareRootSimplifyAction dans history.js). Une magnitude différente de 1 (ex.
+      // "×3") enveloppe dans un FactorGroup classique "k·(√(radicand))" à la place, la
+      // racine intérieure restant simplement sign:1 (le FactorGroup englobant porte alors
+      // le signe global).
+      var sqrtOverallSign = (node.sign < 0) !== (factor < 0) ? -1 : 1;
+      var sqrtMag = Math.abs(factor);
+      var clonedRadicand = node.radicand.map(cloneNode);
+      if (sqrtMag === 1) {
+        return { sign: sqrtOverallSign, radicand: clonedRadicand };
+      }
+      return {
+        sign: sqrtOverallSign,
+        factor: { coeff: sqrtMag, pow: 0 },
+        innerTerms: [{ sign: 1, radicand: clonedRadicand }]
+      };
     }
     if (isFactorGroup(node)) {
       if (node.isDivision) {
@@ -1291,7 +1314,7 @@
   function withSqrtRadicandAtPath(side, path, newRadicand) {
     return side.map(function (n, i) {
       if (i !== path[0]) return cloneNode(n);
-      return { radicand: newRadicand.map(cloneNode) };
+      return { sign: n.sign, radicand: newRadicand.map(cloneNode) };
     });
   }
 
@@ -1325,7 +1348,7 @@
   // le seul noeud du Side résultant (voir le commentaire de modèle de données en tête de
   // fichier).
   function wrapSideInSqrt(side) {
-    return [{ radicand: cloneSide(side) }];
+    return [{ sign: 1, radicand: cloneSide(side) }];
   }
 
   // Remplace les termes du facteur d'INDICE `branch` du ProductGroup situé à `path`
