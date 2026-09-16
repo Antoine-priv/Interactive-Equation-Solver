@@ -27,9 +27,9 @@ in `(function (App) { ... })(window.App = window.App || {});` IIFEs.
   CDN `<script>`/`<link>` tags). MathLive backs the unified math keypad; KaTeX
   remains the display renderer for confirmed equation steps/arrows, untouched by that work.
 - Script load order in `index.html` matters and mirrors the dependency graph: `expression.js`
-  → `equation.js` → `parser.js` → `generator.js` → `history.js` → `canvas.js` → `zoom.js` →
-  `render.js` → `arrows.js` → `toolbar.js` → `mathKeypad.js` → `keyboard.js` →
-  `newEquationModal.js` → `theme.js` → `main.js`.
+  → `equation.js` → `inequality.js` → `parser.js` → `generator.js` → `history.js` →
+  `canvas.js` → `zoom.js` → `render.js` → `arrows.js` → `toolbar.js` → `mathKeypad.js` →
+  `keyboard.js` → `newEquationModal.js` → `theme.js` → `main.js`.
 - No lint/build commands exist for this project. A regression test suite does exist (see
   below) — run the targeted test after any change to `js/*.js`.
 

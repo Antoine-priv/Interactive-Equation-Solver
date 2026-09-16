@@ -33,18 +33,19 @@ function ok(label, cond) {
     }
     function sideEq(a, b) { return JSON.stringify(a.map(roundNode)) === JSON.stringify(b.map(roundNode)); }
 
-    // generateVariableDenominatorEquation (voir generator.js/CLAUDE.md) construit
-    // délibérément un FactorGroup.isExpressionQuotient DIRECTEMENT en AST — la seule
-    // forme que generateEquation() puisse produire que parser.js ne sait PAS relire
-    // (\frac exige toujours un dénominateur numérique) : hors-sujet pour ce fuzz du
-    // round-trip texte, skippée ici plutôt que comptée en échec (voir aussi
-    // generateRoundTrippableEquation dans newEquationModal.js, qui applique la même
-    // exclusion côté "Générer aléatoirement" réel).
+    // generateVariableDenominatorEquation/generateVariableRadicandEquation (voir
+    // generator.js/CLAUDE.md) construisent délibérément un FactorGroup.
+    // isExpressionQuotient / un SqrtGroup DIRECTEMENT en AST — les deux SEULES formes que
+    // generateEquation() puisse produire que parser.js ne sait PAS relire (\frac exige
+    // toujours un dénominateur numérique ; \sqrt{...} se replie toujours en nombre, voir
+    // foldSqrt) : hors-sujet pour ce fuzz du round-trip texte, skippées ici plutôt que
+    // comptées en échec (voir aussi generateRoundTrippableEquation dans
+    // newEquationModal.js, qui applique la même exclusion côté "Générer aléatoirement" réel).
     var mismatches = 0, parseFails = 0, tripleCount = 0, skipped = 0, total = 4000;
     var firstFails = [];
     for (var i = 0; i < total; i++) {
       var eq = App.Generator.generateEquation();
-      if (eq.left.concat(eq.right).some(function (n) { return App.Expr.isExpressionQuotient(n); })) {
+      if (eq.left.concat(eq.right).some(function (n) { return App.Expr.isExpressionQuotient(n) || App.Expr.isSqrtGroup(n); })) {
         skipped++;
         continue;
       }

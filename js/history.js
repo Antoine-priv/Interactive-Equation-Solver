@@ -9,6 +9,7 @@
   'use strict';
   var Expr = App.Expr;
   var Eq = App.Equation;
+  var Ineq = App.Ineq;
 
   function emptyPending() {
     return {
@@ -135,6 +136,28 @@
     var listeners = [];
     var lastClickKey = null;
     var lastClickTime = 0;
+    // Opérateur COURANT ('\geq'/'\leq'/'<'/'>'), non nul UNIQUEMENT pour un moteur de
+    // colonne "Condition d'existence" en mode inégalité (radicand>=0 d'une racine carrée,
+    // voir existenceConditionAction dans l'orchestrateur/App.Ineq dans inequality.js) —
+    // null pour toute équation normale ("=" implicite partout, voir Equation dans
+    // equation.js, volontairement jamais touché). Posé une fois pour toutes par
+    // init(equation, opts), puis mis à jour par confirm() (mode 'expr' seulement : seule
+    // une multiplication/division PAR UN NOMBRE NÉGATIF peut jamais le faire changer,
+    // voir plus bas) — jamais remis à zéro par resetPending (une étape confirmée doit
+    // garder son sens, pas juste sa sélection en cours).
+    var currentOperator = null;
+
+    // Point de passage UNIQUE pour empiler une nouvelle étape (remplace tout
+    // `steps.push(...)` direct) : y accroche `currentOperator` (voir ci-dessus) sur
+    // CHAQUE étape confirmée, y compris celles qui ne changent jamais le sens
+    // (Simplifier/Factoriser/Développer) — seul confirm() en mode 'expr' le fait
+    // réellement varier, mais toute étape doit porter la valeur EN VIGUEUR à ce
+    // moment-là pour que chaque ligne affiche le bon opérateur (voir renderChain dans
+    // render.js, qui lit `step.operator`).
+    function pushRaw(stepObj) {
+      if (currentOperator) stepObj.operator = currentOperator;
+      steps.push(stepObj);
+    }
 
     // Vrai si ce clic (identifié par `key`, une chaîne stable pour "ce terme précis")
     // arrive assez vite après le précédent clic sur EXACTEMENT le même terme pour
@@ -173,7 +196,7 @@
     // branches, voir confirmSquareRoot dans l'orchestrateur App.History) : reste une étape
     // normale de LA chaîne, jamais une "fourche" à une seule branche.
     function pushStep(equation, opDesc) {
-      steps.push({ equation: equation, opLeft: opDesc, opRight: opDesc });
+      pushRaw({ equation: equation, opLeft: opDesc, opRight: opDesc });
       resetPending();
     }
 
@@ -183,12 +206,18 @@
     // l'autre membre, inchangé, reste muet (opDesc null, pas de flèche étiquetée dessus) —
     // même principe que confirmSimplifySelection pour une sélection intérieure SEULE.
     function pushAsymmetricStep(equation, opLeft, opRight) {
-      steps.push({ equation: equation, opLeft: opLeft, opRight: opRight });
+      pushRaw({ equation: equation, opLeft: opLeft, opRight: opRight });
       resetPending();
     }
 
-    function init(equation) {
-      steps = [{ equation: equation, opLeft: null, opRight: null }];
+    // `opts.operator` (optionnel) : voir la déclaration de `currentOperator` plus haut —
+    // posé UNE FOIS ici pour toute la vie de ce moteur (jamais remis à zéro ailleurs),
+    // absent/undefined pour toute équation normale.
+    function init(equation, opts) {
+      currentOperator = (opts && opts.operator) || null;
+      var firstStep = { equation: equation, opLeft: null, opRight: null };
+      if (currentOperator) firstStep.operator = currentOperator;
+      steps = [firstStep];
       pending = emptyPending();
       lastClickKey = null;
       notify();
@@ -1058,6 +1087,16 @@
           notify();
           return false;
         }
+        // Mode inégalité (currentOperator non nul, voir sa déclaration plus haut) : ×/÷
+        // par une EXPRESSION (ops[i].terms présent, ex. "×(x+5)") reste hors-champ pour
+        // l'instant — son signe dépend de x, une inversion de sens ne peut pas se décider
+        // aveuglément comme pour un simple nombre (voir CLAUDE.md/le plan). Vérifié AVANT
+        // d'appliquer quoi que ce soit : un rejet clair plutôt qu'un résultat mal posé.
+        if (currentOperator && ops.some(function (op) { return (op.symbol === '×' || op.symbol === '÷') && op.terms; })) {
+          pending.error = 'Multiplier ou diviser par une expression n\'est pas encore pris en charge dans une inégalité.';
+          notify();
+          return false;
+        }
         var newEqExpr;
         try {
           newEqExpr = Eq.applyOpSequence(eq, ops);
@@ -1066,8 +1105,20 @@
           notify();
           return false;
         }
+        // Chaque ×/÷ par un nombre NÉGATIF (rawValue déjà signé, voir
+        // classifyMulDivOperand) inverse le sens de l'inégalité ; un nombre pair
+        // d'inversions revient au sens de départ (ex. ÷(-2) puis ×(-3) : deux
+        // inversions, sens inchangé) — voir App.Ineq.flipOperator (inequality.js).
+        // N'importe pour une équation normale (currentOperator déjà null, jamais mis à
+        // jour ici).
+        if (currentOperator) {
+          var signFlips = ops.filter(function (op) {
+            return (op.symbol === '×' || op.symbol === '÷') && typeof op.rawValue === 'number' && op.rawValue < 0;
+          }).length;
+          if (signFlips % 2 === 1) currentOperator = Ineq.flipOperator(currentOperator);
+        }
         var opDescExpr = { type: 'expr', ops: ops };
-        steps.push({ equation: newEqExpr, opLeft: opDescExpr, opRight: opDescExpr });
+        pushRaw({ equation: newEqExpr, opLeft: opDescExpr, opRight: opDescExpr });
       } else if (opType === 'factor') {
         var target = factorTarget(eq);
         if (!target || target.indices.length < 1) {
@@ -1160,7 +1211,7 @@
         }
         var stepF = { equation: newEqF, opLeft: null, opRight: null };
         stepF[target.side === 'left' ? 'opLeft' : 'opRight'] = stepDesc;
-        steps.push(stepF);
+        pushRaw(stepF);
       } else {
         return false;
       }
@@ -1236,7 +1287,7 @@
         var stepD = { equation: outD, opLeft: null, opRight: null };
         stepD[d.side === 'left' ? 'opLeft' : 'opRight'] = innerOpDesc;
         stepD[otherSide === 'left' ? 'opLeft' : 'opRight'] = otherOpDesc;
-        steps.push(stepD);
+        pushRaw(stepD);
         resetPending();
         return true;
       }
@@ -1247,7 +1298,7 @@
         return false;
       }
       if (!result.opLeft && !result.opRight) return false; // sélection insuffisante/invalide
-      steps.push({ equation: result.equation, opLeft: result.opLeft, opRight: result.opRight });
+      pushRaw({ equation: result.equation, opLeft: result.opLeft, opRight: result.opRight });
       resetPending();
       return true;
     }
@@ -1534,7 +1585,7 @@
         var outExpD = applyDrilledArray(eq, d, newInnerD);
         var stepExpD = { equation: outExpD, opLeft: null, opRight: null };
         stepExpD[d.side === 'left' ? 'opLeft' : 'opRight'] = descD;
-        steps.push(stepExpD);
+        pushRaw(stepExpD);
         resetPending();
         return true;
       }
@@ -1549,7 +1600,7 @@
         return false;
       }
       var stepExpand = { equation: res.equation, opLeft: res.opLeft, opRight: res.opRight };
-      steps.push(stepExpand);
+      pushRaw(stepExpand);
       resetPending();
       return true;
     }
@@ -1968,13 +2019,13 @@
       return null;
     }
 
-    function init(equation) {
+    function init(equation, opts) {
       branches = null;
       focusedBranch = 0;
       branchSplitLabel = '';
       domainConditions = null;
       focusedDomain = null;
-      leaf.init(equation);
+      leaf.init(equation, opts);
     }
 
     function setFocusedBranch(index) {
@@ -2154,14 +2205,21 @@
         }
       }
       if (existingIdx >= 0) return { spawned: false, pan: true, index: existingIdx };
+      var conditionOperator = d.part === 'den' ? '\\neq' : '\\geq';
       var eng = createBranchable();
-      eng.init({ left: Expr.cloneSide(arr), right: [{ coeff: 0, pow: 0 }] });
+      // Le dénominateur (part==='den') reste une équation NORMALE ("=0" à résoudre, sa
+      // colonne relabellise juste la ligne finale en "≠", voir renderDomainSplit dans
+      // render.js) — seul le radicand (part==='sqrt') passe réellement en mode inégalité
+      // (opts.operator, voir init() dans createEngine), sens inversé par tout ×/÷ négatif
+      // le long de sa propre résolution (voir confirm() en mode 'expr').
+      eng.init({ left: Expr.cloneSide(arr), right: [{ coeff: 0, pow: 0 }] },
+        d.part === 'sqrt' ? { operator: conditionOperator } : undefined);
       eng.subscribe(notify);
       domainConditions = (domainConditions || []).concat([{
         id: domainConditions ? domainConditions.length : 0,
         kind: d.part,
         capturedArray: Expr.cloneSide(arr),
-        operator: d.part === 'den' ? '\\neq' : '\\geq',
+        operator: conditionOperator,
         engine: eng,
         solved: false,
         solvedSetLatex: null

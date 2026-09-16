@@ -280,6 +280,23 @@
     return { left: left, right: right };
   }
 
+  // "√(x+a) = k" : une racine carrée dont le radicand est une expression EN x (pas
+  // encore un nombre replié, contrairement à \sqrt{...} saisi manuellement — voir
+  // foldSqrt dans parser.js) — construite directement comme un SqrtGroup{radicand:...}
+  // (voir Expr.isSqrtGroup), jamais via le parser. Point d'entrée pour "Condition
+  // d'existence" côté radicand (voir history.js/existenceConditionAction) : x+a≥0, une
+  // INÉGALITÉ (contrairement au cas dénominateur, résolue par le moteur normal puis
+  // juste relabellisée "≠") — voir js/inequality.js et le mode `currentOperator` dans
+  // history.js. Degré 1 seulement pour l'instant (voir le plan, Phase 2/3).
+  function generateVariableRadicandEquation() {
+    var a = randInt(-9, 9);
+    var radicand = [{ coeff: 1, pow: 1 }];
+    if (a !== 0) radicand.push({ coeff: a, pow: 0 });
+    var left = [{ sign: 1, radicand: radicand }];
+    var right = [{ coeff: nonZeroInt(1, 9), pow: 0 }];
+    return { left: left, right: right };
+  }
+
   // "a²x²-c² + (px+q)(rx+s) = 0" : une différence de carrés NON factorisée (ex. "9x²-4")
   // additionnée à un produit de deux sommes NON développé (ex. "(3-2x)(3x-2)") — ni l'une
   // ni l'autre n'est l'équation finale : Développer le produit puis Simplifier avec la
@@ -393,7 +410,8 @@
     if (roll < 0.84) return generateSquaredLinearTimesLinear();
     if (roll < 0.90) return generateFractionEquation();
     if (roll < 0.93) return generateVariableDenominatorEquation();
-    if (roll < 0.97) return generateIdentityPlusProduct();
+    if (roll < 0.96) return generateVariableRadicandEquation();
+    if (roll < 0.98) return generateIdentityPlusProduct();
     return generateTrinomialMinusSquareGroup();
   }
 
@@ -412,6 +430,7 @@
     generateDiffOfTwoSquaredExpr: generateDiffOfTwoSquaredExpr,
     generateFractionEquation: generateFractionEquation,
     generateVariableDenominatorEquation: generateVariableDenominatorEquation,
+    generateVariableRadicandEquation: generateVariableRadicandEquation,
     generateIdentityPlusProduct: generateIdentityPlusProduct,
     generateTrinomialMinusSquareGroup: generateTrinomialMinusSquareGroup
   };

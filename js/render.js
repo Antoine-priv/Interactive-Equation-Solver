@@ -1478,7 +1478,14 @@
       // C'est sur cette équation encadrée (la dernière obtenue) que les termes se
       // sélectionnent pour simplifier/factoriser/développer, pas sur la ligne "pending".
       var rowOpts = { pending: false, solved: solved, current: current };
-      if (isLastConfirmed && solved && opts.eqGlyph) rowOpts.eqGlyph = opts.eqGlyph;
+      // `step.operator` (moteur en mode inégalité, voir createEngine/currentOperator dans
+      // history.js) prime sur `opts.eqGlyph` (le "≠" fixe du cas dénominateur, Phase 1,
+      // qui lui ne relabellise QUE la ligne finale une fois résolue) : une inégalité
+      // affiche son PROPRE opérateur sur CHAQUE ligne confirmée, pas seulement la
+      // dernière (son sens peut changer d'une étape à l'autre, voir "sens inversé"
+      // ci-dessus).
+      if (step.operator) rowOpts.eqGlyph = step.operator;
+      else if (isLastConfirmed && solved && opts.eqGlyph) rowOpts.eqGlyph = opts.eqGlyph;
       if (isLastConfirmed && pending.opType !== 'expr') {
         // Pas de glisser-déposer au premier niveau sur le membre où l'on est "entré" (voir
         // pending.drilled) : évite la complexité d'un réordonnancement du membre pendant
@@ -1506,10 +1513,24 @@
       // style), le vrai basculement est fait juste après la fin de cette boucle.
       if (fadeNewStep && isLastConfirmed && !solved) fadeInEl = row;
       if (fadeNewStep && i === steps.length - 2) fadeOutEl = row;
+      // Moteur en mode inégalité (step.operator, voir createEngine/currentOperator dans
+      // history.js) dont CETTE étape a inversé le sens par rapport à la précédente (ex.
+      // "÷(-2)") : rend l'inversion visible sur l'étiquette de la flèche elle-même,
+      // plutôt qu'un simple changement silencieux de glyphe sur la ligne (voir aussi
+      // eqGlyph dans createRow) — auto-appliqué (pas de clic de confirmation dédié, voir
+      // le plan), donc d'autant plus important à signaler clairement ici.
+      var flipped = step.operator && steps[i - 1] && steps[i - 1].operator &&
+        steps[i - 1].operator !== step.operator;
+      var opLeftLabel = formatOpLabel(step.opLeft);
+      var opRightLabel = formatOpLabel(step.opRight);
+      if (flipped) {
+        if (opLeftLabel) opLeftLabel += '\\;(\\text{sens inversé})';
+        if (opRightLabel) opRightLabel += '\\;(\\text{sens inversé})';
+      }
       rowsData.push({
         el: row,
-        opLeft: formatOpLabel(step.opLeft),
-        opRight: formatOpLabel(step.opRight),
+        opLeft: opLeftLabel,
+        opRight: opRightLabel,
         opLeftWarn: descHasZeroRisk(step.opLeft),
         opRightWarn: descHasZeroRisk(step.opRight),
         pending: false
