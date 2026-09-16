@@ -14,6 +14,20 @@
   // recentre que lorsque CE moteur précis avance vraiment d'une étape — jamais pour un
   // simple changement de focus entre des branches déjà affichées.
   var lastCenteredStepByEngine = new WeakMap();
+  // Demi-largeur (repère LOCAL, hors échelle) du groupe "Condition d'existence" mesurée
+  // lors de son PREMIER positionnement pour CE jeu de colonnes (voir positionDomainGroup
+  // plus bas), clé = moteur de la toute première colonne (stable tant que ce jeu de
+  // colonnes ne change pas, comme lastCenteredStepByEngine ci-dessus) : sans ça,
+  // positionDomainGroup posait `left` (le bord GAUCHE de la boîte) à un point fixe, alors
+  // que la largeur de cette boîte grandit avec le contenu (une "Opération" qui ajoute des
+  // termes, ex. "+5" des deux côtés) — la boîte s'élargissait donc uniquement VERS LA
+  // DROITE, décalant visuellement l'équation vers le bord droit de l'écran à chaque étape
+  // au lieu de rester centrée (retour utilisateur). En gardant la demi-largeur du tout
+  // premier rendu, le CENTRE de la boîte reste fixe d'un rendu à l'autre — elle grandit
+  // alors symétriquement autour de ce centre, comme la chaîne principale l'est déjà dans
+  // #history. Réinitialisée dès que le nombre de colonnes change (ajout/retrait d'une
+  // condition), qui justifie légitimement un nouveau centre.
+  var domainGroupWidthRef = new WeakMap();
   // Suivi PAR MOTEUR (même principe que lastCenteredStepByEngine ci-dessus) de la
   // présence, au dernier rendu, d'un aperçu "pending" (voir isNewPendingPreview dans
   // renderChain) : la ligne "pending" est entièrement reconstruite à CHAQUE rendu, donc
@@ -1993,7 +2007,7 @@
     // "naturelle" (avant de poser left/top) donne l'écart interne EXACT entre son propre
     // bord haut et sa première équation, à soustraire ensuite pour aligner celle-ci (et
     // non le groupe lui-même) sur mainFirstLine.
-    function positionDomainGroup(group, historyEl, mainRowsData) {
+    function positionDomainGroup(group, historyEl, mainRowsData, conditions) {
       var mainFirstLine = mainRowsData && mainRowsData.length && mainRowsData[0].el.querySelector('.eq-line');
       var domainFirstLine = group.querySelector('.domain-branch .eq-line');
       if (!mainFirstLine || !domainFirstLine) { group.style.visibility = 'hidden'; return; }
@@ -2016,7 +2030,20 @@
       // bien à GAUCHE de cette colonne. Volontairement plus généreux que ce strict
       // minimum (retours utilisateur successifs à agrandir encore cet espace).
       var GAP = 420;
-      group.style.left = ((maxRight - historyRect.left) / scale + GAP) + 'px';
+      var groupWidthLocal = groupRectBefore.width / scale;
+      // Demi-largeur de RÉFÉRENCE (voir domainGroupWidthRef tout en haut) : capturée au
+      // premier rendu de ce jeu de colonnes (ou si leur nombre a changé depuis), sinon
+      // réutilisée telle quelle — c'est elle, jamais la largeur COURANTE, qui ancre le
+      // centre, pour que la boîte grandisse symétriquement plutôt que de dériver vers la
+      // droite au fil des "Opération" appliquées dans une colonne.
+      var refKey = conditions[0].engine;
+      var ref = domainGroupWidthRef.get(refKey);
+      if (!ref || ref.count !== conditions.length) {
+        ref = { count: conditions.length, halfWidth: groupWidthLocal / 2 };
+        domainGroupWidthRef.set(refKey, ref);
+      }
+      var anchorCenterX = (maxRight - historyRect.left) / scale + GAP + ref.halfWidth;
+      group.style.left = (anchorCenterX - groupWidthLocal / 2) + 'px';
       group.style.top = ((mainLineRect.top - internalTopOffset - historyRect.top) / scale) + 'px';
       group.style.visibility = 'visible';
     }
@@ -2188,7 +2215,7 @@
         var domainGroupEl = domainSplitResult.group;
         requestAnimationFrame(function () {
           if (isStaleRender()) return;
-          positionDomainGroup(domainGroupEl, history, res.rowsData);
+          positionDomainGroup(domainGroupEl, history, res.rowsData, domainConditionsArr);
         });
       }
     } else {
