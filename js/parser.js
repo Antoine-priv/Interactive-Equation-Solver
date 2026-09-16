@@ -24,10 +24,10 @@
   var FRAC_BODY_RE = new RegExp('^\\\\frac\\{(' + FRAC_NUMER + ')\\}\\{(-?' + NUM + ')\\}$');
   // Numérateur "simple" (nombre ou x seul) : celui déjà pris en charge par FRAC/TOKEN_RE
   // ci-dessus comme un COEFFICIENT décimal ("\frac{1}{2}x" = 0,5x). Sert à distinguer ce
-  // cas du numérateur QUELCONQUE ci-dessous (voir GENERAL_FRAC_DEN_RE), qui reste un
-  // FactorGroup isDivision affiché en fraction plutôt qu'un nombre replié.
+  // cas du numérateur QUELCONQUE (voir plus bas dans parseSide), qui reste un FactorGroup
+  // isDivision affiché en fraction plutôt qu'un nombre replié — même chose pour un
+  // dénominateur qui contiendrait x (voir denIsNumeric plus bas).
   var SIMPLE_FRAC_NUMER_RE = new RegExp('^' + FRAC_NUMER + '$');
-  var GENERAL_FRAC_DEN_RE = new RegExp('^\\{(-?' + NUM + ')\\}');
   // Coefficient explicite devant une parenthèse ouvrante, ex. "2(" dans "2(5x-7)" : permet
   // de taper directement un FactorGroup déjà factorisé (voir plus bas dans parseSide),
   // plutôt que de ne reconnaître QUE l'équation développée.
@@ -188,29 +188,60 @@
         continue;
       }
 
-      // "\frac{...}{d}" dont le numérateur n'est PAS un simple nombre/x (ex.
-      // "\frac{7x-3}{5}") : un FactorGroup isDivision, numérateur analysé RÉCURSIVEMENT via
-      // parseSide (même principe que readParenFactor pour "(...)"). Le cas simple
-      // ("\frac{1}{2}", "\frac{x}{2}" — un coefficient décimal, PAS une fraction affichée)
-      // reste géré plus bas par TOKEN_RE/FRAC_BODY_RE, inchangé : on ne l'intercepte pas ici.
+      // "\frac{...}{...}" dont le NUMÉRATEUR n'est pas un simple nombre/x (ex.
+      // "\frac{7x-3}{5}"), OU dont le DÉNOMINATEUR contient x (ex. "\frac{5}{x+3}",
+      // "\frac{7x-3}{x+5}") : un FactorGroup isDivision, le membre quelconque (numérateur
+      // et/ou dénominateur) analysé RÉCURSIVEMENT via parseSide (même principe que
+      // readParenFactor pour "(...)"). Le cas simple ("\frac{1}{2}", "\frac{x}{2}" — un
+      // coefficient décimal, PAS une fraction affichée) reste géré plus bas par
+      // TOKEN_RE/FRAC_BODY_RE, inchangé : on ne l'intercepte pas ici (numérateur simple ET
+      // dénominateur numérique, seul cas qui retombe sans "continue" ci-dessous).
       if (s.slice(afterSign, afterSign + 6) === '\\frac{') {
         var numOpen = afterSign + 5;
         var numClose = findMatchingBrace(s, numOpen);
         if (numClose === -1) throw new Error('Fraction non fermée près de "' + s.slice(afterSign) + '".');
         var numerContent = s.slice(numOpen + 1, numClose);
-        if (!SIMPLE_FRAC_NUMER_RE.test(numerContent)) {
-          var denMatch = GENERAL_FRAC_DEN_RE.exec(s.slice(numClose + 1));
-          if (!denMatch) throw new Error('Fraction invalide près de "' + s.slice(afterSign) + '".');
-          var denVal = parseFloat(denMatch[1].replace(',', '.'));
-          if (denVal === 0) throw new Error('Division par zéro dans une fraction.');
-          nodes.push({
-            sign: sign * (denVal < 0 ? -1 : 1),
-            factor: { coeff: Math.abs(denVal), pow: 0 },
-            innerTerms: parseSide(numerContent),
-            isDivision: true
-          });
-          pos = numClose + 1 + denMatch[0].length;
-          continue;
+        if (s[numClose + 1] === '{') {
+          var denOpen = numClose + 1;
+          var denClose = findMatchingBrace(s, denOpen);
+          if (denClose === -1) throw new Error('Fraction non fermée près de "' + s.slice(afterSign) + '".');
+          var denContent = s.slice(denOpen + 1, denClose);
+          var denIsNumeric = /^-?\d+(?:[.,]\d+)?$/.test(denContent);
+          if (!denIsNumeric) {
+            // Dénominateur QUELCONQUE (contient x) : factorTerms (pas factor), jamais
+            // replié en coefficient — voir Expr.isExpressionQuotient/wrapSideInQuotient
+            // dans expression.js, la même forme que produit "÷(expression)" en cours de
+            // résolution (voir divide_by_expression.js), désormais aussi saisissable
+            // directement dans une équation neuve.
+            if (!denContent) throw new Error('Dénominateur vide dans une fraction.');
+            var denTerms = parseSide(denContent);
+            if (denTerms.length === 1 && !App.Expr.isGroup(denTerms[0]) && denTerms[0].pow === 0 &&
+                App.Expr.roundClean(denTerms[0].coeff) === 0) {
+              throw new Error('Division par zéro dans une fraction.');
+            }
+            nodes.push({
+              sign: sign,
+              factorTerms: denTerms,
+              innerTerms: parseSide(numerContent),
+              isDivision: true
+            });
+            pos = denClose + 1;
+            continue;
+          }
+          if (!SIMPLE_FRAC_NUMER_RE.test(numerContent)) {
+            // Numérateur quelconque, dénominateur NUMÉRIQUE (ex. "\frac{7x-3}{5}") :
+            // comportement inchangé.
+            var denVal = parseFloat(denContent.replace(',', '.'));
+            if (denVal === 0) throw new Error('Division par zéro dans une fraction.');
+            nodes.push({
+              sign: sign * (denVal < 0 ? -1 : 1),
+              factor: { coeff: Math.abs(denVal), pow: 0 },
+              innerTerms: parseSide(numerContent),
+              isDivision: true
+            });
+            pos = denClose + 1;
+            continue;
+          }
         }
       }
 

@@ -1884,18 +1884,25 @@
     // une branche "Produit nul" (même récursion, même interactivité) — seule la mise en
     // page du wrapper diffère (voir .domain-split/.domain-group dans style.css : le
     // groupe entier est positionné À CÔTÉ de la chaîne principale par positionDomainGroup,
-    // appelé depuis renderAll une fois la mise en page connue). Pas de fourche dessinée
-    // depuis le terme drillé d'origine ici (son ancre \htmlId ne survit pas forcément —
-    // l'élève peut depuis ressortir du drill ou faire avancer la chaîne principale) :
-    // polish déféré, voir le plan. Renvoie le groupe créé (jamais encore positionné : voir
-    // positionDomainGroup) pour que l'appelant le positionne après mise en page.
+    // appelé depuis renderAll une fois la mise en page connue). Jamais de liseré
+    // ".branch-focused" ici (contrairement à une branche "Produit nul") : une colonne de
+    // domaine focalisée se reconnaît déjà à son contenu interactif (termes sélectionnables,
+    // fenêtre d'action à proximité), un cadre en plus serait redondant. Pas de fourche
+    // dessinée depuis le terme drillé d'origine ici (son ancre \htmlId ne survit pas
+    // forcément — l'élève peut depuis ressortir du drill ou faire avancer la chaîne
+    // principale) : polish déféré, voir le plan. Renvoie { group, focusedRes } : `group`
+    // (jamais encore positionné, voir positionDomainGroup) pour que l'appelant le
+    // positionne après mise en page, `focusedRes` (résultat de renderBranchNode pour LA
+    // colonne focalisée, ou null si aucune) pour que l'appelant y fasse suivre la fenêtre
+    // d'action/le recentrage automatique (scrollTarget/scrollEngine/opPrevRowEl, voir
+    // plus bas) exactement comme il le fait déjà pour une branche "Produit nul" focalisée.
     function renderDomainSplit(engineRoot, historyEl, conditions, focusedDomainIdx) {
       var group = document.createElement('div');
       group.className = 'domain-group';
       historyEl.appendChild(group);
 
       var header = document.createElement('div');
-      header.className = 'domain-split-header';
+      header.className = 'domain-split-header section-header';
       header.textContent = 'Domaine de définition';
       group.appendChild(header);
 
@@ -1903,11 +1910,11 @@
       wrap.className = 'domain-split';
       group.appendChild(wrap);
 
+      var focusedRes = null;
       conditions.forEach(function (cond, idx) {
         var col = document.createElement('div');
         var isFocused = focusedDomainIdx === idx;
-        col.className = 'produit-nul-branch domain-branch' +
-          ((isFocused && branchOutlineVisible) ? ' branch-focused' : '');
+        col.className = 'produit-nul-branch domain-branch';
         col.setAttribute('data-domain-index', String(idx));
         col.addEventListener('click', function () { engineRoot.setFocusedDomain(idx); });
         var chainEl = document.createElement('div');
@@ -1915,13 +1922,25 @@
         col.appendChild(chainEl);
         wrap.appendChild(col);
 
-        renderBranchNode(cond.engine, chainEl, {
+        var childRes = renderBranchNode(cond.engine, chainEl, {
           noDrag: true,
           onBeforeAction: function () { engineRoot.focusDomain(idx); },
           notifyFocus: function () { engineRoot.setFocusedDomain(idx); },
           focused: isFocused,
           eqGlyph: cond.operator
         });
+        if (isFocused) {
+          focusedRes = childRes;
+        } else {
+          // Même principe que renderBranchNode pour ses propres enfants (voir plus haut) :
+          // pré-marque les feuilles de CETTE colonne non focalisée comme "déjà vues", pour
+          // qu'un simple changement de focus (revenir sur une colonne déjà affichée, sans
+          // nouvelle étape) ne déclenche pas à tort un recentrage automatique.
+          childRes.leafEngines.forEach(function (leafEng) {
+            var leafSteps = leafEng.getSteps();
+            lastCenteredStepByEngine.set(leafEng, leafSteps[leafSteps.length - 1]);
+          });
+        }
 
         // "Étude de signe" menée jusqu'au bout (voir chooseSignStudyInterval/
         // getSignStudyResult dans history.js, Phase 3 du plan) : l'équation elle-même
@@ -1950,7 +1969,7 @@
         group.appendChild(dfEl);
       }
 
-      return group;
+      return { group: group, focusedRes: focusedRes };
     }
 
     // Positionne `group` (le résultat de renderDomainSplit) À CÔTÉ de la dernière ligne de
@@ -1960,14 +1979,27 @@
     // d'ancre pour ce `position:absolute` (voir .domain-group dans style.css). Appelé
     // depuis un requestAnimationFrame (comme drawAll) : la mise en page (largeur réelle
     // de `group`, notamment) doit déjà être connue.
-    function positionDomainGroup(group, historyEl, refRowEl) {
-      if (!refRowEl) { group.style.visibility = 'hidden'; return; }
+    // `mainHeaderEl` : l'en-tête "Équation" (voir plus bas), pour aligner celui de
+    // "Domaine de définition" à LA MÊME hauteur (donc, les deux en-têtes ayant la même
+    // taille/marge, la toute première ligne de chaque côté s'aligne aussi) — jamais la
+    // ligne "current" (qui bouge d'une étape à l'autre, ce qui ferait "sauter"
+    // verticalement tout le groupe de domaine à chaque nouvelle étape de la chaîne
+    // principale). `mainRowsData` : pour placer le groupe à droite du membre le plus
+    // large réellement affiché (measuré sur `.eq-line`, le contenu visible et centré —
+    // PAS `.eq-row`, qui occupe toujours toute la largeur du conteneur), plutôt qu'à
+    // droite d'une seule ligne arbitraire.
+    function positionDomainGroup(group, historyEl, mainHeaderEl, mainRowsData) {
+      if (!mainHeaderEl || !mainRowsData || !mainRowsData.length) { group.style.visibility = 'hidden'; return; }
       var scale = App.Canvas.getScale();
       var historyRect = historyEl.getBoundingClientRect();
-      var refRect = refRowEl.getBoundingClientRect();
+      var headerRect = mainHeaderEl.getBoundingClientRect();
+      var maxRight = Math.max.apply(null, mainRowsData.map(function (rd) {
+        var lineEl = rd.el.querySelector('.eq-line');
+        return lineEl ? lineEl.getBoundingClientRect().right : rd.el.getBoundingClientRect().left;
+      }));
       var GAP = 64;
-      group.style.left = ((refRect.right - historyRect.left) / scale + GAP) + 'px';
-      group.style.top = (refRect.top - historyRect.top) / scale + 'px';
+      group.style.left = ((maxRight - historyRect.left) / scale + GAP) + 'px';
+      group.style.top = (headerRect.top - historyRect.top) / scale + 'px';
       group.style.visibility = 'visible';
     }
 
@@ -1987,18 +2019,51 @@
         notifyFocus: function () { Hist.focusMain(); },
         focused: mainFocused
       });
-      scrollTarget = res.framedRowEl;
-      scrollTargetSolved = res.framedSolved;
-      opPrevRowEl = findPrevRowEl(res.rowsData, res.framedRowEl);
-      var steps = mainEngine.getSteps();
+
+      // En-tête "Équation" : ajouté APRÈS coup (renderChain vide et reconstruit `history`
+      // à chaque rendu, voir son tout début) comme premier enfant plutôt qu'avant — même
+      // habillage que ".domain-split-header" (voir .section-header dans style.css) pour
+      // que positionDomainGroup, plus bas, puisse aligner les deux en-têtes (et donc,
+      // marges identiques obligent, la toute première ligne de chaque côté) à la même
+      // hauteur.
+      var mainHeaderEl = document.createElement('div');
+      mainHeaderEl.className = 'equation-header section-header';
+      mainHeaderEl.textContent = 'Équation';
+      history.insertBefore(mainHeaderEl, history.firstChild);
+
+      // "Condition d'existence" (domaine de définition, voir Hist.getDomainConditions
+      // dans history.js) : rendue ICI, AVANT de fixer scrollTarget/opPrevRowEl/etc.
+      // ci-dessous, pour que — la colonne focalisée, quand il y en a une, l'emporte sur la
+      // chaîne principale pour TOUT ce qui suit (fenêtre d'action, recentrage automatique
+      // sur une nouvelle étape) — exactement comme une branche "Produit nul" focalisée le
+      // fait déjà pour ces mêmes variables (voir focusedChildRes dans le bloc `else`
+      // ci-dessous). Sans ceci, la fenêtre d'action restait accrochée à la chaîne
+      // principale même une fois une colonne de domaine focalisée (bug rapporté), et une
+      // nouvelle étape confirmée À L'INTÉRIEUR d'une colonne ne recentrait jamais la vue.
+      var domainConditionsArr = Hist.getDomainConditions();
+      var domainSplitResult = null;
+      if (domainConditionsArr && domainConditionsArr.length) {
+        domainSplitResult = renderDomainSplit(Hist, history, domainConditionsArr, Hist.getFocusedDomain());
+      }
+      var domainFocusedRes = domainSplitResult && domainSplitResult.focusedRes;
+      var activeEngine = domainFocusedRes ? domainFocusedRes.scrollEngine : mainEngine;
+      var activeRes = domainFocusedRes || res;
+
+      scrollTarget = activeRes.framedRowEl;
+      scrollTargetSolved = activeRes.framedSolved;
+      opPrevRowEl = findPrevRowEl(activeRes.rowsData, activeRes.framedRowEl);
+      scrollEngine = activeEngine;
+      var steps = activeEngine.getSteps();
       scrollIdentity = steps[steps.length - 1];
 
       // Décision de visibilité du pavé "live" (voir computeLiveOpInfo) : masquée tout de
       // suite et de façon SYNCHRONE (jamais depuis le rAF différé de drawAll plus bas) si
       // rien n'est "live" cette fois-ci — sinon il resterait visible un instant à sa
       // dernière position connue, potentiellement obsolète, jusqu'au prochain rendu.
-      // Positionné/montré, lui, uniquement par drawAll (voir drawOpts.live ci-dessous) :
-      // seule cette étape différée connaît les coordonnées réelles après mise en page.
+      // Positionné/montré, lui, uniquement par drawAll (voir drawOpts.live ci-dessous) —
+      // celui d'une colonne de domaine focalisée est géré indépendamment par SON PROPRE
+      // renderBranchNode (voir plus haut), jamais ici : `res.liveInfo` (jamais
+      // `activeRes.liveInfo`) reste donc le bon test, spécifique à la chaîne principale.
       if (!res.liveInfo) App.MathKeypad.hideLiveOpPill();
 
       // Aperçu de "Produit nul" (survol de son bouton, voir previewProduitNul dans
@@ -2097,18 +2162,15 @@
         App.Arrows.drawAll(history, res.rowsData, drawOpts);
       });
 
-      // "Condition d'existence" (domaine de définition, voir Hist.getDomainConditions
-      // dans history.js) : rendue APRÈS la chaîne principale, toujours (indépendamment de
-      // mainFocused) — ces colonnes existent quel que soit ce qui est actuellement
-      // focalisé. Voir renderDomainSplit plus bas pour la mise en page (volontairement
-      // simple en v1, voir style.css).
-      var domainConditionsArr = Hist.getDomainConditions();
-      if (domainConditionsArr && domainConditionsArr.length) {
-        var domainGroupEl = renderDomainSplit(Hist, history, domainConditionsArr, Hist.getFocusedDomain());
-        var domainRefRowEl = res.framedRowEl;
+      // "Condition d'existence" (voir plus haut pour son rendu, déjà fait à ce stade) :
+      // ne reste qu'à la positionner À CÔTÉ de la chaîne principale une fois la mise en
+      // page connue (comme drawAll ci-dessus) — alignée sur mainHeaderEl, jamais sur la
+      // ligne "current" (voir positionDomainGroup).
+      if (domainSplitResult) {
+        var domainGroupEl = domainSplitResult.group;
         requestAnimationFrame(function () {
           if (isStaleRender()) return;
-          positionDomainGroup(domainGroupEl, history, domainRefRowEl);
+          positionDomainGroup(domainGroupEl, history, mainHeaderEl, res.rowsData);
         });
       }
     } else {
@@ -2457,27 +2519,34 @@
   // dans renderAll (diviser par App.Canvas.getScale() : voir le commentaire de
   // targetCenter plus haut), mais appelée à la demande plutôt qu'après un nouveau step.
   function panToDomainColumn(index) {
-    var col = document.querySelector('.domain-branch[data-domain-index="' + index + '"]');
-    var scroller = document.getElementById('historyScroll');
-    if (!col || !scroller) return;
-    var scale = App.Canvas.getScale();
-    var scrollerRect = scroller.getBoundingClientRect();
-    var colRect = col.getBoundingClientRect();
-    var centerX = (colRect.left - scrollerRect.left) / scale + App.Canvas.getX() + colRect.width / (2 * scale);
-    var centerY = (colRect.top - scrollerRect.top) / scale + App.Canvas.getY() + colRect.height / (2 * scale);
-    App.Canvas.scrollTo({
-      left: centerX - scroller.clientWidth / (2 * scale),
-      top: centerY - scroller.clientHeight / (2 * scale),
-      behavior: 'smooth'
+    // Différé d'un rAF : appelée juste après existenceConditionAction()/notify(), qui
+    // vient de (re)construire la colonne PUIS de programmer son propre positionnement
+    // (positionDomainGroup, voir renderAll) dans un rAF à elle — celui-ci, programmé
+    // ENSUITE, s'exécute donc TOUJOURS après (même frame, ordre FIFO), garantissant que
+    // `col` a déjà ses coordonnées finales (jamais celles, invisibles/à (0,0), d'avant
+    // positionnement) au moment de mesurer son rect ci-dessous.
+    requestAnimationFrame(function () {
+      var col = document.querySelector('.domain-branch[data-domain-index="' + index + '"]');
+      var scroller = document.getElementById('historyScroll');
+      if (!col || !scroller) return;
+      var scale = App.Canvas.getScale();
+      var scrollerRect = scroller.getBoundingClientRect();
+      var colRect = col.getBoundingClientRect();
+      var centerX = (colRect.left - scrollerRect.left) / scale + App.Canvas.getX() + colRect.width / (2 * scale);
+      var centerY = (colRect.top - scrollerRect.top) / scale + App.Canvas.getY() + colRect.height / (2 * scale);
+      App.Canvas.scrollTo({
+        left: centerX - scroller.clientWidth / (2 * scale),
+        top: centerY - scroller.clientHeight / (2 * scale),
+        behavior: 'smooth'
+      });
+      // Pulsation brève (voir .domain-branch-flash dans style.css) : confirme
+      // visuellement QUELLE colonne un second clic sur "Condition d'existence" vient de
+      // retrouver. Classe jetable, retirée après sa durée (2 x 0.5s, voir le keyframes)
+      // plutôt que laissée en place (un futur re-rendu la perdrait de toute façon en
+      // reconstruisant la colonne, mais autant nettoyer proprement).
+      col.classList.add('domain-branch-flash');
+      setTimeout(function () { col.classList.remove('domain-branch-flash'); }, 1000);
     });
-    // Pulsation brève (voir .domain-branch-flash dans style.css) : confirme visuellement
-    // QUELLE colonne un second clic sur "Condition d'existence" vient de retrouver —
-    // `.branch-focused` seul (permanent tant que focalisée) ne signale pas cet ARRIVÉE-ci
-    // en particulier. Classe jetable, retirée après sa durée (2 x 0.5s, voir le
-    // keyframes) plutôt que laissée en place (un futur re-rendu la perdrait de toute
-    // façon en reconstruisant la colonne, mais autant nettoyer proprement).
-    col.classList.add('domain-branch-flash');
-    setTimeout(function () { col.classList.remove('domain-branch-flash'); }, 1000);
   }
 
   var BRANCH_OUTLINE_KEEP_SELECTOR = '.produit-nul-branch, #controlPanel, #opButtons, ' +

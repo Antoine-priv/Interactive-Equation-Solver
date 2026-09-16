@@ -39,6 +39,13 @@ function ok(label, cond) {
   await page.click('button[data-op="existence"]');
   await page.waitForTimeout(120);
 
+  // Re-center first: spawning condition #0 above auto-panned the viewport onto its new
+  // column (bug fix — the view used to only pan on a dedup click, never on a fresh
+  // spawn), which can leave the main equation (and its action window) outside the
+  // viewport, same as panning onto a wide "Produit nul" split does.
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(60);
+
   // --- Spawn condition #1: the radicand "x-2" (index 1 on the left side) ---
   await page.evaluate(() => {
     window.App.History.toggleTermSelection('left', 1);
@@ -47,7 +54,7 @@ function ok(label, cond) {
   await page.waitForTimeout(80);
   let pending = await page.evaluate(() => window.App.History.getPending());
   ok('drilled into the radicand (second term)', pending.drilled && pending.drilled.part === 'sqrt');
-  await page.click('button[data-op="existence"]');
+  await page.click('button[data-op="existence"]', { force: true });
   await page.waitForTimeout(120);
 
   const conditionsCount = await page.evaluate(() => window.App.History.getDomainConditions().length);

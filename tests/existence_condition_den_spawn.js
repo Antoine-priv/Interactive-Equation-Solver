@@ -104,6 +104,18 @@ function ok(label, cond) {
   ok('the domain column\'s own term got selected (delegation reached IT, not the main leaf)',
     JSON.stringify(await page.evaluate(() => window.App.History.getPending().selectedLeft)) === '[0]');
 
+  // --- The floating action window (#opButtons) must follow the focused domain column,
+  // not stay glued to the main equation (bug rapporté) ---
+  await page.waitForTimeout(150);
+  const panelHidden = await page.evaluate(() => document.getElementById('opButtons').hidden);
+  ok('the action window is visible once a domain column is focused with a selection', !panelHidden);
+  const [panelBox, colBox] = await Promise.all([
+    page.locator('#opButtons').boundingBox(),
+    page.locator('.domain-branch[data-domain-index="0"]').boundingBox()
+  ]);
+  ok('the action window is vertically near the focused domain column (not the main equation)',
+    panelBox && colBox && Math.abs((panelBox.y + panelBox.height / 2) - (colBox.y + colBox.height / 2)) < colBox.height);
+
   // --- Solve this focused domain column ("x+3=0" -> "x=-3") through the SHARED
   // "Opération" flow (App.History, still delegating to the focused domain engine) and
   // check the final row is relabeled "≠" (this value is EXCLUDED, not a solution). ---

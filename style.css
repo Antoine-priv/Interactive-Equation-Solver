@@ -564,11 +564,22 @@ button {
   margin: 0;
 }
 
-.domain-split-header {
+/* Titres "Équation"/"Domaine de définition" (voir renderAll dans render.js) : IDENTIQUES
+   (même police/marge) à dessein — positionDomainGroup aligne le second sur le premier
+   (même rect.top), et cette identité de hauteur/marge est ce qui fait que la toute
+   première équation de chaque côté s'aligne ELLE AUSSI, sans calcul dédié. */
+.section-header {
   text-align: left;
-  font-size: 1.3rem;
+  font-size: 1.6rem;
+  font-weight: 600;
   color: var(--text-muted);
-  margin: 0 0 12px;
+  margin: 0 0 20px;
+}
+
+.equation-header {
+  /* Premier enfant de #history (voir renderAll) : centré comme la chaîne elle-même,
+     contrairement à ".domain-split-header" (aligné à gauche de sa propre colonne). */
+  text-align: center;
 }
 
 /* Bref "flash" (voir panToDomainColumn dans render.js) : un second clic sur "Condition
@@ -613,6 +624,14 @@ button {
    place chacune. autoFitRowFont (render.js) réduit encore au cas par cas si besoin. */
 .produit-nul-chain .eq-line {
   font-size: 1.7rem;
+}
+
+/* "Condition d'existence" (voir .domain-branch plus haut) : SEULE colonne à droite de la
+   chaîne principale, jamais côte à côte avec une autre — garde donc la police normale
+   (2.9rem, comme l'équation initiale), contrairement aux colonnes "Produit nul" ci-dessus
+   qui, elles, se partagent toujours l'espace avec au moins une autre colonne. */
+.domain-branch .produit-nul-chain .eq-line {
+  font-size: 2.9rem;
 }
 
 /* Pas de défilement horizontal propre à chaque ligne ici (contrairement au cas normal,

@@ -1180,10 +1180,13 @@
         } else if (op === 'existence') {
           // Crée une nouvelle colonne "domaine de définition", SAUF si un domaine
           // structurellement identique existe déjà (voir existenceConditionAction dans
-          // history.js) : dans ce cas, on ne fait que recentrer la vue dessus plutôt que
-          // d'en créer un second.
+          // history.js) : dans ce cas, on recentre juste la vue dessus plutôt que d'en
+          // créer un second. Dans LES DEUX cas (nouvelle colonne OU déjà existante), la
+          // vue doit se déplacer jusqu'à elle — sans ça, une toute nouvelle colonne
+          // pouvait rester hors du viewport tant qu'on ne pensait pas à panoramiquer
+          // manuellement (bug rapporté).
           var result = App.History.existenceConditionAction();
-          if (result && result.pan) App.Render.panToDomainColumn(result.index);
+          if (result && (result.spawned || result.pan)) App.Render.panToDomainColumn(result.index);
         } else if (op === 'signstudy') {
           // Engage le mode (2 étapes de choix, voir buildSignStudyStep) ; re-cliquer
           // dessus l'annule (cancelOp, comme "Opération") — rien à "garder" contrairement
