@@ -485,13 +485,15 @@
     };
   }
 
-  // Valide l'étape en cours du pavé "Opération" — sauf "√" armée (voir pending.sqrtArmed
-  // dans history.js), qui scinde en branches (confirmSquareRoot) plutôt que d'avancer LE
-  // MÊME moteur d'une étape ordinaire. Partagé entre la coche à côté du bouton "Opération"
-  // et la touche "↵"/Entrée du clavier mathématique unifié (voir bindMathKeypad).
+  // Valide l'étape en cours du pavé "Opération" — sauf "√"/"(⋯)²" armées (voir
+  // pending.sqrtArmed/squareArmed dans history.js), qui appliquent leur propre action
+  // dédiée (confirmSquareRoot/confirmSquareBothSides) plutôt que d'avancer LE MÊME moteur
+  // d'une étape ordinaire. Partagé entre la coche à côté du bouton "Opération" et la
+  // touche "↵"/Entrée du clavier mathématique unifié (voir bindMathKeypad).
   function confirmExprOrSqrt() {
     var pending = App.History.getPending();
     if (pending.opType === 'expr' && pending.sqrtArmed) App.History.confirmSquareRoot();
+    else if (pending.opType === 'expr' && pending.squareArmed) App.History.confirmSquareBothSides();
     else App.History.confirm();
   }
 
@@ -520,7 +522,8 @@
           onEnter: confirmExprOrSqrt,
           onEscape: function () { App.History.cancelOp(); },
           onInput: function (latex) { App.History.setExprChainText(latex); },
-          onSqrt: function () { App.History.toggleSquareRootArmed(); }
+          onSqrt: function () { App.History.toggleSquareRootArmed(); },
+          onSquare: function () { App.History.toggleSquareArmed(); }
         }, pending.exprLatex || '');
         mathKeypadBound = true;
         mathKeypadBoundSide = exprLiveSide;
@@ -533,7 +536,9 @@
       // habituel (voir computeSelectionInfo/le clic sur data-op="simplify"), jamais en
       // ré-armant cette même touche. Dépend donc de la forme de l'équation ET de l'absence
       // d'une autre composition déjà en cours (une chaîne non vide dans le champ) — sauf si
-      // déjà armée, où elle doit rester cliquable pour pouvoir la désarmer.
+      // déjà armée, où elle doit rester cliquable pour pouvoir la désarmer. Grisée aussi
+      // tant que "(⋯)²" (ci-dessous) est elle-même armée : les deux touches n'ont, comme
+      // +/-/×/÷ entre elles, jamais de sens armées ensemble.
       var stage = App.History.squareRootStage();
       var sqrtTitle, sqrtDisabled, sqrtPressed = false;
       if (pending.sqrtArmed) {
@@ -542,13 +547,31 @@
         sqrtPressed = true;
       } else {
         sqrtTitle = 'Racine carrée des deux membres';
-        sqrtDisabled = stage !== 'wrap' || pending.exprLatex !== '';
+        sqrtDisabled = pending.squareArmed || stage !== 'wrap' || pending.exprLatex !== '';
       }
-      // "√" armée : plus rien d'autre à composer avec (voir toggleSquareRootArmed dans
-      // history.js) — seul un second clic sur "√" (pour la désarmer) ou "↵" (pour
-      // confirmer la scission) reste possible.
-      App.MathKeypad.setAllKeysDisabled(pending.sqrtArmed, ['sqrt', 'enter']);
+
+      // Touche "(⋯)²" (voir opts.onSquare ci-dessus) : élève les deux membres au carré en
+      // une seule étape (voir canSquareBothSides/confirmSquareBothSides dans history.js) —
+      // toujours disponible (pas de forme particulière requise, contrairement à "√" — voir
+      // le commentaire de canSquareBothSides), sauf pendant la composition d'une autre
+      // chaîne ou tant que "√" est elle-même armée.
+      var squareTitle, squareDisabled, squarePressed = false;
+      if (pending.squareArmed) {
+        squareTitle = 'Carré armé : cliquez "↵" pour appliquer, ou re-cliquez ici pour annuler.';
+        squareDisabled = false;
+        squarePressed = true;
+      } else {
+        squareTitle = 'Élever les deux membres au carré';
+        squareDisabled = pending.sqrtArmed || !App.History.canSquareBothSides() || pending.exprLatex !== '';
+      }
+
+      // "√"/"(⋯)²" armée : plus rien d'autre à composer avec (voir toggleSquareRootArmed/
+      // toggleSquareArmed dans history.js) — seuls un second clic sur la touche armée (pour
+      // la désarmer) ou "↵" (pour confirmer) restent possibles.
+      App.MathKeypad.setAllKeysDisabled(pending.sqrtArmed || pending.squareArmed,
+        pending.squareArmed ? ['square', 'enter'] : ['sqrt', 'enter']);
       App.MathKeypad.setKeyState('sqrt', { disabled: sqrtDisabled, pressed: sqrtPressed, title: sqrtTitle });
+      App.MathKeypad.setKeyState('square', { disabled: squareDisabled, pressed: squarePressed, title: squareTitle });
     } else if (mathKeypadBound) {
       App.MathKeypad.clearActiveField();
       mathKeypadBound = false;

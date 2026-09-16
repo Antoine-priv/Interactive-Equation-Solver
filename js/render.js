@@ -220,6 +220,12 @@
       // fourche (splitIntoBranches), mais rendu comme une étape normale à deux flèches.
       return '\\sqrt{\\phantom{x}}';
     }
+    if (desc.type === 'square') {
+      // Touche "carré" (à droite de "√", voir confirmSquareBothSides dans history.js) :
+      // toujours une étape normale à deux flèches identiques (jamais de scission, voir son
+      // commentaire) — même principe que le "√" ci-dessus.
+      return '\\left(\\phantom{x}\\right)^2';
+    }
     if (desc.type === 'factor') {
       if (!desc.factor) return '\\text{factoriser}';
       // Facteur commun d'une somme de ProductGroup (voir Expr.factorCommonProductFactor) :

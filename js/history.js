@@ -116,6 +116,16 @@
       // l'exécuter réellement (confirmSquareRoot dans history.js) — jamais exécutée au
       // simple clic sur la touche elle-même.
       sqrtArmed: false,
+      // Touche "carré" du pavé "Opération" (voir opts.onSquare câblé par bindMathKeypad
+      // dans toolbar.js), à droite de "√" : élève au carré les DEUX membres en une seule
+      // étape (voir Expr.wrapSideInSquare/confirmSquareBothSides) — l'inverse de "√"
+      // ci-dessus, pour résoudre une équation qui contient déjà une racine carrée (ex.
+      // "√(x-7)=4"). Contrairement à "√", aucune étape 2 séparée n'est nécessaire :
+      // "(±√A)²" vaut toujours A, sans ambiguïté (jamais besoin d'un ± comme pour la
+      // racine elle-même) — une seule étape suffit, elle-même armée puis validée par
+      // cohérence avec le reste de ce pavé (voir hasCurrentDraft), jamais appliquée au
+      // simple clic sur la touche.
+      squareArmed: false,
       // Mode 'signstudy' ("Étude de signe", voir canSignStudy/chooseSignStudySign/
       // chooseSignStudyInterval plus bas) : 2 étapes séquentielles SANS champ de saisie
       // (juste des boutons de choix, voir buildSignStudyStep dans toolbar.js) — celle du
@@ -813,6 +823,17 @@
       if (pending.opType !== 'expr') return;
       if (!pending.sqrtArmed && hasCurrentDraft(pending)) return;
       pending.sqrtArmed = !pending.sqrtArmed;
+      pending.error = null;
+      notify();
+    }
+
+    // Touche "carré" du pavé "Opération" (voir pending.squareArmed) : même principe que
+    // toggleSquareRootArmed ci-dessus (bascule, ne confirme rien elle-même — il faut
+    // ensuite cliquer "↵", voir confirmExprOrSquare dans toolbar.js).
+    function toggleSquareArmed() {
+      if (pending.opType !== 'expr') return;
+      if (!pending.squareArmed && hasCurrentDraft(pending)) return;
+      pending.squareArmed = !pending.squareArmed;
       pending.error = null;
       notify();
     }
@@ -2056,6 +2077,7 @@
       setIdentityFocus: setIdentityFocus,
       confirmExpandFullSelection: confirmExpandFullSelection,
       toggleSquareRootArmed: toggleSquareRootArmed,
+      toggleSquareArmed: toggleSquareArmed,
       setExprChainText: setExprChainText,
       setFactorTermLatex: setFactorTermLatex,
       setIdentityFieldLatex: setIdentityFieldLatex,
@@ -2473,6 +2495,18 @@
       return detectSquareRootUnwrapped(leaf.lastEquation()) ? 'wrap' : null;
     }
 
+    // Touche "carré" du pavé "Opération" (à droite de "√") : élève les DEUX membres au
+    // carré en une seule étape, voir confirmSquareBothSides plus bas — l'inverse de "√"
+    // ci-dessus. Contrairement à "√" (qui n'a de sens QUE sur une forme "(expr)²=c" déjà
+    // reconnue, voir detectSquareRootUnwrapped), élever au carré reste toujours
+    // mathématiquement défini quelle que soit l'équation — pas de condition de forme ici,
+    // seulement "pas dans une colonne de domaine" (même restriction que canSquareRoot).
+    function canSquareBothSides() {
+      if (activeChild()) return activeChild().canSquareBothSides();
+      if (domainConditions) return false;
+      return true;
+    }
+
     // Étape 2 ("Simplifier") : que ferait un clic MAINTENANT, d'après la sélection libre en
     // cours (pending.selectedLeft/Right — un membre déjà enveloppé n'a jamais qu'UN seul
     // noeud, donc "sélectionné" y équivaut toujours à "cet index unique présent") ? Exige
@@ -2651,6 +2685,21 @@
       return true;
     }
 
+    // Touche "carré" du pavé "Opération" (armée puis validée, voir confirmExprOrSquare
+    // dans toolbar.js) : élève l'INTÉGRALITÉ des deux membres au carré EN UNE SEULE étape
+    // — contrairement à "Racine carrée" (2 étapes : envelopper, PUIS simplifier), pas
+    // d'ambiguïté ici à laisser à l'élève : "(±√A)²" vaut toujours A, jamais besoin d'un
+    // ±, donc jamais de scission en branches non plus (voir Expr.wrapSideInSquare, qui
+    // annule directement racine+carré quand un membre est déjà un SqrtGroup nu).
+    function confirmSquareBothSides() {
+      if (activeChild()) return activeChild().confirmSquareBothSides();
+      if (domainConditions) return false;
+      var eq = leaf.lastEquation();
+      var squared = { left: Expr.wrapSideInSquare(eq.left), right: Expr.wrapSideInSquare(eq.right) };
+      leaf.pushStep(squared, { type: 'square' });
+      return true;
+    }
+
     // Toute autre méthode "active" de l'API : déléguée à l'enfant focalisé s'il y en a
     // un, sinon exécutée directement sur `leaf`. Chaque nom ci-dessous existe à
     // l'identique sur `leaf` (voir la fin de createEngine plus haut) ET, une fois généré
@@ -2664,7 +2713,7 @@
       'confirmSimplifySelection', 'enterFactorWithSelection', 'getFactorTargetShape',
       'getFactorSelectionIndices',
       'chooseFactorMode', 'goBackToFactorChoice', 'setIdentityFocus',
-      'confirmExpandFullSelection', 'toggleSquareRootArmed', 'setExprChainText',
+      'confirmExpandFullSelection', 'toggleSquareRootArmed', 'toggleSquareArmed', 'setExprChainText',
       'setFactorTermLatex', 'setIdentityFieldLatex', 'parseOperandTerm', 'confirm',
       'computePreview', 'setSideOrder', 'setInnerOrder', 'setDrilledFactorOrder',
       'clickNestedFactor', 'setFactorOrder',
@@ -2712,7 +2761,9 @@
       squareRootStage: squareRootStage,
       squareRootAction: squareRootAction,
       previewSquareRoot: previewSquareRoot,
-      confirmSquareRoot: confirmSquareRoot
+      confirmSquareRoot: confirmSquareRoot,
+      canSquareBothSides: canSquareBothSides,
+      confirmSquareBothSides: confirmSquareBothSides
     };
     DELEGATED_METHODS.forEach(function (name) {
       api[name] = function () {

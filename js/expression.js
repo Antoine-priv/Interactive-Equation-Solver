@@ -1362,6 +1362,32 @@
     return [{ sign: 1, radicand: cloneSide(side) }];
   }
 
+  // Enveloppe un membre ENTIER au carré (ex. "x+5" -> "(x+5)²") — voir
+  // confirmSquareBothSides dans history.js, qui l'applique aux DEUX membres à la fois
+  // (inverse de wrapSideInSqrt ci-dessus, pour résoudre une équation qui contient déjà une
+  // racine carrée, ex. "√(x-7)=4"). Deux cas repliés directement plutôt que de toujours
+  // produire un ProductGroup :
+  // 1) le membre est DÉJÀ un simple "√(radicand)" (SqrtGroup, sign ignoré : "(±√A)²" vaut
+  //    toujours A, sans ambiguïté contrairement au sens inverse) -> ressort directement le
+  //    radicand, annulant racine+carré en une seule étape ;
+  // 2) le membre est un simple Term nu (ex. une constante "4", ou un monôme "3x") -> replié
+  //    arithmétiquement ("16", "9x²") plutôt qu'enveloppé en "(4)²", comme le fait déjà
+  //    scaleNode pour une multiplication directe.
+  // Sinon (plusieurs termes, ou un groupe qui n'est pas une racine nue), enveloppe en
+  // ProductGroup à un seul facteur d'exposant 2 (isSquareFactorGroup, voir le commentaire
+  // de modèle de données en tête de fichier) — la forme "(expr)²" attendue par
+  // detectSquareRootUnwrapped si l'élève enchaîne ensuite avec "Racine carrée".
+  function wrapSideInSquare(side) {
+    if (side.length === 1 && isSqrtGroup(side[0])) {
+      return cloneSide(side[0].radicand);
+    }
+    if (side.length === 1 && !isGroup(side[0])) {
+      var t = side[0];
+      return [{ coeff: roundClean(t.coeff * t.coeff), pow: t.pow * 2 }];
+    }
+    return [{ sign: 1, factors: [{ terms: cloneSide(side), exponent: 2 }] }];
+  }
+
   // Remplace les termes du facteur d'INDICE `branch` du ProductGroup situé à `path`
   // (toujours un seul niveau, path.length===1 — voir pending.drilled.branch dans
   // history.js : à la différence d'un FactorGroup, on ne descend pas plus profond qu'une
@@ -1449,6 +1475,7 @@
     wrapSideInQuotient: wrapSideInQuotient,
     withSqrtRadicandAtPath: withSqrtRadicandAtPath,
     wrapSideInSqrt: wrapSideInSqrt,
+    wrapSideInSquare: wrapSideInSquare,
     drilledWorkingArray: drilledWorkingArray,
     withDrilledArrayAtPath: withDrilledArrayAtPath
   };

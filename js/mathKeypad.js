@@ -65,6 +65,12 @@
   // `key` : identifiant stable posé en attribut `data-key` sur le bouton (voir buildKeys) —
   // pour cibler une touche depuis les tests, comme le veut la convention du projet
   // (tests/README.md : `data-*`/état `App.*`, jamais le texte affiché ou une classe CSS).
+  // Grille à 8 colonnes (7 auparavant) : la touche "carré" ci-dessous, ajoutée À DROITE de
+  // "√" (dernière rangée), porte le total de cette rangée à 8 cellules (6 touches simples +
+  // "enter" sur 2). Les 3 AUTRES rangées, elles, gardent leurs 7 touches d'origine — chacune
+  // reçoit donc une touche `filler` invisible en bout de rangée (voir buildKeys) pour
+  // occuper la 8e colonne et garder les 4 rangées alignées, plutôt que de leur inventer une
+  // 8e touche réelle qui n'a pas été demandée.
   var KEY_ROWS = [
     [
       { key: 'x', label: 'x', insert: 'x' },
@@ -73,7 +79,8 @@
       { key: '8', label: '8', insert: '8' },
       { key: '9', label: '9', insert: '9' },
       { key: 'times', label: '×', insert: '\\times ' },
-      { key: 'div', label: '÷', insert: '\\div ' }
+      { key: 'div', label: '÷', insert: '\\div ' },
+      { key: 'filler1', filler: true }
     ],
     [
       { key: 'sq', label: 'x²', insert: '^2' },
@@ -82,7 +89,8 @@
       { key: '5', label: '5', insert: '5' },
       { key: '6', label: '6', insert: '6' },
       { key: 'plus', label: '+', insert: '+' },
-      { key: 'minus', label: '−', insert: '-' }
+      { key: 'minus', label: '−', insert: '-' },
+      { key: 'filler2', filler: true }
     ],
     [
       { key: 'pow', label: 'xⁿ', insert: '^{#?}' },
@@ -91,7 +99,8 @@
       { key: '2', label: '2', insert: '2' },
       { key: '3', label: '3', insert: '3' },
       { key: 'eq', label: '=', insert: '=' },
-      { key: 'backspace', html: BACKSPACE_SVG, action: 'backspace' }
+      { key: 'backspace', html: BACKSPACE_SVG, action: 'backspace' },
+      { key: 'filler3', filler: true }
     ],
     [
       // sqrtKey : quand le champ actif fournit `opts.onSqrt` (voir setActiveField), cette
@@ -99,6 +108,12 @@
       // "Opération" où "√" est une action immédiate (scinder en branches), pas un symbole
       // à composer dans l'expression, voir toolbar.js.
       { key: 'sqrt', html: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 13h3l3 7 5-17h9"/></svg>', insert: '\\sqrt{#@}', sqrtKey: true },
+      // squareKey : même principe que sqrtKey ci-dessus, pour le champ actif qui fournit
+      // `opts.onSquare` (utilisé par le pavé "Opération" — "élever les deux membres au
+      // carré" est, là aussi, une action immédiate, pas un symbole à composer). Sans
+      // callback fourni (ex. le champ de la modale "Nouvelle équation"), retombe sur le
+      // même repli que "x²" (insert '^2') plutôt que de ne rien faire.
+      { key: 'square', label: '(⋯)²', insert: '^2', squareKey: true },
       { key: ',', label: ',', insert: ',' },
       { key: '0', label: '0', insert: '0' },
       { key: 'left', html: ARROW_LEFT_SVG, action: 'left' },
@@ -121,6 +136,7 @@
   var onEscapeCb = null;
   var onInputCb = null;
   var onSqrtCb = null;
+  var onSquareCb = null;
   var onTabCb = null;
   var collapsed = false;
 
@@ -227,6 +243,7 @@
     if (key.action === 'right') { activeField.executeCommand('moveToNextChar'); return; }
     if (key.action === 'enter') { if (onEnterCb) onEnterCb(); return; }
     if (key.sqrtKey && onSqrtCb) { onSqrtCb(); return; }
+    if (key.squareKey && onSquareCb) { onSquareCb(); return; }
     activeField.executeCommand(['insert', key.insert]);
   }
 
@@ -234,6 +251,16 @@
     keysGrid.innerHTML = '';
     KEY_ROWS.forEach(function (row) {
       row.forEach(function (key) {
+        // Touche `filler` (voir KEY_ROWS) : occupe juste sa cellule de grille, invisible et
+        // non interactive — garde les 4 rangées alignées sur 8 colonnes sans inventer de
+        // touche réelle non demandée.
+        if (key.filler) {
+          var fillerEl = document.createElement('div');
+          fillerEl.className = 'key-filler';
+          fillerEl.setAttribute('aria-hidden', 'true');
+          keysGrid.appendChild(fillerEl);
+          return;
+        }
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = key.primary ? 'key-btn panel-confirm-cell' : 'key-btn';
@@ -415,6 +442,7 @@
   // "Nouvelle équation" sans rien valider ; `opts.onInput` (optionnel) à chaque frappe, avec
   // le LaTeX courant (aperçu en direct) ; `opts.onSqrt` (optionnel) redéfinit la touche "√"
   // pour appeler ce callback au lieu d'insérer "\sqrt{}" (voir sqrtKey dans KEY_ROWS) ;
+  // `opts.onSquare` (optionnel), même principe pour la touche "(⋯)²" (voir squareKey) ;
   // `opts.onTab` (optionnel) par la touche Tab physique au lieu de son comportement natif
   // (sortir du champ) — ex. basculer entre les champs "a"/"b" d'une identité remarquable.
   // `initialLatex` préremplit le champ.
@@ -429,6 +457,7 @@
     onEscapeCb = (opts && opts.onEscape) || null;
     onInputCb = (opts && opts.onInput) || null;
     onSqrtCb = (opts && opts.onSqrt) || null;
+    onSquareCb = (opts && opts.onSquare) || null;
     onTabCb = (opts && opts.onTab) || null;
     setError(null);
     render();
@@ -484,6 +513,7 @@
     onEscapeCb = null;
     onInputCb = null;
     onSqrtCb = null;
+    onSquareCb = null;
     onTabCb = null;
     fieldSlot.hidden = true;
     hideLiveOpPill();
