@@ -571,6 +571,17 @@ button {
   margin: 0;
 }
 
+/* "Df=cond1∩cond2∩..." (voir renderDomainSplit dans render.js) : réutilise ".solution-set"
+   (même habillage que le résumé "S={...}" de Produit nul) mais avec plus d'air au-dessus —
+   son margin-top négatif (-16px, pensé pour coller juste sous la DERNIÈRE ligne confirmée
+   d'UNE branche unique) collait ici la combinaison directement contre les colonnes de
+   domaine, trop proche du dernier résultat de chacune (retour utilisateur : plus d'espace
+   entre "le résultat de la condition d'existence" et "le résultat de l'équation qui y
+   mène"). */
+.domain-df-result {
+  margin-top: 28px;
+}
+
 /* Titres "Équation"/"Domaine de définition" (voir renderAll dans render.js) : IDENTIQUES
    (même police/marge) à dessein — positionDomainGroup aligne le second sur le premier
    (même rect.top), et cette identité de hauteur/marge est ce qui fait que la toute
