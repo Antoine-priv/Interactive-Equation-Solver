@@ -1997,7 +1997,15 @@
         var lineEl = rd.el.querySelector('.eq-line');
         return lineEl ? lineEl.getBoundingClientRect().right : rd.el.getBoundingClientRect().left;
       }));
-      var GAP = 64;
+      // Assez large pour que la fenêtre d'action, une fois une colonne de domaine
+      // focalisée, ne chevauche JAMAIS la chaîne principale : applyPanelPosition
+      // (toolbar.js) la place entièrement à GAUCHE de l'équation focalisée, sur
+      // panelEl.offsetWidth (~212px, "les 212px habituels") + son propre GAP interne
+      // (26px) = ~238px — dont ~46px seulement retombent dans le padding gauche de
+      // `.domain-branch` lui-même (voir .produit-nul-branch), le reste (~192px) déborde
+      // bien à GAUCHE de cette colonne. 240 laisse une marge de sécurité confortable
+      // (zoom/police variables) sans coller les deux zones l'une à l'autre pour autant.
+      var GAP = 240;
       group.style.left = ((maxRight - historyRect.left) / scale + GAP) + 'px';
       group.style.top = (headerRect.top - historyRect.top) / scale + 'px';
       group.style.visibility = 'visible';

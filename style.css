@@ -553,11 +553,18 @@ button {
      rendu, avant tout rAF) : invisible plutôt que visible un instant à (0,0), en haut à
      gauche de #history. */
   visibility: hidden;
+  /* Empile en-tête puis colonnes, CENTRÉS l'un sur l'autre (donc le titre "Domaine de
+     définition" centré sur ses propres équations, quel que soit leur nombre) : la
+     largeur du groupe se règle sur son enfant le plus large (.domain-split), l'en-tête
+     (plus étroit, un simple texte) se retrouve centré dessus par align-items. */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .domain-split {
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   align-items: flex-start;
   flex-wrap: wrap;
   gap: 64px;
@@ -567,19 +574,16 @@ button {
 /* Titres "Équation"/"Domaine de définition" (voir renderAll dans render.js) : IDENTIQUES
    (même police/marge) à dessein — positionDomainGroup aligne le second sur le premier
    (même rect.top), et cette identité de hauteur/marge est ce qui fait que la toute
-   première équation de chaque côté s'aligne ELLE AUSSI, sans calcul dédié. */
+   première équation de chaque côté s'aligne ELLE AUSSI, sans calcul dédié. Centrés tous
+   les deux : "Équation" au-dessus de la chaîne principale (elle-même centrée dans
+   #history), "Domaine de définition" au-dessus de ses colonnes (voir .domain-group,
+   qui s'en charge via align-items plutôt qu'un text-align ici). */
 .section-header {
-  text-align: left;
-  font-size: 1.6rem;
+  text-align: center;
+  font-size: 2.2rem;
   font-weight: 600;
   color: var(--text-muted);
   margin: 0 0 20px;
-}
-
-.equation-header {
-  /* Premier enfant de #history (voir renderAll) : centré comme la chaîne elle-même,
-     contrairement à ".domain-split-header" (aligné à gauche de sa propre colonne). */
-  text-align: center;
 }
 
 /* Bref "flash" (voir panToDomainColumn dans render.js) : un second clic sur "Condition
