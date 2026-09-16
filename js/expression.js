@@ -473,6 +473,17 @@
     function foldSign(sign, terms) {
       return sign < 0 ? terms.map(function (t) { return scaleNode(t, -1); }) : cloneSide(terms);
     }
+    // "x÷x" et toutes ses formes dérivées (ex. "-x÷x", "x÷-x", "3x÷3x", "(x-3)÷(x-3)") :
+    // le membre ENTIER (pas seulement un facteur/une fraction déjà en place, voir les cas
+    // spécifiques ci-dessous) est structurellement identique — au signe près — au diviseur.
+    // Vérifié AVANT les cas à noeud unique ci-dessous : un simple Term (ex. "x" nu) n'est ni
+    // un FactorGroup ni un ProductGroup, aucun des trois cas suivants ne le couvrirait sinon.
+    if (sidesEquivalent(side, divisorTerms)) {
+      return [{ coeff: 1, pow: 0 }];
+    }
+    if (sidesEquivalent(side, divisorTerms.map(function (t) { return scaleNode(t, -1); }))) {
+      return [{ coeff: -1, pow: 0 }];
+    }
     if (side.length === 1) {
       var node = side[0];
       if (isExpressionQuotient(node) && sidesEquivalent(node.factorTerms, divisorTerms)) {

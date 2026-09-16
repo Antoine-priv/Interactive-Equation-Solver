@@ -72,6 +72,34 @@ function ok(label, cond) {
       factors: [{ terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 }, { terms: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], exponent: 1 }]
     }]));
 
+  // --- Test 3b : annulation — "x÷x" et ses formes dérivées (le membre ENTIER, pas
+  // seulement un facteur/une fraction déjà en place, vaut structurellement le diviseur,
+  // au signe près) — voir le cas ajouté en tête de wrapSideInQuotient (expression.js).
+  await applyChain('x=5', '\\div x');
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  ok('x÷x cancels to 1 (not a "x/x" fraction)',
+    JSON.stringify(step.equation.left) === JSON.stringify([{ coeff: 1, pow: 0 }]));
+
+  await applyChain('-x=5', '\\div x');
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  ok('-x÷x cancels to -1',
+    JSON.stringify(step.equation.left) === JSON.stringify([{ coeff: -1, pow: 0 }]));
+
+  await applyChain('3x=5', '\\div3x');
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  ok('3x÷3x cancels to 1',
+    JSON.stringify(step.equation.left) === JSON.stringify([{ coeff: 1, pow: 0 }]));
+
+  await applyChain('x-3=5', '\\div(x-3)');
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  ok('(x-3)÷(x-3) cancels to 1 (multi-term side, not just a single Term)',
+    JSON.stringify(step.equation.left) === JSON.stringify([{ coeff: 1, pow: 0 }]));
+
+  await applyChain('x-3=5', '\\div(3-x)');
+  step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  ok('(x-3)÷(3-x) cancels to -1 (opposite expression)',
+    JSON.stringify(step.equation.left) === JSON.stringify([{ coeff: -1, pow: 0 }]));
+
   // --- Test 4 : annulation — "k(...)" (multiplication) dont l'intérieur vaut le diviseur ---
   await applyChain('5(x+7)=0', '\\div(x+7)');
   step = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
