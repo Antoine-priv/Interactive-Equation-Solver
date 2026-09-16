@@ -104,10 +104,29 @@
     overlay.addEventListener('click', function (e) {
       if (e.target === overlay) close();
     });
+    // "Générer aléatoirement" remplit le champ en LaTeX pour relecture (voir ci-dessous),
+    // qui devra donc pouvoir être RE-analysé par le parseur manuel une fois validé (voir
+    // submitManual) — contrairement à App.History.init(App.Generator.generateEquation())
+    // au chargement de la page (main.js), qui charge l'AST directement, sans jamais
+    // repasser par le parseur. Un dénominateur-expression (isExpressionQuotient, voir
+    // generateVariableDenominatorEquation dans generator.js) n'est PAS ré-analysable ainsi
+    // (parser.js exige toujours un dénominateur numérique pour "\frac", voir CLAUDE.md) :
+    // on retire cette forme au hasard ICI, pas dans generateEquation() lui-même (qui reste
+    // le point d'entrée légitime pour le chargement direct de page).
+    function hasExpressionQuotient(eq) {
+      return eq.left.concat(eq.right).some(function (n) { return App.Expr.isExpressionQuotient(n); });
+    }
+    function generateRoundTrippableEquation() {
+      for (var attempt = 0; attempt < 20; attempt++) {
+        var eq = App.Generator.generateEquation();
+        if (!hasExpressionQuotient(eq)) return eq;
+      }
+      return App.Generator.generateFractionEquation();
+    }
     randomBtn.addEventListener('click', function () {
       // Remplit juste le champ (sans appliquer ni fermer) : l'élève peut relire/modifier
       // avant de valider lui-même, exactement comme une saisie manuelle.
-      App.MathKeypad.setLatex(equationToLatex(App.Generator.generateEquation()));
+      App.MathKeypad.setLatex(equationToLatex(generateRoundTrippableEquation()));
       manualError.textContent = '';
     });
   }

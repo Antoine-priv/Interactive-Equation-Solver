@@ -1188,7 +1188,13 @@
     leftSpan.className = 'side';
     var eqSign = document.createElement('span');
     eqSign.className = 'eq-sign';
-    window.katex.render('=', eqSign, { throwOnError: false });
+    // `opts.eqGlyph` (voir renderChain, câblé depuis renderDomainSplit) : la ligne
+    // FINALE d'une colonne "Condition d'existence" affiche "≠"/"≥" plutôt que "=" une
+    // fois résolue — une simple relabellisation d'affichage (App.Equation reste
+    // toujours opérateur-agnostique, voir history.js) : "dénominateur=0" se résout par
+    // le moteur d'équation normal, seule sa lecture finale change de sens ("x=-3" veut
+    // dire ici "x≠-3", la valeur EXCLUE du domaine).
+    window.katex.render(opts.eqGlyph || '=', eqSign, { throwOnError: false });
     var rightSpan = document.createElement('span');
     rightSpan.className = 'side';
 
@@ -1472,6 +1478,7 @@
       // C'est sur cette équation encadrée (la dernière obtenue) que les termes se
       // sélectionnent pour simplifier/factoriser/développer, pas sur la ligne "pending".
       var rowOpts = { pending: false, solved: solved, current: current };
+      if (isLastConfirmed && solved && opts.eqGlyph) rowOpts.eqGlyph = opts.eqGlyph;
       if (isLastConfirmed && pending.opType !== 'expr') {
         // Pas de glisser-déposer au premier niveau sur le membre où l'on est "entré" (voir
         // pending.drilled) : évite la complexité d'un réordonnancement du membre pendant
@@ -1825,13 +1832,72 @@
       };
     }
 
+    // "Condition d'existence" (domaine de définition) : une colonne indépendante par
+    // dénominateur/radicand pour lequel l'élève a cliqué ce bouton (voir
+    // existenceConditionAction dans history.js) — COEXISTE avec la chaîne principale
+    // (contrairement à "Produit nul"/"Racine carrée", qui la remplacent) : un clic dans
+    // une colonne focalise CETTE colonne (Hist.setFocusedDomain) pour le pavé/clavier
+    // partagé, un clic dans la chaîne principale y rend la main (Hist.focusMain, câblé
+    // juste au-dessus). Chaque colonne est rendue via renderBranchNode, exactement comme
+    // une branche "Produit nul" (même récursion, même interactivité) — seule la mise en
+    // page du wrapper diffère (voir .domain-split dans style.css : volontairement
+    // simple pour la v1, pas de padding 50vw ni de calcul JS de largeur/défilement dédié
+    // — #historyScroll défile normalement si les colonnes débordent). Pas de fourche
+    // dessinée depuis le terme drillé d'origine ici (son ancre \htmlId ne survit pas
+    // forcément — l'élève peut depuis ressortir du drill ou faire avancer la chaîne
+    // principale) : polish déféré, voir le plan.
+    function renderDomainSplit(engineRoot, historyEl, conditions, focusedDomainIdx) {
+      var header = document.createElement('div');
+      header.className = 'domain-split-header';
+      header.textContent = 'Domaine de définition';
+      historyEl.appendChild(header);
+
+      var wrap = document.createElement('div');
+      wrap.className = 'domain-split';
+      historyEl.appendChild(wrap);
+
+      conditions.forEach(function (cond, idx) {
+        var col = document.createElement('div');
+        var isFocused = focusedDomainIdx === idx;
+        col.className = 'produit-nul-branch domain-branch' +
+          ((isFocused && branchOutlineVisible) ? ' branch-focused' : '');
+        col.setAttribute('data-domain-index', String(idx));
+        col.addEventListener('click', function () { engineRoot.setFocusedDomain(idx); });
+        var chainEl = document.createElement('div');
+        chainEl.className = 'produit-nul-chain';
+        col.appendChild(chainEl);
+        wrap.appendChild(col);
+
+        renderBranchNode(cond.engine, chainEl, {
+          noDrag: true,
+          onBeforeAction: function () { engineRoot.focusDomain(idx); },
+          notifyFocus: function () { engineRoot.setFocusedDomain(idx); },
+          focused: isFocused,
+          eqGlyph: cond.operator
+        });
+      });
+    }
+
     if (!branches) {
-      // Cas normal (pas de "produit nul" en cours) : une seule chaîne, comme avant.
-      var res = renderChain(Hist, history, {});
+      // Cas normal (pas de "produit nul" en cours) : une seule chaîne, comme avant — via
+      // Hist.getLeaf() (jamais Hist directement) pour ne JAMAIS suivre la délégation
+      // "Condition d'existence" (Hist.getFocusedDomain(), voir history.js) ICI : la
+      // chaîne principale reste TOUJOURS affichée/interactive pour elle-même, qu'une
+      // colonne de domaine soit focalisée ou non (voir renderDomainSplit plus bas, qui
+      // s'occupe de CETTE colonne-là séparément). Un premier clic dans la chaîne
+      // principale pendant qu'une colonne de domaine est focalisée se contente d'y
+      // rendre la main (voir notifyFocus/Hist.focusMain), sans agir — même principe
+      // qu'un premier clic dans une colonne "Produit nul" pas encore active.
+      var mainEngine = Hist.getLeaf();
+      var mainFocused = Hist.getFocusedDomain() === null;
+      var res = renderChain(mainEngine, history, {
+        notifyFocus: function () { Hist.focusMain(); },
+        focused: mainFocused
+      });
       scrollTarget = res.framedRowEl;
       scrollTargetSolved = res.framedSolved;
       opPrevRowEl = findPrevRowEl(res.rowsData, res.framedRowEl);
-      var steps = Hist.getSteps();
+      var steps = mainEngine.getSteps();
       scrollIdentity = steps[steps.length - 1];
 
       // Décision de visibilité du pavé "live" (voir computeLiveOpInfo) : masquée tout de
@@ -1851,6 +1917,12 @@
       // ET la flèche fourchue AVANT de cliquer "Valider" — purement visuel (aucune
       // branche réelle créée, lignes non interactives, voir .produit-nul-preview).
       // Disparaît tout seul au prochain rendu dès que la condition n'est plus remplie.
+      // Tout ce bloc d'aperçu au survol (Produit nul/Racine carrée) ne s'applique QUE
+      // quand la chaîne principale est bien la cible active : une colonne de domaine
+      // focalisée gère ses propres actions (via renderBranchNode plus bas), sans aperçu
+      // de survol dédié — même simplification déjà en place pour toute colonne "Produit
+      // nul"/"Racine carrée" imbriquée (voir renderBranchNode, qui n'a jamais eu ce
+      // bloc non plus).
       var previewEquations = null;
       var previewLabel = null;
       // "sqrt-family" (envelopper à l'étape 1, simplifier à l'étape 2) : un aperçu à UNE
@@ -1863,56 +1935,58 @@
       // voir plus bas) : seul CE côté change, l'étiquette ne doit apparaître QUE dessus —
       // sinon null, comme confirmSquareRoot/pushAsymmetricStep pour l'étape confirmée.
       var previewOnlySide = null;
-      if (App.Toolbar.getHoveredOp() === 'produitnul') {
-        previewEquations = Hist.previewProduitNul();
-        previewLabel = '\\text{produit nul}';
-      } else if (Hist.getPending().opType === 'expr' && Hist.getPending().sqrtArmed) {
-        previewEquations = Hist.previewSquareRoot();
-        previewLabel = '\\sqrt{\\phantom{x}}';
-        previewCollapsible = true;
-      } else {
-        var sqrtAction = App.Toolbar.getHoveredOp() === 'simplify' ? Hist.squareRootAction() : null;
-        if (sqrtAction) {
-          // Survol de "Simplifier" alors que la sélection en cours cible l'étape 2 de
-          // "Racine carrée" (voir squareRootSimplifyAction/computeSelectionInfo) : même
-          // aperçu que l'étape 1 ci-dessus (une seule équation en mode 'calc', qui ne
-          // scinde jamais ; ± scindé en mode 'split'/'both'), mais étiqueté "simplifier"
-          // (voir confirmSquareRoot dans history.js, qui utilise ce même libellé pour
-          // l'étape confirmée) plutôt que le symbole "√", puisque c'est désormais ce
-          // bouton-ci qui la déclenche.
-          previewEquations = Hist.previewSquareRoot();
-          previewLabel = '\\text{simplifier}';
-          previewCollapsible = true;
-          if (sqrtAction.mode === 'calc') previewOnlySide = sqrtAction.side;
-        }
-      }
       var previewCols = null;
-      if (previewEquations && previewEquations.length === 1 && previewCollapsible) {
-        var soleRowEl = createRow(previewEquations[0], { pending: true, solved: false, current: false });
-        soleRowEl.classList.add('preview-pop-in');
-        history.appendChild(soleRowEl);
-        var soleOpLeft = previewOnlySide === 'right' ? null : previewLabel;
-        var soleOpRight = previewOnlySide === 'left' ? null : previewLabel;
-        res.rowsData.push({ el: soleRowEl, opLeft: soleOpLeft, opRight: soleOpRight, pending: true });
-      } else if (previewEquations) {
-        // PAS .produit-nul-split (dont le padding de 50vw sert uniquement à permettre,
-        // une fois une VRAIE scission confirmée, de défiler assez loin pour recentrer
-        // n'importe quelle colonne — inutile et contre-productif ici, cet aperçu est
-        // éphémère et doit juste apparaître centré là où il est, sans logique de
-        // défilement dédiée) : mise en page simple et indépendante, voir style.css.
-        var previewWrap = document.createElement('div');
-        previewWrap.className = 'produit-nul-preview preview-pop-in';
-        history.appendChild(previewWrap);
-        previewCols = previewEquations.map(function (eqPrev) {
-          var col = document.createElement('div');
-          col.className = 'produit-nul-branch';
-          var chainEl = document.createElement('div');
-          chainEl.className = 'produit-nul-chain';
-          chainEl.appendChild(createRow(eqPrev, { pending: false, solved: false, current: false }));
-          col.appendChild(chainEl);
-          previewWrap.appendChild(col);
-          return col;
-        });
+      if (mainFocused) {
+        if (App.Toolbar.getHoveredOp() === 'produitnul') {
+          previewEquations = Hist.previewProduitNul();
+          previewLabel = '\\text{produit nul}';
+        } else if (Hist.getPending().opType === 'expr' && Hist.getPending().sqrtArmed) {
+          previewEquations = Hist.previewSquareRoot();
+          previewLabel = '\\sqrt{\\phantom{x}}';
+          previewCollapsible = true;
+        } else {
+          var sqrtAction = App.Toolbar.getHoveredOp() === 'simplify' ? Hist.squareRootAction() : null;
+          if (sqrtAction) {
+            // Survol de "Simplifier" alors que la sélection en cours cible l'étape 2 de
+            // "Racine carrée" (voir squareRootSimplifyAction/computeSelectionInfo) : même
+            // aperçu que l'étape 1 ci-dessus (une seule équation en mode 'calc', qui ne
+            // scinde jamais ; ± scindé en mode 'split'/'both'), mais étiqueté "simplifier"
+            // (voir confirmSquareRoot dans history.js, qui utilise ce même libellé pour
+            // l'étape confirmée) plutôt que le symbole "√", puisque c'est désormais ce
+            // bouton-ci qui la déclenche.
+            previewEquations = Hist.previewSquareRoot();
+            previewLabel = '\\text{simplifier}';
+            previewCollapsible = true;
+            if (sqrtAction.mode === 'calc') previewOnlySide = sqrtAction.side;
+          }
+        }
+        if (previewEquations && previewEquations.length === 1 && previewCollapsible) {
+          var soleRowEl = createRow(previewEquations[0], { pending: true, solved: false, current: false });
+          soleRowEl.classList.add('preview-pop-in');
+          history.appendChild(soleRowEl);
+          var soleOpLeft = previewOnlySide === 'right' ? null : previewLabel;
+          var soleOpRight = previewOnlySide === 'left' ? null : previewLabel;
+          res.rowsData.push({ el: soleRowEl, opLeft: soleOpLeft, opRight: soleOpRight, pending: true });
+        } else if (previewEquations) {
+          // PAS .produit-nul-split (dont le padding de 50vw sert uniquement à permettre,
+          // une fois une VRAIE scission confirmée, de défiler assez loin pour recentrer
+          // n'importe quelle colonne — inutile et contre-productif ici, cet aperçu est
+          // éphémère et doit juste apparaître centré là où il est, sans logique de
+          // défilement dédiée) : mise en page simple et indépendante, voir style.css.
+          var previewWrap = document.createElement('div');
+          previewWrap.className = 'produit-nul-preview preview-pop-in';
+          history.appendChild(previewWrap);
+          previewCols = previewEquations.map(function (eqPrev) {
+            var col = document.createElement('div');
+            col.className = 'produit-nul-branch';
+            var chainEl = document.createElement('div');
+            chainEl.className = 'produit-nul-chain';
+            chainEl.appendChild(createRow(eqPrev, { pending: false, solved: false, current: false }));
+            col.appendChild(chainEl);
+            previewWrap.appendChild(col);
+            return col;
+          });
+        }
       }
 
       requestAnimationFrame(function () {
@@ -1929,6 +2003,16 @@
         if (res.liveInfo) drawOpts.live = res.liveInfo;
         App.Arrows.drawAll(history, res.rowsData, drawOpts);
       });
+
+      // "Condition d'existence" (domaine de définition, voir Hist.getDomainConditions
+      // dans history.js) : rendue APRÈS la chaîne principale, toujours (indépendamment de
+      // mainFocused) — ces colonnes existent quel que soit ce qui est actuellement
+      // focalisé. Voir renderDomainSplit plus bas pour la mise en page (volontairement
+      // simple en v1, voir style.css).
+      var domainConditionsArr = Hist.getDomainConditions();
+      if (domainConditionsArr && domainConditionsArr.length) {
+        renderDomainSplit(Hist, history, domainConditionsArr, Hist.getFocusedDomain());
+      }
     } else {
       // Scission en cours ("Produit nul" ou "Racine carrée") : la chaîne principale
       // reste affichée, figée (plus de ligne "pending" dessus — la suite, ce sont les N
@@ -2268,6 +2352,28 @@
   // les clics tant qu'aucune colonne n'existe (rien à masquer/révéler) pour ne jamais
   // imposer de re-rendu superflu au fil normal de l'utilisation (avant toute
   // "Produit nul").
+  // Recentre la vue sur une colonne "Condition d'existence" déjà créée (voir
+  // existenceConditionAction dans history.js : un second clic sur le bouton pour un
+  // dénominateur/radicand structurellement identique n'en recrée pas une seconde,
+  // il pointe juste ici) — même conversion écran -> local que le recentrage automatique
+  // dans renderAll (diviser par App.Canvas.getScale() : voir le commentaire de
+  // targetCenter plus haut), mais appelée à la demande plutôt qu'après un nouveau step.
+  function panToDomainColumn(index) {
+    var col = document.querySelector('.domain-branch[data-domain-index="' + index + '"]');
+    var scroller = document.getElementById('historyScroll');
+    if (!col || !scroller) return;
+    var scale = App.Canvas.getScale();
+    var scrollerRect = scroller.getBoundingClientRect();
+    var colRect = col.getBoundingClientRect();
+    var centerX = (colRect.left - scrollerRect.left) / scale + App.Canvas.getX() + colRect.width / (2 * scale);
+    var centerY = (colRect.top - scrollerRect.top) / scale + App.Canvas.getY() + colRect.height / (2 * scale);
+    App.Canvas.scrollTo({
+      left: centerX - scroller.clientWidth / (2 * scale),
+      top: centerY - scroller.clientHeight / (2 * scale),
+      behavior: 'smooth'
+    });
+  }
+
   var BRANCH_OUTLINE_KEEP_SELECTOR = '.produit-nul-branch, #controlPanel, #opButtons, ' +
     '#mathKeypadPanel, #mathKeypadPeekTab, #liveOpPill, .arrow-label-mirror, ' +
     '#zoomInBtn, #zoomOutBtn';
@@ -2284,6 +2390,7 @@
   App.Render = {
     renderAll: renderAll,
     formatOpLabel: formatOpLabel,
+    panToDomainColumn: panToDomainColumn,
     init: initBranchOutlineDismissal
   };
 })(window.App = window.App || {});

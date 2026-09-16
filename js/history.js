@@ -1931,6 +1931,19 @@
     var branches = null;        // null, ou [branchable, branchable, ...] (au moins 1) — récursif
     var focusedBranch = 0;      // index dans `branches` — quel enfant reçoit clavier/pavé/sélection
     var branchSplitLabel = '';  // LaTeX affiché sur la flèche fourchue (voir drawFork dans arrows.js) — du texte ("\text{...}") ou un symbole mathématique brut, selon l'action
+    // Colonnes "Condition d'existence" (domaine de définition) : contrairement à
+    // `branches`, qui REMPLACE `leaf` (gelé, toute délégation part vers focusedChild()),
+    // ces colonnes COEXISTENT avec `leaf` toujours actif — chacune est son propre
+    // createBranchable() indépendant, née d'un dénominateur/radicand "figé" au moment du
+    // clic (voir existenceConditionAction). null, ou [{ id, kind: 'den'|'sqrt',
+    // capturedArray, operator, engine, solved, solvedSetLatex }, ...]. `focusedDomain` est
+    // null tant que le clavier/pavé cible `leaf` (ou un enfant de `branches`) ; sinon
+    // l'index dans `domainConditions` dont l'`engine` reçoit la délégation à la place.
+    // Restriction v1 (voir CLAUDE.md/plan) : un même noeud n'a jamais `branches` ET
+    // `domainConditions` à la fois — Produit nul/Racine carrée deviennent indisponibles
+    // sur CE noeud une fois `domainConditions` posé (voir canProduitNul/canSquareRoot).
+    var domainConditions = null;
+    var focusedDomain = null;
     var listeners = [];
 
     function notify() {
@@ -1944,10 +1957,23 @@
 
     function focusedChild() { return branches[focusedBranch]; }
 
+    // Enfant vers lequel toute méthode "active" (DELEGATED_METHODS ci-dessous, ou les
+    // méthodes à délégation manuelle comme confirmProduitNul/confirmSquareRoot) doit
+    // déléguer EN CE MOMENT, ou null si c'est `leaf` lui-même la cible (cas terminal).
+    // `branches` a toujours priorité (voir la restriction v1 ci-dessus : jamais les deux
+    // à la fois sur un même noeud).
+    function activeChild() {
+      if (branches) return focusedChild();
+      if (domainConditions && focusedDomain !== null) return domainConditions[focusedDomain].engine;
+      return null;
+    }
+
     function init(equation) {
       branches = null;
       focusedBranch = 0;
       branchSplitLabel = '';
+      domainConditions = null;
+      focusedDomain = null;
       leaf.init(equation);
     }
 
@@ -1962,6 +1988,28 @@
     // correctement — l'action elle-même déclenchera son propre (unique) rendu.
     function focusBranch(index) {
       if (branches && index >= 0 && index < branches.length) focusedBranch = index;
+    }
+
+    // Même principe que setFocusedBranch/focusBranch, mais pour `domainConditions` (voir
+    // ce champ plus haut) : `setFocusedDomain` notifie (clic direct sur une colonne),
+    // `focusDomain` est la variante silencieuse utilisée juste avant de déléguer un clic
+    // de terme à l'intérieur d'une colonne. `focusMain()` rend la main à `leaf` (clic sur
+    // la chaîne principale, ou sur une branche Produit nul) — notifie, symétriquement à
+    // setFocusedDomain.
+    function setFocusedDomain(index) {
+      if (!domainConditions || index < 0 || index >= domainConditions.length || focusedDomain === index) return;
+      focusedDomain = index;
+      notify();
+    }
+
+    function focusDomain(index) {
+      if (domainConditions && index >= 0 && index < domainConditions.length) focusedDomain = index;
+    }
+
+    function focusMain() {
+      if (focusedDomain === null) return;
+      focusedDomain = null;
+      notify();
     }
 
     // Toujours possible dès qu'il y a quoi que ce soit à annuler : soit une étape dans
@@ -2068,8 +2116,66 @@
     // exiger un clic n'ajoutait qu'une étape artificielle. Scission imbriquée d'un enfant
     // déjà scindé : déléguée à l'enfant focalisé, à profondeur arbitraire (voir le
     // commentaire au-dessus de createBranchable) plutôt qu'interdite.
+    // Détecte si "Condition d'existence" est disponible EN CE MOMENT : l'élève est
+    // "entré" (pending.drilled, voir drillIntoQuotientDenominator/drillIntoSqrt) dans un
+    // dénominateur-expression (part==='den') ou un radicand de racine carrée
+    // (part==='sqrt') — aucune sélection intérieure requise, contrairement à
+    // Simplifier/Factoriser (voir computeSelectionInfo dans toolbar.js, qui appelle
+    // directement ceci plutôt que de redupliquer cette détection).
+    function canExistenceCondition() {
+      if (activeChild()) return activeChild().canExistenceCondition();
+      var d = leaf.getPending().drilled;
+      if (!d) return false;
+      var groupNode = Expr.nodeAtPath(leaf.lastEquation()[d.side], d.path);
+      if (!groupNode) return false;
+      if (d.part === 'den') return Expr.isExpressionQuotient(groupNode);
+      if (d.part === 'sqrt') return Expr.isSqrtGroup(groupNode);
+      return false;
+    }
+
+    // Clic sur "Condition d'existence" : crée une nouvelle colonne "domaine de
+    // définition" à partir du dénominateur/radicand actuellement drillé (dénominateur ≠
+    // 0, radicand ≥ 0), OU — si un domaine STRUCTURELLEMENT identique (voir
+    // Expr.sidesEquivalent) a déjà été créé par un clic précédent — signale juste son
+    // index pour que l'appelant (toolbar.js) recentre la vue dessus au lieu d'en créer un
+    // second (voir App.Render.panToDomainColumn). `capturedArray` fige une COPIE du
+    // dénominateur/radicand au moment du clic : la colonne créée est ensuite totalement
+    // indépendante de l'équation principale, exactement comme une branche Produit nul.
+    function existenceConditionAction() {
+      if (activeChild()) return activeChild().existenceConditionAction();
+      if (!canExistenceCondition()) return { spawned: false, pan: false };
+      var d = leaf.getPending().drilled;
+      var groupNode = Expr.nodeAtPath(leaf.lastEquation()[d.side], d.path);
+      var arr = Expr.drilledWorkingArray(groupNode, d);
+      var existingIdx = -1;
+      if (domainConditions) {
+        for (var i = 0; i < domainConditions.length; i++) {
+          if (Expr.sidesEquivalent(domainConditions[i].capturedArray, arr)) { existingIdx = i; break; }
+        }
+      }
+      if (existingIdx >= 0) return { spawned: false, pan: true, index: existingIdx };
+      var eng = createBranchable();
+      eng.init({ left: Expr.cloneSide(arr), right: [{ coeff: 0, pow: 0 }] });
+      eng.subscribe(notify);
+      domainConditions = (domainConditions || []).concat([{
+        id: domainConditions ? domainConditions.length : 0,
+        kind: d.part,
+        capturedArray: Expr.cloneSide(arr),
+        operator: d.part === 'den' ? '\\neq' : '\\geq',
+        engine: eng,
+        solved: false,
+        solvedSetLatex: null
+      }]);
+      notify();
+      return { spawned: true, pan: false, index: domainConditions.length - 1 };
+    }
+
     function canProduitNul() {
-      if (branches) return focusedChild().canProduitNul();
+      if (activeChild()) return activeChild().canProduitNul();
+      // v1 : indisponible sur ce noeud une fois qu'il porte déjà des colonnes "Condition
+      // d'existence" (voir la restriction en tête de createBranchable) — pas de conflit
+      // de délégation possible plus bas (activeChild() aurait déjà intercepté).
+      if (domainConditions) return false;
       return !!detectProduitNul(leaf.lastEquation());
     }
 
@@ -2079,7 +2185,7 @@
     // données nécessaires pour dessiner un aperçu statique des colonnes qui SERAIENT
     // créées si l'élève cliquait vraiment.
     function previewProduitNul() {
-      if (branches) return focusedChild().previewProduitNul();
+      if (activeChild()) return activeChild().previewProduitNul();
       if (!canProduitNul()) return null;
       var detected = detectProduitNul(leaf.lastEquation());
       return detected.factors.map(function (side) {
@@ -2088,7 +2194,8 @@
     }
 
     function confirmProduitNul() {
-      if (branches) return focusedChild().confirmProduitNul();
+      if (activeChild()) return activeChild().confirmProduitNul();
+      if (domainConditions) return false;
       var detected = detectProduitNul(leaf.lastEquation());
       if (!detected) return false;
       var equations = detected.factors.map(function (side) {
@@ -2167,7 +2274,8 @@
     // — l'étape 2 dépend désormais de la sélection en cours, voir squareRootSimplifyAction,
     // jamais vérifiée ici.
     function canSquareRoot() {
-      if (branches) return focusedChild().canSquareRoot();
+      if (activeChild()) return activeChild().canSquareRoot();
+      if (domainConditions) return false;
       return !!detectSquareRootUnwrapped(leaf.lastEquation());
     }
 
@@ -2175,7 +2283,8 @@
     // MÊME (titre/désactivation) : elle ne porte plus jamais l'étape 2 (voir
     // squareRootSimplifyAction, portée par "Simplifier" à la place).
     function squareRootStage() {
-      if (branches) return focusedChild().squareRootStage();
+      if (activeChild()) return activeChild().squareRootStage();
+      if (domainConditions) return null;
       return detectSquareRootUnwrapped(leaf.lastEquation()) ? 'wrap' : null;
     }
 
@@ -2219,7 +2328,8 @@
     // toolbar.js/render.js pour savoir CE QUE ferait un clic sur "Simplifier" maintenant
     // (activation du bouton, aperçu au survol), sans dupliquer ici la détection de forme.
     function squareRootAction() {
-      if (branches) return focusedChild().squareRootAction();
+      if (activeChild()) return activeChild().squareRootAction();
+      if (domainConditions) return null;
       return squareRootSimplifyAction(leaf.lastEquation(), leaf.getPending());
     }
 
@@ -2281,7 +2391,7 @@
     // si le calcul échouerait (constante négative) — l'aperçu n'a pas vocation à montrer un
     // message d'erreur, seulement un résultat valide.
     function previewSquareRoot() {
-      if (branches) return focusedChild().previewSquareRoot();
+      if (activeChild()) return activeChild().previewSquareRoot();
       var eq = leaf.lastEquation();
       if (detectSquareRootUnwrapped(eq)) {
         return [{ left: Expr.wrapSideInSqrt(eq.left), right: Expr.wrapSideInSqrt(eq.right) }];
@@ -2300,7 +2410,8 @@
     // data-op="simplify" dans toolbar.js) — pas de second armement de la touche "√", jugé
     // peu clair (même geste répété pour un effet complètement différent).
     function confirmSquareRoot() {
-      if (branches) return focusedChild().confirmSquareRoot();
+      if (activeChild()) return activeChild().confirmSquareRoot();
+      if (domainConditions) return false;
       var eq = leaf.lastEquation();
       // Étape 1 : enveloppe l'INTÉGRALITÉ des deux membres dans une racine carrée — une
       // étape normale de la chaîne (deux flèches "√" identiques, comme "÷2" ou toute autre
@@ -2389,11 +2500,27 @@
       getBranchSplitLabel: function () { return branchSplitLabel; },
       setFocusedBranch: setFocusedBranch,
       focusBranch: focusBranch,
+      // Colonnes "Condition d'existence" propres à CE noeud (jamais déléguées, même
+      // principe que getBranches ci-dessus) : voir la déclaration de `domainConditions`
+      // plus haut pour la forme de chaque entrée.
+      getDomainConditions: function () { return domainConditions; },
+      getFocusedDomain: function () { return focusedDomain; },
+      setFocusedDomain: setFocusedDomain,
+      focusDomain: focusDomain,
+      focusMain: focusMain,
+      // Accès DIRECT à `leaf`, jamais délégué (contrairement à getSteps/getPending/etc.,
+      // voir DELEGATED_METHODS plus bas) : sert à render.js pour continuer à afficher/
+      // faire vivre la chaîne PRINCIPALE elle-même, quel que soit l'état de
+      // `focusedDomain` (une colonne "Condition d'existence" focalisée ne doit jamais
+      // faire disparaître ou geler la chaîne principale — voir renderAll).
+      getLeaf: function () { return leaf; },
       canUndo: canUndo,
       undo: undo,
       canProduitNul: canProduitNul,
       previewProduitNul: previewProduitNul,
       confirmProduitNul: confirmProduitNul,
+      canExistenceCondition: canExistenceCondition,
+      existenceConditionAction: existenceConditionAction,
       canSquareRoot: canSquareRoot,
       squareRootStage: squareRootStage,
       squareRootAction: squareRootAction,
@@ -2402,7 +2529,7 @@
     };
     DELEGATED_METHODS.forEach(function (name) {
       api[name] = function () {
-        var target = branches ? focusedChild() : leaf;
+        var target = activeChild() || leaf;
         return target[name].apply(target, arguments);
       };
     });

@@ -536,6 +536,31 @@ button {
   padding: 16px 28px;
 }
 
+/* "Condition d'existence" (domaine de définition, voir renderDomainSplit/
+   panToDomainColumn dans render.js) : une ou plusieurs colonnes indépendantes,
+   affichées SOUS la chaîne principale (celle-ci reste active/éditable juste au-dessus,
+   contrairement à ".produit-nul-split" qui, lui, gèle la chaîne principale) — layout
+   volontairement simple pour la v1 (pas de padding 50vw ni de calcul JS de largeur/
+   défilement comme .produit-nul-split, voir le commentaire de renderDomainSplit) :
+   centrée via un margin normal, #historyScroll défile si besoin comme pour tout contenu
+   large. Réutilise .produit-nul-branch tel quel pour chaque colonne (même liseré de
+   focus, mêmes dimensions) — seul l'habillage du wrapper diffère. */
+.domain-split {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 64px;
+  margin: 12px 0 46px;
+}
+
+.domain-split-header {
+  text-align: center;
+  font-size: 1.3rem;
+  color: var(--text-muted);
+  margin: 40px 0 -4px;
+}
+
 /* Aperçu de "Produit nul" au survol de son bouton (voir renderAll dans render.js) :
    mise en page simple et indépendante de .produit-nul-split (pas de padding de 50vw —
    voir le commentaire dans render.js), juste centrée là où elle apparaît. Légèrement

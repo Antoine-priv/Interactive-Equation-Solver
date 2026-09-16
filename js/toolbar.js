@@ -87,7 +87,8 @@
     factor: 'Factorise les termes sélectionnés par un facteur commun ou une identité remarquable.',
     expand: 'Développe un groupe factorisé ou une fraction.',
     expr: 'Composez librement une suite d\'opérations.',
-    produitnul: 'Sépare l\'équation pour résoudre chaque facteur individuellement.'
+    produitnul: 'Sépare l\'équation pour résoudre chaque facteur individuellement.',
+    existence: 'Calcule la condition d\'existence (domaine de définition) de ce dénominateur/radicand, dans une nouvelle colonne.'
   };
 
   // Caractère "←" (utilisé pour la flèche retour, voir buildFactorBackRow) : selon la
@@ -296,7 +297,7 @@
       var isDen = pending.drilled.part === 'den' && groupNode && App.Expr.isExpressionQuotient(groupNode);
       var isSqrt = pending.drilled.part === 'sqrt' && groupNode && App.Expr.isSqrtGroup(groupNode);
       if (!groupNode || (!isBranch && !isDen && !isSqrt && !App.Expr.isFactorGroup(groupNode))) {
-        return { canSimplify: false, canFactor: false, canExpand: false, canProduitNul: false };
+        return { canSimplify: false, canFactor: false, canExpand: false, canProduitNul: false, canExistenceCondition: false };
       }
       var inner = App.Expr.drilledWorkingArray(groupNode, pending.drilled);
       var sel = pending.selectedInner;
@@ -327,7 +328,8 @@
         canFactor: (sel.length >= 2 && innerClean) || innerCanFactorGroup ||
           allNumericFactorGroups(inner, sel) || allProductGroups(inner, sel),
         canExpand: innerCanExpand,
-        canProduitNul: false
+        canProduitNul: false,
+        canExistenceCondition: App.History.canExistenceCondition()
       };
     }
 
@@ -407,7 +409,8 @@
       canSimplify: canSimplify,
       canFactor: canFactor,
       canExpand: canExpand,
-      canProduitNul: canProduitNul
+      canProduitNul: canProduitNul,
+      canExistenceCondition: false
     };
   }
 
@@ -672,6 +675,7 @@
       else if (op === 'factor') unusable = pending.opType !== 'factor' && !info.canFactor;
       else if (op === 'expand') unusable = !info.canExpand;
       else if (op === 'produitnul') unusable = !info.canProduitNul;
+      else if (op === 'existence') unusable = !info.canExistenceCondition;
       else unusable = false;
       // Délibérément PAS de "si un autre mode est engagé, cache/grise ce bouton" ici :
       // unusable ne dépend que de la sélection courante (info.canX), jamais de
@@ -1087,6 +1091,13 @@
           // Scinde immédiatement (...)(...) = 0 en autant d'équations que de facteurs
           // distincts, sans sélection supplémentaire (voir confirmProduitNul).
           App.History.confirmProduitNul();
+        } else if (op === 'existence') {
+          // Crée une nouvelle colonne "domaine de définition", SAUF si un domaine
+          // structurellement identique existe déjà (voir existenceConditionAction dans
+          // history.js) : dans ce cas, on ne fait que recentrer la vue dessus plutôt que
+          // d'en créer un second.
+          var result = App.History.existenceConditionAction();
+          if (result && result.pan) App.Render.panToDomainColumn(result.index);
         }
       });
     });
