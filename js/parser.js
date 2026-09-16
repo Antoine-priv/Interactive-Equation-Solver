@@ -496,6 +496,29 @@
     return s;
   }
 
+  // "\sqrt{...}" couvrant la TOTALITÉ d'un membre (rien avant, rien après, à part un signe
+  // optionnel), radicand PAS purement numérique (ex. "\sqrt{x+3}", émis par
+  // App.Expr.sideLatex pour un SqrtGroup — voir generateVariableRadicandEquation/
+  // generateVariableRadicandQuadraticEquation dans generator.js et equationToLatex dans
+  // newEquationModal.js, seule source réelle de cette forme) : reconstruit un vrai
+  // SqrtGroup (voir Expr.isSqrtGroup) plutôt que de tenter — et échouer — à le replier en
+  // nombre comme foldSqrt ci-dessous. Cohérent avec l'invariant "toujours seul noeud de son
+  // Side" du modèle de données (voir l'en-tête de expression.js) : dès qu'autre chose
+  // entoure ce \sqrt, on retombe sur foldSqrt (qui continue d'exiger un radicand numérique,
+  // comportement de saisie manuelle inchangé). Un radicand purement numérique (ex.
+  // "\sqrt{25}") est volontairement laissé de côté ici (SQRT_NUM_RE) pour continuer de se
+  // replier en simple nombre, exactement comme avant.
+  function parseWholeSqrtSide(s) {
+    var sign = 1, rest = s;
+    if (rest.charAt(0) === '+') rest = rest.slice(1);
+    else if (rest.charAt(0) === '-') { sign = -1; rest = rest.slice(1); }
+    if (rest.slice(0, 5) !== '\\sqrt') return null;
+    var arg = readLatexArg(rest, 5);
+    if (arg.next !== rest.length) return null;
+    if (SQRT_NUM_RE.test(arg.text)) return null;
+    return [{ sign: sign, radicand: parseSide(arg.text) }];
+  }
+
   // Point d'entrée pour le champ <math-field> unifié : convertit son contenu LaTeX en la
   // notation déjà acceptée par parseSide, puis délègue.
   function parseLatexSide(latex) {
@@ -506,6 +529,8 @@
     var s = String(latex).replace(/\{,\}/g, ',').replace(/\\left|\\right/g, '')
       .replace(/\^\{([0-9]+)\}/g, '^$1').replace(/\s+/g, '');
     if (!s) throw new Error('Un membre de l\'équation est vide.');
+    var wholeSqrt = parseWholeSqrtSide(s);
+    if (wholeSqrt) return wholeSqrt;
     s = foldSqrt(s);
     s = foldTimesDiv(s);
     s = normalizeFracBraces(s);

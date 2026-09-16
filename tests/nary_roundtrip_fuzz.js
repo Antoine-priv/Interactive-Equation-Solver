@@ -23,6 +23,9 @@ function ok(label, cond) {
   const result = await page.evaluate(() => {
     var App = window.App;
     function roundNode(n) {
+      if (App.Expr.isSqrtGroup(n)) {
+        return { sign: n.sign, radicand: n.radicand.map(roundNode) };
+      }
       if (App.Expr.isProductGroup(n)) {
         return { sign: n.sign, factors: n.factors.map(function (f) { return { terms: f.terms.map(roundNode), exponent: f.exponent }; }) };
       }
@@ -56,24 +59,15 @@ function ok(label, cond) {
     }
     function sideEq(a, b) { return JSON.stringify(a.map(roundNode)) === JSON.stringify(b.map(roundNode)); }
 
-    // generateVariableRadicandEquation (voir generator.js/CLAUDE.md) construit
-    // délibérément un SqrtGroup DIRECTEMENT en AST — la seule forme que generateEquation()
-    // puisse produire que parser.js ne sait toujours PAS relire (\sqrt{...} se replie
-    // toujours en nombre, voir foldSqrt, quel que soit son contenu) : hors-sujet pour ce
-    // fuzz du round-trip texte, skippée ici plutôt que comptée en échec (voir aussi
-    // generateRoundTrippableEquation dans newEquationModal.js, qui applique la même
-    // exclusion côté "Générer aléatoirement" réel). Un dénominateur-expression
-    // (isExpressionQuotient, generateVariableDenominatorEquation), lui, round-trippe
-    // désormais correctement (voir stripHtmlWrappers/splitTopLevelEquals dans parser.js) —
-    // n'est donc plus exclu ici.
-    var mismatches = 0, parseFails = 0, tripleCount = 0, skipped = 0, total = 4000;
+    // Un dénominateur-expression (isExpressionQuotient, generateVariableDenominatorEquation)
+    // ET un radicand-expression au premier niveau (isSqrtGroup,
+    // generateVariableRadicandEquation/generateVariableRadicandQuadraticEquation)
+    // round-trippent tous deux désormais (voir stripHtmlWrappers/splitTopLevelEquals et
+    // parseWholeSqrtSide dans parser.js) — plus rien à exclure de ce fuzz.
+    var mismatches = 0, parseFails = 0, tripleCount = 0, total = 4000;
     var firstFails = [];
     for (var i = 0; i < total; i++) {
       var eq = App.Generator.generateEquation();
-      if (eq.left.concat(eq.right).some(function (n) { return App.Expr.isSqrtGroup(n); })) {
-        skipped++;
-        continue;
-      }
       var latex = App.Expr.sideLatex(eq.left) + '=' + App.Expr.sideLatex(eq.right);
       if (eq.left.length === 1 && App.Expr.isProductGroup(eq.left[0]) && eq.left[0].factors.length === 3) tripleCount++;
       try {
@@ -87,10 +81,10 @@ function ok(label, cond) {
         if (firstFails.length < 5) firstFails.push({ type: 'parse', latex: latex, error: e.message });
       }
     }
-    return { mismatches: mismatches, parseFails: parseFails, tripleCount: tripleCount, skipped: skipped, total: total, firstFails: firstFails };
+    return { mismatches: mismatches, parseFails: parseFails, tripleCount: tripleCount, total: total, firstFails: firstFails };
   });
 
-  console.log('round-trip fuzz result:', JSON.stringify({ mismatches: result.mismatches, parseFails: result.parseFails, tripleCount: result.tripleCount, skipped: result.skipped, total: result.total }));
+  console.log('round-trip fuzz result:', JSON.stringify({ mismatches: result.mismatches, parseFails: result.parseFails, tripleCount: result.tripleCount, total: result.total }));
   if (result.firstFails.length) console.log('first failures:', JSON.stringify(result.firstFails, null, 2));
   ok('zero structural mismatches across ' + result.total + ' generated equations', result.mismatches === 0);
   ok('zero parse failures across ' + result.total + ' generated equations', result.parseFails === 0);
