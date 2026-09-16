@@ -109,6 +109,23 @@ function ok(label, cond) {
   ok('the domain column\'s own term got selected (delegation reached IT, not the main leaf)',
     JSON.stringify(await page.evaluate(() => window.App.History.getPending().selectedLeft)) === '[0]');
 
+  // --- Regression (bug rapporté) : le jaune de sélection ne devait apparaître qu'une
+  // fois la souris repartie du terme, au lieu de rester affiché PENDANT le survol — voir
+  // ".domain-branch-focused" dans render.js/style.css (la colonne focalisée ne porte
+  // jamais ".branch-focused" comme une branche "Produit nul", mais doit quand même
+  // repasser le survol normal une fois qu'elle EST la colonne active). ---
+  await page.hover('.domain-branch[data-domain-index="0"] .side[data-side="left"] .term[data-index="0"]', { force: true });
+  await page.waitForTimeout(250);
+  const bgWhileHovering = await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.domain-branch[data-domain-index="0"] .side[data-side="left"] .term[data-index="0"]')).backgroundColor);
+  ok('a selected term keeps its yellow background WHILE hovered (not overridden to none)',
+    bgWhileHovering === 'rgb(246, 195, 61)');
+  await page.mouse.move(5, 5);
+  await page.waitForTimeout(250);
+  const bgAfterLeaving = await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.domain-branch[data-domain-index="0"] .side[data-side="left"] .term[data-index="0"]')).backgroundColor);
+  ok('same yellow (unhovered shade) once the mouse leaves', bgAfterLeaving === 'rgb(253, 230, 138)');
+
   // --- The floating action window (#opButtons) must follow the focused domain column,
   // not stay glued to the main equation (bug rapporté) ---
   await page.waitForTimeout(150);

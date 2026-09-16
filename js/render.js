@@ -1931,7 +1931,18 @@
       conditions.forEach(function (cond, idx) {
         var col = document.createElement('div');
         var isFocused = focusedDomainIdx === idx;
-        col.className = 'produit-nul-branch domain-branch';
+        // ".domain-branch-focused" (jamais ".branch-focused", volontairement omis pour ce
+        // liseré-ci — voir plus bas) : sert UNIQUEMENT à réactiver le survol normal
+        // (couleur au survol, jaune de sélection visible PENDANT le survol) pour la
+        // colonne réellement focalisée, voir la règle ".produit-nul-branch:not(.branch-
+        // focused):not(.domain-branch-focused) .term.selectable:hover" dans style.css.
+        // Sans cette classe, ".branch-focused" restant TOUJOURS absent d'une colonne de
+        // domaine (voir juste en dessous), la règle "colonne pas focalisée -> pas de
+        // survol" s'appliquait À TORT en permanence, y compris à la colonne focalisée :
+        // un terme cliqué (donc .selected, vrai en JS/DOM) semblait perdre son jaune tant
+        // que la souris restait dessus, et ne le montrait qu'une fois la souris repartie
+        // (bug rapporté) — le survol y écrasait le jaune avec "background:none".
+        col.className = 'produit-nul-branch domain-branch' + (isFocused ? ' domain-branch-focused' : '');
         col.setAttribute('data-domain-index', String(idx));
         col.addEventListener('click', function () { engineRoot.setFocusedDomain(idx); });
         var chainEl = document.createElement('div');

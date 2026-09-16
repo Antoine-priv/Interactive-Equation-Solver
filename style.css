@@ -741,9 +741,16 @@ button {
    besoin de les réordonner. S'applique à n'importe quelle profondeur d'imbrication : un
    ancêtre ".produit-nul-branch" pas focalisé désactive le survol de TOUS ses termes,
    y compris ceux d'une sous-colonne elle-même marquée ".branch-focused" en son sein (déjà
-   hors du chemin réellement actif dans ce cas, voir opts.focused/childFocused). */
-.produit-nul-branch:not(.branch-focused) .term.selectable:hover,
-.produit-nul-branch:not(.branch-focused) .factor-slot:hover {
+   hors du chemin réellement actif dans ce cas, voir opts.focused/childFocused).
+   ":not(.domain-branch-focused)" en plus (voir renderDomainSplit dans render.js) : une
+   colonne "Condition d'existence" (.domain-branch) ne porte JAMAIS ".branch-focused"
+   (liseré volontairement omis pour elle, voir .domain-branch-flash) même une fois
+   réellement focalisée (Hist.getFocusedDomain()) — sans cette exception, cette règle
+   désactivait donc TOUJOURS son survol, y compris sur un terme déjà .selected : le jaune
+   de sélection semblait disparaître tant que la souris restait dessus, ne réapparaissant
+   qu'une fois la souris repartie (bug rapporté). */
+.produit-nul-branch:not(.branch-focused):not(.domain-branch-focused) .term.selectable:hover,
+.produit-nul-branch:not(.branch-focused):not(.domain-branch-focused) .factor-slot:hover {
   background: none;
 }
 
