@@ -1896,6 +1896,20 @@
           focused: isFocused,
           eqGlyph: cond.operator
         });
+
+        // "Étude de signe" menée jusqu'au bout (voir chooseSignStudyInterval/
+        // getSignStudyResult dans history.js, Phase 3 du plan) : l'équation elle-même
+        // reste affichée sous forme de produit ((x-a)(x+a)≥0, jamais réduite à "x=..."),
+        // donc PAS "solved" au sens habituel (Equation.isSolved) — l'ensemble solution
+        // final s'affiche ICI, comme un résumé supplémentaire sous la colonne, même
+        // habillage visuel que le résumé "S={...}" de Produit nul (.solution-set).
+        var signStudyResult = cond.engine.getSignStudyResult();
+        if (signStudyResult) {
+          var resultEl = document.createElement('div');
+          resultEl.className = 'solution-set domain-signstudy-result';
+          window.katex.render('x\\in' + signStudyResult, resultEl, { throwOnError: false });
+          col.appendChild(resultEl);
+        }
       });
     }
 

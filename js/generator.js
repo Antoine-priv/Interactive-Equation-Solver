@@ -297,6 +297,19 @@
     return { left: left, right: right };
   }
 
+  // "√(x²-a²) = k" : même principe que generateVariableRadicandEquation, mais un
+  // radicand DEGRÉ 2 volontairement construit comme une DIFFÉRENCE DE CARRÉS pure
+  // (jamais un trinôme quelconque) — ainsi "Factoriser" (identité 3, a²-b²) s'y applique
+  // toujours directement en une étape, condition d'entrée de "Étude de signe" (voir
+  // detectSignStudyProduct/canSignStudy dans history.js, Phase 3 du plan).
+  function generateVariableRadicandQuadraticEquation() {
+    var a = nonZeroInt(2, 9);
+    var radicand = [{ coeff: 1, pow: 2 }, { coeff: -(a * a), pow: 0 }];
+    var left = [{ sign: 1, radicand: radicand }];
+    var right = [{ coeff: nonZeroInt(1, 9), pow: 0 }];
+    return { left: left, right: right };
+  }
+
   // "a²x²-c² + (px+q)(rx+s) = 0" : une différence de carrés NON factorisée (ex. "9x²-4")
   // additionnée à un produit de deux sommes NON développé (ex. "(3-2x)(3x-2)") — ni l'une
   // ni l'autre n'est l'équation finale : Développer le produit puis Simplifier avec la
@@ -411,7 +424,8 @@
     if (roll < 0.90) return generateFractionEquation();
     if (roll < 0.93) return generateVariableDenominatorEquation();
     if (roll < 0.96) return generateVariableRadicandEquation();
-    if (roll < 0.98) return generateIdentityPlusProduct();
+    if (roll < 0.98) return generateVariableRadicandQuadraticEquation();
+    if (roll < 0.99) return generateIdentityPlusProduct();
     return generateTrinomialMinusSquareGroup();
   }
 
@@ -431,6 +445,7 @@
     generateFractionEquation: generateFractionEquation,
     generateVariableDenominatorEquation: generateVariableDenominatorEquation,
     generateVariableRadicandEquation: generateVariableRadicandEquation,
+    generateVariableRadicandQuadraticEquation: generateVariableRadicandQuadraticEquation,
     generateIdentityPlusProduct: generateIdentityPlusProduct,
     generateTrinomialMinusSquareGroup: generateTrinomialMinusSquareGroup
   };

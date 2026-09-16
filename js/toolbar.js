@@ -88,7 +88,8 @@
     expand: 'Développe un groupe factorisé ou une fraction.',
     expr: 'Composez librement une suite d\'opérations.',
     produitnul: 'Sépare l\'équation pour résoudre chaque facteur individuellement.',
-    existence: 'Calcule la condition d\'existence (domaine de définition) de ce dénominateur/radicand, dans une nouvelle colonne.'
+    existence: 'Calcule la condition d\'existence (domaine de définition) de ce dénominateur/radicand, dans une nouvelle colonne.',
+    signstudy: 'Détermine l\'ensemble solution de l\'inégalité à partir du signe du produit factorisé.'
   };
 
   // Caractère "←" (utilisé pour la flèche retour, voir buildFactorBackRow) : selon la
@@ -170,6 +171,74 @@
 
     wrap.appendChild(list);
     return wrap;
+  }
+
+  // "Étude de signe" (voir canSignStudy/chooseSignStudySign/chooseSignStudyInterval dans
+  // history.js, Phase 3 du plan "Condition d'existence") : 2 étapes séquentielles, chacune
+  // une simple liste de boutons de choix (aucun champ de saisie, contrairement à
+  // "Factoriser") — même habillage visuel que buildFactorChoiceStep ci-dessus
+  // (.factor-choice-*, réutilisées telles quelles). Étape 1 (signe du coefficient
+  // dominant) tant que pending.signStudySignConfirmed est faux ; étape 2 (choix de
+  // l'ensemble solution parmi les 2 seuls intervalles pertinents, voir
+  // App.Ineq.signStudyChoice/intervalLatex) une fois vrai.
+  function buildSignStudyStep(pending) {
+    var wrap = document.createElement('div');
+    wrap.className = 'keypad';
+
+    var intro = document.createElement('div');
+    intro.className = 'factor-choice-intro';
+
+    var list = document.createElement('div');
+    list.className = 'factor-choice-list';
+
+    function addChoice(math, onClick) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'factor-choice-btn';
+      var mathEl = document.createElement('span');
+      mathEl.className = 'factor-choice-math';
+      window.katex.render(math, mathEl, { throwOnError: false });
+      btn.appendChild(mathEl);
+      btn.addEventListener('click', onClick);
+      list.appendChild(btn);
+    }
+
+    if (!pending.signStudySignConfirmed) {
+      intro.textContent = 'Signe du coefficient dominant du produit ?';
+      addChoice('+', function () { App.History.chooseSignStudySign('+'); });
+      addChoice('-', function () { App.History.chooseSignStudySign('-'); });
+    } else {
+      intro.textContent = 'Quel est l\'ensemble solution ?';
+      var info = App.History.signStudyInfo();
+      var operator = App.History.getOperator();
+      if (info && operator) {
+        ['between', 'outside'].forEach(function (choice) {
+          addChoice(App.Ineq.intervalLatex(info, operator, choice), function () {
+            App.History.chooseSignStudyInterval(choice);
+          });
+        });
+      }
+    }
+
+    wrap.appendChild(intro);
+    wrap.appendChild(list);
+    return wrap;
+  }
+
+  // Reconstruit le panneau à CHAQUE rendu (contrairement à bindFactorKeypad, qui
+  // préserve un <math-field> vivant entre deux rendus via factorPanelSig) : aucun champ
+  // à préserver ici, juste des boutons — un rebuild complet est donc à la fois plus
+  // simple et sans risque (voir updateFactorErrorLine pour l'équivalent factor, ici
+  // fusionné directement dans la même fonction plutôt que séparé).
+  function bindSignStudyPanel(pending, panel) {
+    panel.innerHTML = '';
+    panel.appendChild(buildSignStudyStep(pending));
+    if (pending.error) {
+      var err = document.createElement('div');
+      err.className = 'panel-error';
+      err.textContent = pending.error;
+      panel.appendChild(err);
+    }
   }
 
   // Étape 2 (cas facteur commun, factorMode === 'common') : le <math-field> partagé vit
@@ -297,7 +366,7 @@
       var isDen = pending.drilled.part === 'den' && groupNode && App.Expr.isExpressionQuotient(groupNode);
       var isSqrt = pending.drilled.part === 'sqrt' && groupNode && App.Expr.isSqrtGroup(groupNode);
       if (!groupNode || (!isBranch && !isDen && !isSqrt && !App.Expr.isFactorGroup(groupNode))) {
-        return { canSimplify: false, canFactor: false, canExpand: false, canProduitNul: false, canExistenceCondition: false };
+        return { canSimplify: false, canFactor: false, canExpand: false, canProduitNul: false, canExistenceCondition: false, canSignStudy: false };
       }
       var inner = App.Expr.drilledWorkingArray(groupNode, pending.drilled);
       var sel = pending.selectedInner;
@@ -329,7 +398,8 @@
           allNumericFactorGroups(inner, sel) || allProductGroups(inner, sel),
         canExpand: innerCanExpand,
         canProduitNul: false,
-        canExistenceCondition: App.History.canExistenceCondition()
+        canExistenceCondition: App.History.canExistenceCondition(),
+        canSignStudy: false
       };
     }
 
@@ -410,7 +480,8 @@
       canFactor: canFactor,
       canExpand: canExpand,
       canProduitNul: canProduitNul,
-      canExistenceCondition: false
+      canExistenceCondition: false,
+      canSignStudy: App.History.canSignStudy()
     };
   }
 
@@ -676,6 +747,7 @@
       else if (op === 'expand') unusable = !info.canExpand;
       else if (op === 'produitnul') unusable = !info.canProduitNul;
       else if (op === 'existence') unusable = !info.canExistenceCondition;
+      else if (op === 'signstudy') unusable = pending.opType !== 'signstudy' && !info.canSignStudy;
       else unusable = false;
       // Délibérément PAS de "si un autre mode est engagé, cache/grise ce bouton" ici :
       // unusable ne dépend que de la sélection courante (info.canX), jamais de
@@ -719,7 +791,11 @@
         }
         return;
       }
-      if (isActive) {
+      // "Étude de signe" (op === 'signstudy') est un mode engagé (pending.opType) comme
+      // 'expr'/'factor', mais chaque clic sur un choix VALIDE déjà directement (voir
+      // chooseSignStudySign/chooseSignStudyInterval dans history.js) — jamais besoin
+      // d'une coche de confirmation séparée, contrairement à 'expr'/'factor'.
+      if (isActive && (op === 'expr' || op === 'factor')) {
         if (!existingConfirm) {
           // Créée déjà dans son état RÉDUIT (confirm-collapsed posé sur la ligne AVANT
           // qu'elle rejoigne le DOM) puis "révélée" après un reflow forcé — même
@@ -783,7 +859,8 @@
     // entièrement dans le pavé ancré (voir bindMathKeypad/mathKeypad.js), "Simplifier" et
     // "Développer" ne font que sélectionner des termes sur l'équation elle-même — donc pas
     // de panneau tant qu'il n'y a pas d'erreur à signaler.
-    var needsPanel = pending.opType === 'factor' || (!!pending.error && pending.opType !== 'expr');
+    var needsPanel = pending.opType === 'factor' || pending.opType === 'signstudy' ||
+      (!!pending.error && pending.opType !== 'expr');
     panel.hidden = !needsPanel;
 
     if (pending.opType === 'factor') {
@@ -793,6 +870,15 @@
       // forcément de configuration) sans passer par un rebuild complet.
       bindFactorKeypad(pending, panel);
       updateFactorErrorLine(panel, pending);
+    } else if (pending.opType === 'signstudy') {
+      // Aucun champ vivant à préserver (voir buildSignStudyStep) : reconstruction
+      // complète à chaque rendu, erreur incluse.
+      if (factorFieldBound) {
+        App.MathKeypad.clearActiveField();
+        factorFieldBound = false;
+      }
+      factorPanelSig = null;
+      bindSignStudyPanel(pending, panel);
     } else {
       // Aucun champ vivant à préserver ici (voir bindFactorKeypad ci-dessus) : repli sur la
       // reconstruction simple d'avant, juste un message d'erreur générique le cas échéant.
@@ -1098,6 +1184,12 @@
           // d'en créer un second.
           var result = App.History.existenceConditionAction();
           if (result && result.pan) App.Render.panToDomainColumn(result.index);
+        } else if (op === 'signstudy') {
+          // Engage le mode (2 étapes de choix, voir buildSignStudyStep) ; re-cliquer
+          // dessus l'annule (cancelOp, comme "Opération") — rien à "garder" contrairement
+          // à "Factoriser" (aucune sélection de termes n'entre en jeu ici).
+          if (pending.opType === 'signstudy') App.History.cancelOp();
+          else App.History.selectOp('signstudy');
         }
       });
     });

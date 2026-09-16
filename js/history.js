@@ -116,6 +116,14 @@
       // l'exécuter réellement (confirmSquareRoot dans history.js) — jamais exécutée au
       // simple clic sur la touche elle-même.
       sqrtArmed: false,
+      // Mode 'signstudy' ("Étude de signe", voir canSignStudy/chooseSignStudySign/
+      // chooseSignStudyInterval plus bas) : 2 étapes séquentielles SANS champ de saisie
+      // (juste des boutons de choix, voir buildSignStudyStep dans toolbar.js) — celle du
+      // signe du coefficient dominant d'abord (ce booléen), celle de l'ensemble solution
+      // ensuite (une fois vrai). Jamais remis à `true` en cours de route : une réponse
+      // fausse à L'UNE OU L'AUTRE étape pose juste pending.error (voir plus bas) sans
+      // jamais avancer ni reculer d'étape.
+      signStudySignConfirmed: false,
       error: null
     };
   }
@@ -157,6 +165,113 @@
     function pushRaw(stepObj) {
       if (currentOperator) stepObj.operator = currentOperator;
       steps.push(stepObj);
+    }
+
+    // LaTeX de l'intervalle final une fois "Étude de signe" menée jusqu'au bout (voir
+    // chooseSignStudyInterval plus bas) — persiste au-delà de resetPending, symétrique à
+    // `currentOperator` : null tant que non résolu ainsi (jamais utilisé pour un moteur
+    // d'équation normale, ni tant que l'équation reste sous forme de produit non résolue).
+    var signStudyResult = null;
+
+    // Détecte si l'équation ACTUELLE est de la forme "(facteur1)(facteur2) <op> 0", les
+    // deux facteurs étant chacun un simple binôme linéaire à racine unique (forme visée
+    // par "Factoriser" sur un radicand degré 2 en mode inégalité, ex. "x²-4≥0" ->
+    // "(x-2)(x+2)≥0" via l'identité 3 — voir CLAUDE.md/le plan, Phase 3). Renvoie
+    // { root1, root2, leadingSign } (racines triées, root1<root2 ; leadingSign '+'|'-'
+    // selon le signe du produit des deux coefficients dominants ET du signe global du
+    // ProductGroup) ou null si la forme ne correspond pas — jamais pertinent pour un
+    // moteur d'équation normale (currentOperator null, premier test ci-dessous).
+    function detectSignStudyProduct(eq) {
+      if (!currentOperator) return null;
+      function linearRoot(side) {
+        if (side.length === 1 && !Expr.isGroup(side[0]) && side[0].pow === 1) {
+          return { c: side[0].coeff, root: 0 };
+        }
+        if (side.length === 2 && !Expr.isGroup(side[0]) && !Expr.isGroup(side[1])) {
+          var a = side[0], b = side[1];
+          if (a.pow === 1 && b.pow === 0) return { c: a.coeff, root: -b.coeff / a.coeff };
+          if (b.pow === 1 && a.pow === 0) return { c: b.coeff, root: -a.coeff / b.coeff };
+        }
+        return null;
+      }
+      function trySide(pSide, zSide) {
+        if (zSide.length !== 1 || Expr.isGroup(zSide[0]) || zSide[0].pow !== 0 || Expr.roundClean(zSide[0].coeff) !== 0) return null;
+        if (pSide.length !== 1 || !Expr.isProductGroup(pSide[0])) return null;
+        var node = pSide[0];
+        if (node.factors.length !== 2 || node.factors[0].exponent !== 1 || node.factors[1].exponent !== 1) return null;
+        var f1 = linearRoot(node.factors[0].terms), f2 = linearRoot(node.factors[1].terms);
+        if (!f1 || !f2) return null;
+        var root1 = Expr.roundClean(f1.root), root2 = Expr.roundClean(f2.root);
+        if (root1 === root2) return null;
+        var leadingSign = (node.sign * f1.c * f2.c) >= 0 ? '+' : '-';
+        var roots = [root1, root2].sort(function (a, b) { return a - b; });
+        return { root1: roots[0], root2: roots[1], leadingSign: leadingSign };
+      }
+      return trySide(eq.left, eq.right) || trySide(eq.right, eq.left);
+    }
+
+    // Disponible dès que ce moteur est en mode inégalité (currentOperator) ET que
+    // l'équation courante a bien la forme voulue (voir detectSignStudyProduct ci-dessus),
+    // hors de tout autre mode engagé ou drill en cours — même esprit que canProduitNul
+    // dans l'orchestrateur, mais purement interne à CE moteur (aucun enfant à qui
+    // déléguer ici, voir DELEGATED_METHODS plus bas pour la délégation automatique).
+    function canSignStudy() {
+      return pending.opType === null && !pending.drilled && !!detectSignStudyProduct(lastEquation());
+    }
+
+    // Lecture seule pour toolbar.js (construction du panneau de choix, voir
+    // buildSignStudyStep) : mêmes infos que canSignStudy, mais renvoyées telles quelles.
+    function signStudyInfo() {
+      return detectSignStudyProduct(lastEquation());
+    }
+
+    // Opérateur courant de CE moteur (voir sa déclaration plus haut) — lecture seule pour
+    // toolbar.js (App.Ineq.signStudyChoice/intervalLatex ont besoin de le connaître pour
+    // construire les bons choix, voir buildSignStudyStep).
+    function getOperator() {
+      return currentOperator;
+    }
+
+    // Étape 1 ("Étude de signe") : l'élève propose le signe du coefficient dominant du
+    // produit. Une réponse fausse pose juste pending.error SANS jamais avancer (voir
+    // emptyPending pour signStudySignConfirmed) — l'élève peut réessayer librement, comme
+    // un choix d'identité de "Factoriser" qui ne correspond pas.
+    function chooseSignStudySign(sign) {
+      if (pending.opType !== 'signstudy') return;
+      var info = detectSignStudyProduct(lastEquation());
+      if (!info) return;
+      if (sign !== info.leadingSign) {
+        pending.error = 'Ce n\'est pas le signe du coefficient dominant : regarde le signe du produit des coefficients de x de chaque facteur (et le signe global éventuel).';
+        notify();
+        return;
+      }
+      pending.signStudySignConfirmed = true;
+      pending.error = null;
+      notify();
+    }
+
+    // Étape 2 ("Étude de signe") : l'élève choisit l'ensemble solution parmi 2 intervalles
+    // ('between' = entre les racines, 'outside' = hors des racines) — voir
+    // App.Ineq.signStudyChoice pour la détermination du bon choix à partir du signe déjà
+    // confirmé et de l'opérateur courant. Juste, mémorise le résultat (voir
+    // `signStudyResult` plus haut) et ressort du mode (resetPending) — comme confirmer
+    // n'importe quel autre mode engagé.
+    function chooseSignStudyInterval(choice) {
+      if (pending.opType !== 'signstudy' || !pending.signStudySignConfirmed) return;
+      var info = detectSignStudyProduct(lastEquation());
+      if (!info) return;
+      var correct = Ineq.signStudyChoice(info, currentOperator);
+      if (choice !== correct) {
+        pending.error = 'Ce n\'est pas le bon ensemble solution — reconsidère la position de x par rapport aux racines selon le signe du coefficient dominant.';
+        notify();
+        return;
+      }
+      signStudyResult = Ineq.intervalLatex(info, currentOperator, correct);
+      resetPending();
+    }
+
+    function getSignStudyResult() {
+      return signStudyResult;
     }
 
     // Vrai si ce clic (identifié par `key`, une chaîne stable pour "ce terme précis")
@@ -1952,7 +2067,13 @@
       setDrilledFactorOrder: setDrilledFactorOrder,
       clickNestedFactor: clickNestedFactor,
       setFactorOrder: setFactorOrder,
-      undo: undo
+      undo: undo,
+      canSignStudy: canSignStudy,
+      signStudyInfo: signStudyInfo,
+      getOperator: getOperator,
+      chooseSignStudySign: chooseSignStudySign,
+      chooseSignStudyInterval: chooseSignStudyInterval,
+      getSignStudyResult: getSignStudyResult
     };
   }
 
@@ -2540,7 +2661,9 @@
       'confirmExpandFullSelection', 'toggleSquareRootArmed', 'setExprChainText',
       'setFactorTermLatex', 'setIdentityFieldLatex', 'parseOperandTerm', 'confirm',
       'computePreview', 'setSideOrder', 'setInnerOrder', 'setDrilledFactorOrder',
-      'clickNestedFactor', 'setFactorOrder'
+      'clickNestedFactor', 'setFactorOrder',
+      'canSignStudy', 'signStudyInfo', 'getOperator', 'chooseSignStudySign',
+      'chooseSignStudyInterval', 'getSignStudyResult'
     ];
 
     var api = {
