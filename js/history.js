@@ -2345,7 +2345,13 @@
         solved: false,
         solvedSetLatex: null
       }]);
-      notify();
+      // Ressort du drill, comme n'importe quelle autre action qui "confirme" (Simplifier,
+      // Factoriser...) — sans ça, l'élève reste bloqué dans CE dénominateur/radicand
+      // (pending.drilled.side toujours posé empêche tout nouveau clic sur l'AUTRE membre,
+      // voir toggleTermSelection) et ne pourrait jamais drills un second
+      // dénominateur/radicand du même côté sans d'abord ressortir manuellement (Échap).
+      // exitDrill() notifie déjà lui-même : pas besoin d'un second notify() ici.
+      leaf.exitDrill();
       return { spawned: true, pan: false, index: domainConditions.length - 1 };
     }
 

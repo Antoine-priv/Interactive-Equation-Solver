@@ -132,6 +132,12 @@ function ok(label, cond) {
     JSON.stringify(await page.evaluate(() => window.App.History.getLeaf().lastEquation())) ===
     JSON.stringify({ left: [{ sign: 1, factorTerms: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], innerTerms: [{ coeff: 5, pow: 0 }], isDivision: true }], right: [{ coeff: 2, pow: 0 }] }));
 
+  // Re-center on the main equation first: the dedup click above panned the viewport onto
+  // the domain column (see App.Render.panToDomainColumn), which — now that domain columns
+  // sit BESIDE rather than below the main chain (Phase 4 layout) — can genuinely leave the
+  // main equation outside the viewport, same as panning to a wide "Produit nul" split does.
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(60);
   const mainTerm = await page.$('.eq-row.current .side[data-side="left"] .term');
   await mainTerm.click({ force: true });
   await page.waitForTimeout(60);

@@ -50,9 +50,22 @@
     return '\\left]-\\infty;' + r1 + closeAtRoot + '\\cup' + openAtRoot + r2 + ';+\\infty\\right[';
   }
 
+  // Notation en intervalle d'une inégalité linéaire déjà résolue ("x <op> r", voir
+  // App.Equation.solvedValue) — demi-droite plutôt qu'un intervalle à 2 bornes (jamais
+  // besoin de signStudyChoice/intervalLatex ci-dessus ici, qui visent le cas degré 2 à
+  // 2 racines) : utilisé par la combinaison "Df=..." dans renderDomainSplit (render.js).
+  function halfLineLatex(root, operator) {
+    if (operator === '\\geq') return '\\left[' + root + ';+\\infty\\right[';
+    if (operator === '\\leq') return '\\left]-\\infty;' + root + '\\right]';
+    if (operator === '>') return '\\left]' + root + ';+\\infty\\right[';
+    if (operator === '<') return '\\left]-\\infty;' + root + '\\right[';
+    return null;
+  }
+
   App.Ineq = {
     flipOperator: flipOperator,
     signStudyChoice: signStudyChoice,
-    intervalLatex: intervalLatex
+    intervalLatex: intervalLatex,
+    halfLineLatex: halfLineLatex
   };
 })(window.App = window.App || {});

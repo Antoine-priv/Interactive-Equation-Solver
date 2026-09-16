@@ -1853,6 +1853,27 @@
       };
     }
 
+    // Ensemble-solution en notation LaTeX d'UNE colonne "Condition d'existence" déjà
+    // résolue (voir conditionDfLatex ci-dessous pour son usage dans la combinaison finale
+    // "Df=..."), ou null tant qu'elle ne l'est pas encore : "Étude de signe" menée jusqu'au
+    // bout (getSignStudyResult, Phase 3) donne directement l'intervalle ; sinon
+    // App.Equation.isSolved/solvedValue (opérateur-agnostique, voir equation.js) — un
+    // dénominateur (kind==='den', jamais d'opérateur/currentOperator) donne "x=r" à LIRE
+    // "x≠r" (voir CLAUDE.md/le plan), soit R\{r} ; un radicand linéaire (kind==='sqrt',
+    // toujours un `step.operator`, voir history.js) donne directement "x<op>r", une
+    // demi-droite (voir App.Ineq.halfLineLatex).
+    function conditionSetLatex(cond) {
+      var signStudyResult = cond.engine.getSignStudyResult();
+      if (signStudyResult) return signStudyResult;
+      var eq = cond.engine.lastEquation();
+      if (!App.Equation.isSolved(eq)) return null;
+      var r = App.Equation.solvedValue(eq);
+      if (cond.kind === 'den') return '\\mathbb{R}\\setminus\\left\\{' + r + '\\right\\}';
+      var steps = cond.engine.getSteps();
+      var operator = steps[steps.length - 1].operator || '\\geq';
+      return App.Ineq.halfLineLatex(r, operator);
+    }
+
     // "Condition d'existence" (domaine de définition) : une colonne indépendante par
     // dénominateur/radicand pour lequel l'élève a cliqué ce bouton (voir
     // existenceConditionAction dans history.js) — COEXISTE avec la chaîne principale
@@ -1861,21 +1882,26 @@
     // partagé, un clic dans la chaîne principale y rend la main (Hist.focusMain, câblé
     // juste au-dessus). Chaque colonne est rendue via renderBranchNode, exactement comme
     // une branche "Produit nul" (même récursion, même interactivité) — seule la mise en
-    // page du wrapper diffère (voir .domain-split dans style.css : volontairement
-    // simple pour la v1, pas de padding 50vw ni de calcul JS de largeur/défilement dédié
-    // — #historyScroll défile normalement si les colonnes débordent). Pas de fourche
-    // dessinée depuis le terme drillé d'origine ici (son ancre \htmlId ne survit pas
-    // forcément — l'élève peut depuis ressortir du drill ou faire avancer la chaîne
-    // principale) : polish déféré, voir le plan.
+    // page du wrapper diffère (voir .domain-split/.domain-group dans style.css : le
+    // groupe entier est positionné À CÔTÉ de la chaîne principale par positionDomainGroup,
+    // appelé depuis renderAll une fois la mise en page connue). Pas de fourche dessinée
+    // depuis le terme drillé d'origine ici (son ancre \htmlId ne survit pas forcément —
+    // l'élève peut depuis ressortir du drill ou faire avancer la chaîne principale) :
+    // polish déféré, voir le plan. Renvoie le groupe créé (jamais encore positionné : voir
+    // positionDomainGroup) pour que l'appelant le positionne après mise en page.
     function renderDomainSplit(engineRoot, historyEl, conditions, focusedDomainIdx) {
+      var group = document.createElement('div');
+      group.className = 'domain-group';
+      historyEl.appendChild(group);
+
       var header = document.createElement('div');
       header.className = 'domain-split-header';
       header.textContent = 'Domaine de définition';
-      historyEl.appendChild(header);
+      group.appendChild(header);
 
       var wrap = document.createElement('div');
       wrap.className = 'domain-split';
-      historyEl.appendChild(wrap);
+      group.appendChild(wrap);
 
       conditions.forEach(function (cond, idx) {
         var col = document.createElement('div');
@@ -1911,6 +1937,38 @@
           col.appendChild(resultEl);
         }
       });
+
+      // "Df=cond1∩cond2∩..." (voir le plan) : seulement une fois CHAQUE colonne résolue
+      // (conditionSetLatex non nul pour toutes) — recalculé à chaque rendu, jamais mis en
+      // cache (comparativement bon marché, même principe que le résumé "S={...}" de
+      // Produit nul).
+      var allSetLatex = conditions.map(conditionSetLatex);
+      if (allSetLatex.length && allSetLatex.every(function (l) { return l !== null; })) {
+        var dfEl = document.createElement('div');
+        dfEl.className = 'solution-set domain-df-result';
+        window.katex.render('D_f=' + allSetLatex.join('\\cap'), dfEl, { throwOnError: false });
+        group.appendChild(dfEl);
+      }
+
+      return group;
+    }
+
+    // Positionne `group` (le résultat de renderDomainSplit) À CÔTÉ de la dernière ligne de
+    // la chaîne principale (`refRowEl`, ex. res.framedRowEl) plutôt qu'en-dessous : même
+    // conversion écran -> local (diviser par App.Canvas.getScale()) que le recentrage
+    // automatique de renderAll/panToDomainColumn — #history (position:relative) sert
+    // d'ancre pour ce `position:absolute` (voir .domain-group dans style.css). Appelé
+    // depuis un requestAnimationFrame (comme drawAll) : la mise en page (largeur réelle
+    // de `group`, notamment) doit déjà être connue.
+    function positionDomainGroup(group, historyEl, refRowEl) {
+      if (!refRowEl) { group.style.visibility = 'hidden'; return; }
+      var scale = App.Canvas.getScale();
+      var historyRect = historyEl.getBoundingClientRect();
+      var refRect = refRowEl.getBoundingClientRect();
+      var GAP = 64;
+      group.style.left = ((refRect.right - historyRect.left) / scale + GAP) + 'px';
+      group.style.top = (refRect.top - historyRect.top) / scale + 'px';
+      group.style.visibility = 'visible';
     }
 
     if (!branches) {
@@ -2046,7 +2104,12 @@
       // simple en v1, voir style.css).
       var domainConditionsArr = Hist.getDomainConditions();
       if (domainConditionsArr && domainConditionsArr.length) {
-        renderDomainSplit(Hist, history, domainConditionsArr, Hist.getFocusedDomain());
+        var domainGroupEl = renderDomainSplit(Hist, history, domainConditionsArr, Hist.getFocusedDomain());
+        var domainRefRowEl = res.framedRowEl;
+        requestAnimationFrame(function () {
+          if (isStaleRender()) return;
+          positionDomainGroup(domainGroupEl, history, domainRefRowEl);
+        });
       }
     } else {
       // Scission en cours ("Produit nul" ou "Racine carrée") : la chaîne principale
@@ -2407,6 +2470,14 @@
       top: centerY - scroller.clientHeight / (2 * scale),
       behavior: 'smooth'
     });
+    // Pulsation brève (voir .domain-branch-flash dans style.css) : confirme visuellement
+    // QUELLE colonne un second clic sur "Condition d'existence" vient de retrouver —
+    // `.branch-focused` seul (permanent tant que focalisée) ne signale pas cet ARRIVÉE-ci
+    // en particulier. Classe jetable, retirée après sa durée (2 x 0.5s, voir le
+    // keyframes) plutôt que laissée en place (un futur re-rendu la perdrait de toute
+    // façon en reconstruisant la colonne, mais autant nettoyer proprement).
+    col.classList.add('domain-branch-flash');
+    setTimeout(function () { col.classList.remove('domain-branch-flash'); }, 1000);
   }
 
   var BRANCH_OUTLINE_KEEP_SELECTOR = '.produit-nul-branch, #controlPanel, #opButtons, ' +

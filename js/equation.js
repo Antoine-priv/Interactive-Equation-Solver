@@ -119,14 +119,24 @@
   }
 
   // Résolu si un membre est exactement "x" (coeff 1) et l'autre une constante.
+  function isPureX(side) {
+    return Expr.sideIsSingleTerm(side) && side[0].pow === 1 && Expr.roundClean(side[0].coeff) === 1;
+  }
+  function isConstantSide(side) {
+    return Expr.sideIsSingleTerm(side) && side[0].pow === 0;
+  }
   function isSolved(eq) {
-    function isPureX(side) {
-      return Expr.sideIsSingleTerm(side) && side[0].pow === 1 && Expr.roundClean(side[0].coeff) === 1;
-    }
-    function isConstant(side) {
-      return Expr.sideIsSingleTerm(side) && side[0].pow === 0;
-    }
-    return (isPureX(eq.left) && isConstant(eq.right)) || (isPureX(eq.right) && isConstant(eq.left));
+    return (isPureX(eq.left) && isConstantSide(eq.right)) || (isPureX(eq.right) && isConstantSide(eq.left));
+  }
+
+  // La constante de l'autre côté d'une équation `isSolved` (ex. "x=-3" ou "-3=x" -> -3) —
+  // utilisé pour la combinaison "Df=..." d'une colonne "Condition d'existence" (voir
+  // renderDomainSplit dans render.js, App.Equation restant lui-même opérateur-agnostique).
+  // null si `eq` n'est pas (encore) sous cette forme.
+  function solvedValue(eq) {
+    if (isPureX(eq.left) && isConstantSide(eq.right)) return Expr.roundClean(eq.right[0].coeff);
+    if (isPureX(eq.right) && isConstantSide(eq.left)) return Expr.roundClean(eq.left[0].coeff);
+    return null;
   }
 
   App.Equation = {
@@ -137,6 +147,7 @@
     applyExpand: applyExpand,
     applyExpandProduct: applyExpandProduct,
     applyExpandProductFactorSubset: applyExpandProductFactorSubset,
-    isSolved: isSolved
+    isSolved: isSolved,
+    solvedValue: solvedValue
   };
 })(window.App = window.App || {});
