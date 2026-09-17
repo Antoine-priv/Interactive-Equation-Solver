@@ -1,5 +1,4 @@
 const { chromium } = require('playwright');
-const SCRATCH = __dirname + '/screenshots';
 const FILE = 'file:///home/antoine/Developpement/Equations/index.html';
 
 function ok(label, cond) {
@@ -7,12 +6,13 @@ function ok(label, cond) {
   if (!cond) process.exitCode = 1;
 }
 
-// "Étude de signe" (Phase 3 du plan "Condition d'existence") : une fois un radicand
-// degré 2 ramené par "Factoriser" à "(x-3)(x+3)≥0" (voir generateVariableRadicandQuadraticEquation
-// dans generator.js), l'élève doit d'abord donner le signe du coefficient dominant du
-// produit, PUIS choisir le bon ensemble solution parmi 2 intervalles — voir
-// detectSignStudyProduct/chooseSignStudySign/chooseSignStudyInterval dans history.js et
-// App.Ineq.signStudyChoice/intervalLatex dans inequality.js.
+// "Étude de signe" (l'ancienne Phase 3 du plan "Condition d'existence") a été retirée :
+// un radicand degré 2 (ex. "√(x²-9)") n'a désormais plus AUCUN chemin pour résoudre sa
+// condition de domaine ("x²-9≥0" factorisée n'admettrait plus de conclusion) — donc
+// "Condition d'existence" ne doit plus jamais s'y proposer, contrairement au cas linéaire
+// (toujours pris en charge normalement, voir isLinearRadicand dans history.js). Cette
+// équation reste par ailleurs parfaitement résolvable comme équation NORMALE, en élevant
+// les deux membres au carré (touche "(‥)²" du pavé "Opération").
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1300, height: 900 } });
@@ -34,85 +34,67 @@ function ok(label, cond) {
     window.App.History.toggleTermSelection('left', 0);
   });
   await page.waitForTimeout(80);
-  let pending = await page.evaluate(() => window.App.History.getPending());
+  const pending = await page.evaluate(() => window.App.History.getPending());
   ok('drilled into the degree-2 radicand', pending.drilled && pending.drilled.part === 'sqrt');
 
-  await page.click('button[data-op="existence"]');
-  await page.waitForTimeout(120);
-  const conditionsCount = await page.evaluate(() => window.App.History.getDomainConditions().length);
-  const firstStepLeft = await page.evaluate(() => window.App.History.getDomainConditions()[0].engine.getSteps()[0].equation.left);
-  ok('domain column spawned on "x²-9 \\geq 0"', conditionsCount === 1 &&
-    JSON.stringify(firstStepLeft) === JSON.stringify([{ coeff: 1, pow: 2 }, { coeff: -9, pow: 0 }]));
+  ok('"Condition d\'existence" stays DISABLED for a degree-2 radicand (no signstudy left to solve it)',
+    !(await page.evaluate(() => window.App.Toolbar.computeSelectionInfo().canExistenceCondition)));
 
-  // Focus the column, then factor "x²-9" via the standard identity-3 flow (a=x, b=3 —
-  // same order as tests/identity_order.js's regression case, giving a clean sign=+1).
-  await page.evaluate(() => {
-    window.App.History.setFocusedDomain(0);
-    var H = window.App.History;
-    H.toggleTermSelection('left', 0);
-    H.toggleTermSelection('left', 1);
-    H.enterFactorWithSelection();
-    H.chooseFactorMode(3);
-    H.setIdentityFieldLatex('x');
-    H.setIdentityFocus('b');
-    H.setIdentityFieldLatex('3');
-    H.confirm();
-  });
-  await page.waitForTimeout(120);
-  const factoredEq = await page.evaluate(() => window.App.History.getDomainConditions()[0].engine.lastEquation());
-  console.log('factored:', JSON.stringify(factoredEq));
-  ok('column reached "(x-3)(x+3) \\geq 0"', JSON.stringify(factoredEq.left[0]) === JSON.stringify({
-    sign: 1,
-    factors: [{ terms: [{ coeff: 1, pow: 1 }, { coeff: -3, pow: 0 }], exponent: 1 }, { terms: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], exponent: 1 }]
+  const existenceRow = await page.evaluate(() => document.querySelector('button[data-op="existence"]').closest('.op-row'));
+  ok('the "Condition d\'existence" row itself is still present in the DOM (not the whole button removed)',
+    existenceRow !== null);
+
+  // Clicking it anyway (e.g. a stale/forced click) must be a strict no-op: no column
+  // spawned, nothing thrown.
+  await page.evaluate(() => window.App.History.existenceConditionAction());
+  await page.waitForTimeout(80);
+  const conditions = await page.evaluate(() => window.App.History.getDomainConditions());
+  ok('existenceConditionAction() is a no-op for a degree-2 radicand (no column spawned)', conditions === null);
+
+  // The old "signstudy" op/UI no longer exists at all.
+  const signstudyBtn = await page.$('button[data-op="signstudy"]');
+  ok('the "Étude de signe" button no longer exists in the DOM', signstudyBtn === null);
+  const apiGone = await page.evaluate(() => ({
+    canSignStudy: typeof window.App.History.canSignStudy,
+    chooseSignStudySign: typeof window.App.History.chooseSignStudySign,
+    chooseSignStudyInterval: typeof window.App.History.chooseSignStudyInterval,
+    getSignStudyResult: typeof window.App.History.getSignStudyResult,
+    ineqSignStudyChoice: typeof window.App.Ineq.signStudyChoice,
+    ineqIntervalLatex: typeof window.App.Ineq.intervalLatex
   }));
+  console.log('removed API surface (all should be "undefined"):', JSON.stringify(apiGone));
+  ok('the whole signstudy API surface is gone', Object.keys(apiGone).every((k) => apiGone[k] === 'undefined'));
 
-  ok('"Étude de signe" is now enabled', await page.evaluate(() => window.App.Toolbar.computeSelectionInfo().canSignStudy));
-  const info = await page.evaluate(() => window.App.History.signStudyInfo());
-  console.log('signStudyInfo:', JSON.stringify(info));
-  ok('roots/leading sign correctly detected (-3, 3, "+")',
-    info.root1 === -3 && info.root2 === 3 && info.leadingSign === '+');
-
-  // Engage the mode through the real button, then answer via the API (same convention
-  // as other tests here) — wrong sign first (must NOT advance), then the right one.
-  await page.click('button[data-op="signstudy"]');
-  await page.waitForTimeout(100);
-  ok('"signstudy" mode is engaged', (await page.evaluate(() => window.App.History.getPending().opType)) === 'signstudy');
-
-  await page.evaluate(() => window.App.History.chooseSignStudySign('-'));
-  await page.waitForTimeout(60);
-  pending = await page.evaluate(() => window.App.History.getPending());
-  ok('a wrong sign choice sets an error and does NOT advance', !!pending.error && pending.signStudySignConfirmed === false);
-
-  await page.evaluate(() => window.App.History.chooseSignStudySign('+'));
-  await page.waitForTimeout(60);
-  pending = await page.evaluate(() => window.App.History.getPending());
-  ok('the correct sign choice advances to the interval step', pending.signStudySignConfirmed === true && pending.error === null);
-
-  // Wrong interval choice first ("between" — the correct one for "\geq" + opens-up is
-  // "outside") must NOT resolve anything.
-  await page.evaluate(() => window.App.History.chooseSignStudyInterval('between'));
-  await page.waitForTimeout(60);
-  pending = await page.evaluate(() => window.App.History.getPending());
-  const resultAfterWrong = await page.evaluate(() => window.App.History.getDomainConditions()[0].engine.getSignStudyResult());
-  ok('a wrong interval choice sets an error and resolves nothing', !!pending.error && resultAfterWrong === null);
-
-  await page.evaluate(() => window.App.History.chooseSignStudyInterval('outside'));
-  await page.waitForTimeout(120);
-  pending = await page.evaluate(() => window.App.History.getPending());
-  ok('the correct interval choice exits the mode (opType back to null)', pending.opType === null);
-
-  const finalResult = await page.evaluate(() => window.App.History.getDomainConditions()[0].engine.getSignStudyResult());
-  console.log('signStudyResult:', finalResult);
-  ok('the stored result is "]-\\infty;-3]\\cup[3;+\\infty[" (outside, inclusive brackets)',
-    finalResult === '\\left]-\\infty;-3\\right]\\cup\\left[3;+\\infty\\right[');
-
-  await page.waitForTimeout(150);
-  const resultElHtml = await page.evaluate(() => {
-    var el = document.querySelector('.domain-branch[data-domain-index="0"] .domain-signstudy-result');
-    return el ? el.innerHTML : null;
+  // Regression: a LINEAR radicand must still work exactly as before (only degree >= 2 is
+  // excluded).
+  await page.evaluate(() => {
+    window.App.History.startNewEquation({
+      left: [{ sign: 1, radicand: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }] }],
+      right: [{ coeff: 3, pow: 0 }]
+    });
+    window.App.History.toggleTermSelection('left', 0);
+    window.App.History.toggleTermSelection('left', 0);
   });
-  ok('the interval result is actually rendered in the domain column', !!resultElHtml);
-  await page.screenshot({ path: `${SCRATCH}/existence_condition_degree2_signstudy.png` });
+  await page.waitForTimeout(80);
+  ok('regression: "Condition d\'existence" is still available for a LINEAR radicand',
+    await page.evaluate(() => window.App.Toolbar.computeSelectionInfo().canExistenceCondition));
+
+  // Regression: the degree-2 equation is still solvable directly by squaring both sides.
+  await page.evaluate(() => {
+    window.App.History.startNewEquation({
+      left: [{ sign: 1, radicand: [{ coeff: 1, pow: 2 }, { coeff: -9, pow: 0 }] }],
+      right: [{ coeff: 3, pow: 0 }]
+    });
+  });
+  await page.click('button[data-op="expr"]');
+  await page.waitForTimeout(100);
+  await page.click('[data-key="square"]');
+  await page.click('[data-key="enter"]');
+  await page.waitForTimeout(150);
+  const squared = await page.evaluate(() => window.App.History.lastEquation());
+  console.log('degree-2 sqrt equation squared directly:', JSON.stringify(squared));
+  ok('regression: "√(x²-9)=3" still solves normally via "(‥)²" (x²-9=9)',
+    JSON.stringify(squared) === JSON.stringify({ left: [{ coeff: 1, pow: 2 }, { coeff: -9, pow: 0 }], right: [{ coeff: 9, pow: 0 }] }));
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');

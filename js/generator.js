@@ -298,10 +298,14 @@
   }
 
   // "√(x²-a²) = k" : même principe que generateVariableRadicandEquation, mais un
-  // radicand DEGRÉ 2 volontairement construit comme une DIFFÉRENCE DE CARRÉS pure
-  // (jamais un trinôme quelconque) — ainsi "Factoriser" (identité 3, a²-b²) s'y applique
-  // toujours directement en une étape, condition d'entrée de "Étude de signe" (voir
-  // detectSignStudyProduct/canSignStudy dans history.js, Phase 3 du plan).
+  // radicand DEGRÉ 2 — se résout en élevant les deux membres au carré (touche "(‥)²" du
+  // pavé "Opération", voir Expr.wrapSideInSquare/confirmSquareBothSides dans history.js),
+  // qui annule le √ directement (radicand≥0 garanti par construction ici) et redonne une
+  // équation quadratique normale ("x²-a²=k²") à résoudre via les outils habituels
+  // (Factoriser identité 3, Produit nul). Volontairement EXCLU de "Condition d'existence"
+  // (voir isLinearRadicand dans history.js) : un radicand degré 2 n'est plus résolvable
+  // comme colonne de domaine depuis le retrait d'"Étude de signe" — seulement praticable
+  // en équation "normale" à résoudre au carré.
   function generateVariableRadicandQuadraticEquation() {
     var a = nonZeroInt(2, 9);
     var radicand = [{ coeff: 1, pow: 2 }, { coeff: -(a * a), pow: 0 }];

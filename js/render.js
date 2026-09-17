@@ -1878,16 +1878,14 @@
 
     // Ensemble-solution en notation LaTeX d'UNE colonne "Condition d'existence" déjà
     // résolue (voir conditionDfLatex ci-dessous pour son usage dans la combinaison finale
-    // "Df=..."), ou null tant qu'elle ne l'est pas encore : "Étude de signe" menée jusqu'au
-    // bout (getSignStudyResult, Phase 3) donne directement l'intervalle ; sinon
-    // App.Equation.isSolved/solvedValue (opérateur-agnostique, voir equation.js) — un
-    // dénominateur (kind==='den', jamais d'opérateur/currentOperator) donne "x=r" à LIRE
-    // "x≠r" (voir CLAUDE.md/le plan), soit R\{r} ; un radicand linéaire (kind==='sqrt',
-    // toujours un `step.operator`, voir history.js) donne directement "x<op>r", une
-    // demi-droite (voir App.Ineq.halfLineLatex).
+    // "Df=..."), ou null tant qu'elle ne l'est pas encore : App.Equation.isSolved/
+    // solvedValue (opérateur-agnostique, voir equation.js) — un dénominateur
+    // (kind==='den', jamais d'opérateur/currentOperator) donne "x=r" à LIRE "x≠r" (voir
+    // CLAUDE.md), soit R\{r} ; un radicand (kind==='sqrt', toujours un `step.operator`,
+    // toujours linéaire — voir isLinearRadicand dans history.js, seule forme offerte à
+    // "Condition d'existence") donne directement "x<op>r", une demi-droite (voir
+    // App.Ineq.halfLineLatex).
     function conditionSetLatex(cond) {
-      var signStudyResult = cond.engine.getSignStudyResult();
-      if (signStudyResult) return signStudyResult;
       var eq = cond.engine.lastEquation();
       if (!App.Equation.isSolved(eq)) return null;
       var r = App.Equation.solvedValue(eq);
@@ -1974,20 +1972,6 @@
             var leafSteps = leafEng.getSteps();
             lastCenteredStepByEngine.set(leafEng, leafSteps[leafSteps.length - 1]);
           });
-        }
-
-        // "Étude de signe" menée jusqu'au bout (voir chooseSignStudyInterval/
-        // getSignStudyResult dans history.js, Phase 3 du plan) : l'équation elle-même
-        // reste affichée sous forme de produit ((x-a)(x+a)≥0, jamais réduite à "x=..."),
-        // donc PAS "solved" au sens habituel (Equation.isSolved) — l'ensemble solution
-        // final s'affiche ICI, comme un résumé supplémentaire sous la colonne, même
-        // habillage visuel que le résumé "S={...}" de Produit nul (.solution-set).
-        var signStudyResult = cond.engine.getSignStudyResult();
-        if (signStudyResult) {
-          var resultEl = document.createElement('div');
-          resultEl.className = 'solution-set domain-signstudy-result';
-          window.katex.render('x\\in' + signStudyResult, resultEl, { throwOnError: false });
-          col.appendChild(resultEl);
         }
       });
 
