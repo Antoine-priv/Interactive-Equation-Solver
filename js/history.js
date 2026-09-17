@@ -1860,7 +1860,10 @@
         // Aperçu tolérant : garde le plus long préfixe d'entrées déjà valides dans la
         // chaîne en cours de frappe (voir parseExprChain), ignore silencieusement le reste
         // encore incomplet — le <math-field> lui-même affiche déjà tout ce qui est tapé,
-        // pas besoin d'un repli "texte brut" séparé comme avant (rawText).
+        // pas besoin d'un repli "texte brut" séparé comme avant (rawText). ("√"/"(‥)²"
+        // ARMÉES, voir pending.sqrtArmed/squareArmed, n'atteignent jamais ce chemin : leur
+        // propre aperçu dédié, voir previewSquareRoot/previewSquareBothSides plus bas et
+        // shouldShowLivePreview dans render.js, remplace celui-ci pendant qu'elles le sont.)
         var chainPreview = parseExprChain(p.exprLatex, true);
         if (chainPreview.ops.length === 0) {
           return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
@@ -2689,6 +2692,17 @@
       return true;
     }
 
+    // Aperçu en lecture seule pour "(‥)²" pendant qu'elle est armée (voir previewSquareRoot
+    // ci-dessus pour le même principe côté "√" — appelé depuis renderAll dans render.js,
+    // voir Hist.getPending().squareArmed) : TOUJOURS un seul résultat (jamais de fourche,
+    // contrairement à previewSquareRoot — voir confirmSquareBothSides plus bas), donc pas
+    // besoin de gérer plusieurs équations ici.
+    function previewSquareBothSides() {
+      if (activeChild()) return activeChild().previewSquareBothSides();
+      var eq = leaf.lastEquation();
+      return [{ left: Expr.wrapSideInSquare(eq.left), right: Expr.wrapSideInSquare(eq.right) }];
+    }
+
     // Touche "carré" du pavé "Opération" (armée puis validée, voir confirmExprOrSquare
     // dans toolbar.js) : élève l'INTÉGRALITÉ des deux membres au carré EN UNE SEULE étape
     // — contrairement à "Racine carrée" (2 étapes : envelopper, PUIS simplifier), pas
@@ -2767,6 +2781,7 @@
       previewSquareRoot: previewSquareRoot,
       confirmSquareRoot: confirmSquareRoot,
       canSquareBothSides: canSquareBothSides,
+      previewSquareBothSides: previewSquareBothSides,
       confirmSquareBothSides: confirmSquareBothSides
     };
     DELEGATED_METHODS.forEach(function (name) {

@@ -1304,11 +1304,11 @@
 
   function shouldShowLivePreview(pending, opts) {
     if (opts.focused === false) return false;
-    // "√" armée (voir pending.sqrtArmed dans history.js) : la ligne "pending" générique
-    // n'aurait de toute façon rien à montrer (chaîne vide, équation inchangée, voir
-    // computePreview) — l'aperçu dédié (colonnes scindées, voir previewSquareRoot et
-    // renderAll) la remplace déjà, pas besoin des deux à la fois.
-    if (pending.opType === 'expr' && pending.sqrtArmed) return false;
+    // "√"/"(‥)²" armées (voir pending.sqrtArmed/squareArmed dans history.js) : la ligne
+    // "pending" générique n'aurait de toute façon rien à montrer (chaîne vide, équation
+    // inchangée, voir computePreview) — l'aperçu dédié (voir previewSquareRoot/
+    // previewSquareBothSides et renderAll) la remplace déjà, pas besoin des deux à la fois.
+    if (pending.opType === 'expr' && (pending.sqrtArmed || pending.squareArmed)) return false;
     if (pending.opType === 'expr' || pending.opType === 'factor') return true;
     if (pending.opType !== null) return false;
     var hovered = App.Toolbar.getHoveredOp();
@@ -2163,6 +2163,12 @@
         } else if (Hist.getPending().opType === 'expr' && Hist.getPending().sqrtArmed) {
           previewEquations = Hist.previewSquareRoot();
           previewLabel = '\\sqrt{\\phantom{x}}';
+          previewCollapsible = true;
+        } else if (Hist.getPending().opType === 'expr' && Hist.getPending().squareArmed) {
+          // "(‥)²" armée : même principe que "√" juste au-dessus — TOUJOURS collapsible
+          // (previewSquareBothSides ne scinde jamais, contrairement à previewSquareRoot).
+          previewEquations = Hist.previewSquareBothSides();
+          previewLabel = '\\left(\\phantom{x}\\right)^2';
           previewCollapsible = true;
         } else {
           var sqrtAction = App.Toolbar.getHoveredOp() === 'simplify' ? Hist.squareRootAction() : null;
