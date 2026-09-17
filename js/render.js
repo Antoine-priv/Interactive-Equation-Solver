@@ -2216,14 +2216,20 @@
 
       // "Condition d'existence" (voir plus haut pour son rendu, déjà fait à ce stade) :
       // ne reste qu'à la positionner À CÔTÉ de la chaîne principale une fois la mise en
-      // page connue (comme drawAll ci-dessus) — alignée sur mainHeaderEl, jamais sur la
-      // ligne "current" (voir positionDomainGroup).
+      // page connue — alignée sur mainHeaderEl, jamais sur la ligne "current" (voir
+      // positionDomainGroup). SYNCHRONE (jamais un rAF à elle, contrairement à drawAll) :
+      // toute la mise en page dont elle dépend (autoFitRowFont, katex.render, insertion
+      // DOM) est déjà, elle aussi, synchrone à ce stade — getBoundingClientRect force de
+      // toute façon un reflow immédiat, rAF ou pas. Un rAF ici arrivait APRÈS celui,
+      // déjà programmé plus haut (dans renderDomainSplit -> renderBranchNode), qui
+      // positionne le pavé "live" d'une colonne focalisée : ce pavé (un singleton
+      // absolu, enfant de #canvasLayer, PAS de la colonne — voir positionLiveField dans
+      // arrows.js) se figeait alors à la position "naturelle" (pas encore déplacée) de la
+      // colonne, contrairement à sa flèche (un enfant SVG de la colonne, qui suit
+      // automatiquement son parent une fois déplacé) — bug rapporté : le champ de saisie
+      // apparaissait près de la chaîne principale plutôt qu'à côté de sa propre flèche.
       if (domainSplitResult) {
-        var domainGroupEl = domainSplitResult.group;
-        requestAnimationFrame(function () {
-          if (isStaleRender()) return;
-          positionDomainGroup(domainGroupEl, history, res.rowsData, domainConditionsArr);
-        });
+        positionDomainGroup(domainSplitResult.group, history, res.rowsData, domainConditionsArr);
       }
     } else {
       // Scission en cours ("Produit nul" ou "Racine carrée") : la chaîne principale
