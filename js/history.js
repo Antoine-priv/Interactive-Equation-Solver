@@ -2396,9 +2396,15 @@
     // que si les DEUX membres sont prouvablement non négatifs À CE STADE — voir
     // Expr.sideIsNonNegative (expression.js). Sans cette condition, "x=-3" élevé au carré
     // donnerait "x²=9", qui admet aussi x=3, jamais solution de l'équation de départ.
+    // PAS de garde `domainConditions` ici (contrairement à canProduitNul/canSquareRoot,
+    // voir la restriction v1 au sommet de createBranchable) : confirmSquareBothSides ne
+    // scinde JAMAIS `leaf` en `branches` (toujours un pushStep normal, un seul résultat,
+    // voir plus bas) — aucun conflit structurel avec `domainConditions`, qui COEXISTE
+    // avec `leaf`. Sans cette exception, établir le domaine d'une équation comme
+    // "√(x-3)=3" AVANT de l'élever au carré (l'enchaînement pédagogique normal : domaine
+    // d'abord, résolution ensuite) bloquait définitivement toute suite (bug rapporté).
     function canSquareBothSides() {
       if (activeChild()) return activeChild().canSquareBothSides();
-      if (domainConditions) return false;
       var eq = leaf.lastEquation();
       return Expr.sideIsNonNegative(eq.left) && Expr.sideIsNonNegative(eq.right);
     }
@@ -2600,7 +2606,6 @@
     // annule directement racine+carré quand un membre est déjà un SqrtGroup nu).
     function confirmSquareBothSides() {
       if (activeChild()) return activeChild().confirmSquareBothSides();
-      if (domainConditions) return false;
       var eq = leaf.lastEquation();
       var squared = { left: Expr.wrapSideInSquare(eq.left), right: Expr.wrapSideInSquare(eq.right) };
       leaf.pushStep(squared, { type: 'square' });
