@@ -1362,6 +1362,26 @@
     return [{ sign: 1, radicand: cloneSide(side) }];
   }
 
+  // Un membre est-il PROUVABLEMENT non négatif, sans connaître x ? Utilisé par
+  // canSquareBothSides (history.js) pour n'autoriser "élever les deux membres au carré"
+  // que quand ce reste une équivalence (⟺), jamais seulement une implication (⟹) : élever
+  // au carré une égalité dont un membre pourrait être négatif peut introduire une solution
+  // parasite (ex. "x=-3" élevé au carré donne "x²=9", qui admet aussi x=3, invalide pour
+  // l'équation de départ) — seuls deux cas sont ici prouvables SANS student input
+  // supplémentaire (une étude de signe complète sortirait du cadre de ce bouton) :
+  // 1) une racine carrée nue non niée (SqrtGroup, sign===1 — "-√(...)" est, lui, ≤0, pas
+  //    prouvé ≥0) : toujours ≥0 par construction, quel que soit son radicand ;
+  // 2) une simple constante numérique ≥0 (Term, pow===0). Tout le reste (une expression en
+  // x, y compris un monôme comme "3x", ou une constante négative) reste de signe INCONNU ou
+  // avéré négatif à ce stade — pas prouvable ici, donc refusé.
+  function sideIsNonNegative(side) {
+    if (side.length !== 1) return false;
+    var node = side[0];
+    if (isSqrtGroup(node)) return node.sign === 1;
+    if (!isGroup(node)) return node.pow === 0 && roundClean(node.coeff) >= 0;
+    return false;
+  }
+
   // Enveloppe un membre ENTIER au carré (ex. "x+5" -> "(x+5)²") — voir
   // confirmSquareBothSides dans history.js, qui l'applique aux DEUX membres à la fois
   // (inverse de wrapSideInSqrt ci-dessus, pour résoudre une équation qui contient déjà une
@@ -1475,6 +1495,7 @@
     wrapSideInQuotient: wrapSideInQuotient,
     withSqrtRadicandAtPath: withSqrtRadicandAtPath,
     wrapSideInSqrt: wrapSideInSqrt,
+    sideIsNonNegative: sideIsNonNegative,
     wrapSideInSquare: wrapSideInSquare,
     drilledWorkingArray: drilledWorkingArray,
     withDrilledArrayAtPath: withDrilledArrayAtPath

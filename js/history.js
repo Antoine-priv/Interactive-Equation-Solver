@@ -2499,12 +2499,16 @@
     // carré en une seule étape, voir confirmSquareBothSides plus bas — l'inverse de "√"
     // ci-dessus. Contrairement à "√" (qui n'a de sens QUE sur une forme "(expr)²=c" déjà
     // reconnue, voir detectSquareRootUnwrapped), élever au carré reste toujours
-    // mathématiquement défini quelle que soit l'équation — pas de condition de forme ici,
-    // seulement "pas dans une colonne de domaine" (même restriction que canSquareRoot).
+    // mathématiquement DÉFINI quelle que soit l'équation, mais n'en reste une ÉQUIVALENCE
+    // (⟺, jamais seulement une implication ⟹ qui pourrait introduire une solution parasite)
+    // que si les DEUX membres sont prouvablement non négatifs À CE STADE — voir
+    // Expr.sideIsNonNegative (expression.js). Sans cette condition, "x=-3" élevé au carré
+    // donnerait "x²=9", qui admet aussi x=3, jamais solution de l'équation de départ.
     function canSquareBothSides() {
       if (activeChild()) return activeChild().canSquareBothSides();
       if (domainConditions) return false;
-      return true;
+      var eq = leaf.lastEquation();
+      return Expr.sideIsNonNegative(eq.left) && Expr.sideIsNonNegative(eq.right);
     }
 
     // Étape 2 ("Simplifier") : que ferait un clic MAINTENANT, d'après la sélection libre en

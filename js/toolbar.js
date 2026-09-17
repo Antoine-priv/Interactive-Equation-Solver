@@ -550,16 +550,20 @@
         sqrtDisabled = pending.squareArmed || stage !== 'wrap' || pending.exprLatex !== '';
       }
 
-      // Touche "(⋯)²" (voir opts.onSquare ci-dessus) : élève les deux membres au carré en
+      // Touche "(‥)²" (voir opts.onSquare ci-dessus) : élève les deux membres au carré en
       // une seule étape (voir canSquareBothSides/confirmSquareBothSides dans history.js) —
-      // toujours disponible (pas de forme particulière requise, contrairement à "√" — voir
-      // le commentaire de canSquareBothSides), sauf pendant la composition d'une autre
-      // chaîne ou tant que "√" est elle-même armée.
+      // disponible dès que les DEUX membres sont prouvablement non négatifs (sinon élever
+      // au carré ne serait qu'une implication, pas une équivalence — voir le commentaire de
+      // canSquareBothSides), sauf pendant la composition d'une autre chaîne ou tant que "√"
+      // est elle-même armée.
       var squareTitle, squareDisabled, squarePressed = false;
       if (pending.squareArmed) {
         squareTitle = 'Carré armé : cliquez "↵" pour appliquer, ou re-cliquez ici pour annuler.';
         squareDisabled = false;
         squarePressed = true;
+      } else if (!pending.sqrtArmed && pending.exprLatex === '' && !App.History.canSquareBothSides()) {
+        squareTitle = 'Élever au carré ne préserverait pas l\'équivalence : les deux membres doivent être positifs (ou nuls).';
+        squareDisabled = true;
       } else {
         squareTitle = 'Élever les deux membres au carré';
         squareDisabled = pending.sqrtArmed || !App.History.canSquareBothSides() || pending.exprLatex !== '';
