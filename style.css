@@ -1770,20 +1770,15 @@ button {
 /* ---- Clavier mathématique unifié (js/mathKeypad.js) ---- */
 .math-keypad-panel {
   position: fixed;
-  /* Collé au bord droit de la fenêtre (ni marge extérieure, ni padding interne de ce
-     côté-là — voir aussi le padding ci-dessous) : plus d'espace mort entre les touches
-     (ex. "÷"/"−"/"="/"↵", sa colonne la plus à droite) et le bord de la fenêtre. Les
-     coins droits perdent leur arrondi en conséquence (voir border-radius plus bas) —
-     sinon la courbe laisserait un petit triangle de fond visible pile contre ce bord. */
-  right: 0;
+  right: 22px;
   bottom: 22px;
   width: 360px;
   max-height: calc(100vh - 60px);
   overflow-y: auto;
   background: var(--surface);
-  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  padding: 16px 0 20px 20px;
+  padding: 16px 20px 20px;
   z-index: 60; /* au-dessus de .modal-overlay (50) : le clavier reste ancré à l'écran,
                   pas dans la boîte de la modale, même quand une modale est ouverte */
   display: flex;
@@ -1820,6 +1815,13 @@ button {
 .math-keypad-header {
   display: flex;
   justify-content: flex-end;
+  /* Cette rangée ne porte jamais que la petite icône "Réduire le clavier" (30px, collée
+     à droite) — le `gap:10px` du panneau (voir .math-keypad-panel) laissait un vide sous
+     elle avant le pavé de touches, disproportionné pour une rangée aussi peu remplie.
+     Marge négative : annule quasiment ce gap SEULEMENT ici (field/error/clavier gardent
+     le leur, utile quand le champ ou une erreur redevient visible) plutôt que de réduire
+     le `gap` du panneau entier. */
+  margin-bottom: -8px;
 }
 .math-keypad-collapse {
   display: flex;
