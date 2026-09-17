@@ -1880,20 +1880,17 @@ button {
 }
 .math-keypad-error[hidden] { display: none; }
 
-/* 8 colonnes (7 auparavant, voir KEY_ROWS/buildKeys dans mathKeypad.js) : la touche
-   "(⋯)²" ajoutée à droite de "√" porte la dernière rangée à 8 cellules ; les 3 autres
-   gardent leurs 7 touches d'origine plus une ".key-filler" invisible en 8e colonne. */
+/* 7 colonnes (voir KEY_ROWS dans mathKeypad.js) : les 4 rangées ont toutes exactement 7
+   touches réelles, donc pas de 8e colonne fantôme à remplir — sinon ce vide se voit
+   directement entre les touches et le bord droit du pavé, ancré au bord de la fenêtre
+   (voir .math-keypad-panel). */
 .math-keypad-keys {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 6px;
   width: 100%;
 }
 .math-keypad-keys .key-btn { font-size: 1rem; padding: 11px 0; }
-/* Cellule de remplissage (voir key.filler dans mathKeypad.js) : occupe juste sa place
-   dans la grille, sans aucun rendu ni interaction — garde les rangées à 7 vraies touches
-   alignées sur la grille à 8 colonnes sans leur inventer une 8e touche réelle. */
-.key-filler { visibility: hidden; }
 
 .math-keypad-peek {
   position: fixed;

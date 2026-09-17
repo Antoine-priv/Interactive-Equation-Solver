@@ -65,12 +65,12 @@
   // `key` : identifiant stable posé en attribut `data-key` sur le bouton (voir buildKeys) —
   // pour cibler une touche depuis les tests, comme le veut la convention du projet
   // (tests/README.md : `data-*`/état `App.*`, jamais le texte affiché ou une classe CSS).
-  // Grille à 8 colonnes (7 auparavant) : la touche "carré" ci-dessous, ajoutée À DROITE de
-  // "√" (dernière rangée), porte cette rangée à 7 touches réelles + 1 "filler" (comme les 3
-  // AUTRES rangées, qui gardent leurs 7 touches d'origine + 1 "filler" chacune, voir
-  // buildKeys) — "enter" n'occupe plus 2 colonnes (voir son propre commentaire plus bas) :
-  // les 4 rangées ont donc désormais TOUTES la même forme (7 touches réelles, 1 filler en
-  // bout de rangée), jamais de touche `filler` inventée qui n'aurait pas été demandée.
+  // Grille à 7 colonnes : les 4 rangées ont TOUTES 7 touches réelles, aucune n'a besoin
+  // d'un remplissage invisible (voir l'ancien "key-filler", retiré — il ne servait plus
+  // qu'à occuper une 8e colonne fantôme, laissant un vide entre les touches et le bord
+  // droit du pavé maintenant que celui-ci est ancré au bord de la fenêtre, voir
+  // .math-keypad-panel dans style.css) — "enter" n'occupe jamais 2 colonnes (voir son
+  // propre commentaire plus bas).
   var KEY_ROWS = [
     [
       { key: 'x', label: 'x', insert: 'x' },
@@ -79,8 +79,7 @@
       { key: '8', label: '8', insert: '8' },
       { key: '9', label: '9', insert: '9' },
       { key: 'times', label: '×', insert: '\\times ' },
-      { key: 'div', label: '÷', insert: '\\div ' },
-      { key: 'filler1', filler: true }
+      { key: 'div', label: '÷', insert: '\\div ' }
     ],
     [
       { key: 'sq', label: 'x²', insert: '^2' },
@@ -89,8 +88,7 @@
       { key: '5', label: '5', insert: '5' },
       { key: '6', label: '6', insert: '6' },
       { key: 'plus', label: '+', insert: '+' },
-      { key: 'minus', label: '−', insert: '-' },
-      { key: 'filler2', filler: true }
+      { key: 'minus', label: '−', insert: '-' }
     ],
     [
       { key: 'pow', label: 'xⁿ', insert: '^{#?}' },
@@ -99,8 +97,7 @@
       { key: '2', label: '2', insert: '2' },
       { key: '3', label: '3', insert: '3' },
       { key: 'eq', label: '=', insert: '=' },
-      { key: 'backspace', html: BACKSPACE_SVG, action: 'backspace' },
-      { key: 'filler3', filler: true }
+      { key: 'backspace', html: BACKSPACE_SVG, action: 'backspace' }
     ],
     [
       // sqrtKey : quand le champ actif fournit `opts.onSqrt` (voir setActiveField), cette
@@ -122,13 +119,9 @@
       { key: 'left', html: ARROW_LEFT_SVG, action: 'left' },
       { key: 'right', html: ARROW_RIGHT_SVG, action: 'right' },
       // Seule action de validation du pavé (l'ancien bouton "Valider" séparé a été retiré) :
-      // une seule cellule comme toute autre touche (jamais `span:2`) — sur 2 colonnes, elle
-      // débordait seule au-delà du bord droit "visuel" du pavé (les 3 autres rangées
-      // s'arrêtent, elles, à la 7e colonne réelle — la 8e n'est qu'un filler invisible, voir
-      // plus haut), donnant l'impression qu'elle "collait" toute seule à droite plutôt que
-      // de faire partie de la même grille que le reste des touches.
-      { key: 'enter', html: ENTER_SVG, action: 'enter', primary: true },
-      { key: 'filler4', filler: true }
+      // une seule cellule comme toute autre touche (jamais `span:2`), pour rester alignée
+      // avec la 7e colonne réelle des 3 autres rangées.
+      { key: 'enter', html: ENTER_SVG, action: 'enter', primary: true }
     ]
   ];
 
@@ -258,16 +251,6 @@
     keysGrid.innerHTML = '';
     KEY_ROWS.forEach(function (row) {
       row.forEach(function (key) {
-        // Touche `filler` (voir KEY_ROWS) : occupe juste sa cellule de grille, invisible et
-        // non interactive — garde les 4 rangées alignées sur 8 colonnes sans inventer de
-        // touche réelle non demandée.
-        if (key.filler) {
-          var fillerEl = document.createElement('div');
-          fillerEl.className = 'key-filler';
-          fillerEl.setAttribute('aria-hidden', 'true');
-          keysGrid.appendChild(fillerEl);
-          return;
-        }
         var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = key.primary ? 'key-btn panel-confirm-cell' : 'key-btn';

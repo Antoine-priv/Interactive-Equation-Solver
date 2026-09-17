@@ -128,11 +128,11 @@ function ok(label, cond) {
     latexAfterPow.indexOf('^{') !== -1);
 
   // --- 4) Layout: "↵" occupies a SINGLE grid cell (never span:2) so it doesn't stick out
-  // past the other 3 rows' real content (each 7 real keys + 1 invisible filler). ---
+  // past the other 3 rows' real content (each row has exactly 7 real keys, no filler). ---
   const enterSpan = await page.evaluate(() => document.querySelector('[data-key="enter"]').style.gridColumn);
   ok('"↵" no longer spans 2 columns', enterSpan === '');
-  const fillerCount = await page.evaluate(() => document.querySelectorAll('.key-filler').length);
-  ok('exactly 4 filler cells (one per row, all 4 rows now the same 7+1 shape)', fillerCount === 4);
+  const totalKeyCount = await page.evaluate(() => document.querySelector('.math-keypad-keys').children.length);
+  ok('4 rows of exactly 7 real keys each, no filler cells', totalKeyCount === 28);
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
