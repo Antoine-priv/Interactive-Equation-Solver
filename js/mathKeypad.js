@@ -66,11 +66,11 @@
   // pour cibler une touche depuis les tests, comme le veut la convention du projet
   // (tests/README.md : `data-*`/état `App.*`, jamais le texte affiché ou une classe CSS).
   // Grille à 8 colonnes (7 auparavant) : la touche "carré" ci-dessous, ajoutée À DROITE de
-  // "√" (dernière rangée), porte le total de cette rangée à 8 cellules (6 touches simples +
-  // "enter" sur 2). Les 3 AUTRES rangées, elles, gardent leurs 7 touches d'origine — chacune
-  // reçoit donc une touche `filler` invisible en bout de rangée (voir buildKeys) pour
-  // occuper la 8e colonne et garder les 4 rangées alignées, plutôt que de leur inventer une
-  // 8e touche réelle qui n'a pas été demandée.
+  // "√" (dernière rangée), porte cette rangée à 7 touches réelles + 1 "filler" (comme les 3
+  // AUTRES rangées, qui gardent leurs 7 touches d'origine + 1 "filler" chacune, voir
+  // buildKeys) — "enter" n'occupe plus 2 colonnes (voir son propre commentaire plus bas) :
+  // les 4 rangées ont donc désormais TOUTES la même forme (7 touches réelles, 1 filler en
+  // bout de rangée), jamais de touche `filler` inventée qui n'aurait pas été demandée.
   var KEY_ROWS = [
     [
       { key: 'x', label: 'x', insert: 'x' },
@@ -113,15 +113,22 @@
       // carré" est, là aussi, une action immédiate, pas un symbole à composer). Sans
       // callback fourni (ex. le champ de la modale "Nouvelle équation"), retombe sur le
       // même repli que "x²" (insert '^2') plutôt que de ne rien faire.
-      { key: 'square', label: '(⋯)²', insert: '^2', squareKey: true },
+      // Libellé à DEUX points ("‥", U+2025) plutôt que les trois de l'ellipsis normale
+      // ("⋯") : sur une touche aussi étroite, "(⋯)²" débordait légèrement du centre de sa
+      // cellule ; un point de moins suffit à le recentrer.
+      { key: 'square', label: '(‥)²', insert: '^2', squareKey: true },
       { key: ',', label: ',', insert: ',' },
       { key: '0', label: '0', insert: '0' },
       { key: 'left', html: ARROW_LEFT_SVG, action: 'left' },
       { key: 'right', html: ARROW_RIGHT_SVG, action: 'right' },
       // Seule action de validation du pavé (l'ancien bouton "Valider" séparé a été retiré) :
-      // mise en avant visuelle (accent, span 2 colonnes) plutôt qu'une simple touche parmi
-      // d'autres, voir buildKeys/.panel-confirm-cell.
-      { key: 'enter', html: ENTER_SVG, action: 'enter', primary: true, span: 2 }
+      // une seule cellule comme toute autre touche (jamais `span:2`) — sur 2 colonnes, elle
+      // débordait seule au-delà du bord droit "visuel" du pavé (les 3 autres rangées
+      // s'arrêtent, elles, à la 7e colonne réelle — la 8e n'est qu'un filler invisible, voir
+      // plus haut), donnant l'impression qu'elle "collait" toute seule à droite plutôt que
+      // de faire partie de la même grille que le reste des touches.
+      { key: 'enter', html: ENTER_SVG, action: 'enter', primary: true },
+      { key: 'filler4', filler: true }
     ]
   ];
 
