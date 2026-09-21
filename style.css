@@ -734,16 +734,28 @@ button {
 .sign-chart-target:hover {
   background: var(--accent-soft);
 }
-/* Case pas encore remplie : un repère discret (jamais vide/invisible, pour que la cible
-   cliquable reste toujours localisable) — un simple point, pas une vraie valeur. */
+/* Case pas encore remplie : juste le contour de la cible (retour utilisateur : pas de
+   "." dedans) — reste localisable sans prétendre porter une valeur. */
 .sign-chart-target-empty {
   box-shadow: inset 0 0 0 1.5px var(--border);
-  color: var(--text-muted);
-  font-size: 0.8rem;
 }
 .sign-chart-target-wrong {
   color: var(--danger);
   box-shadow: inset 0 0 0 2px var(--danger);
+}
+
+/* Colonne intervalle de BORD (contient "-∞"/"+∞" en en-tête, voir EDGE_SIGN_FRACTION dans
+   render.js) : le signe n'y est PAS centré dans la colonne (retour utilisateur : "le
+   signe apparaît directement sous le symbole infini") — sa cible est positionnée par JS
+   via `left` en pourcentage de la largeur de LA CASE (jamais centrée par flexbox ici,
+   donc `flex-start`), puis recentrée sur ce point précis via translateX(-50%) plutôt que
+   par son propre coin. */
+.sign-chart-cell-edge {
+  justify-content: flex-start;
+}
+.sign-chart-cell-edge .sign-chart-target {
+  position: relative;
+  transform: translateX(-50%);
 }
 
 /* Repère visuel "valeur exclue du domaine" (voir isExcludedCol dans render.js) : un

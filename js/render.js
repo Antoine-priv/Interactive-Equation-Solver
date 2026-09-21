@@ -2203,15 +2203,27 @@
       // dernière frontière soit IDENTIQUE (We/2+Wb/2 = Wb+Wm), il faut We = Wb+2*Wm : une
       // colonne "de bord" (qui n'a qu'UN voisin réel) doit donc être plus large qu'une
       // colonne "du milieu" (qui en a deux), pas plus étroite comme on pourrait l'attendre
-      // à tort. Chaque signe reste centré dans sa propre colonne (voir .sign-chart-target
-      // dans style.css) : ce calcul ne change donc QUE l'espacement des ÉTIQUETTES de la
-      // rangée "x", jamais la logique "signe au milieu exact" déjà vérifiée par ailleurs
-      // (une colonne "de bord" n'a de toute façon pas de vraie valeur numérique en face
-      // pour définir un "milieu" — voir le plan : rester centré y reste la seule
-      // convention sensée, quelle que soit sa largeur).
+      // à tort.
       var BOUNDARY_W = 76;
       var MIDDLE_INTERVAL_W = 150;
       var EDGE_INTERVAL_W = BOUNDARY_W + 2 * MIDDLE_INTERVAL_W;
+      // Le SIGNE d'une colonne de bord, lui, ne peut PAS rester centré dans sa colonne
+      // (retour utilisateur : "le signe apparaît directement sous le symbole infini") —
+      // "-∞"/"+∞" (en-tête) restent eux centrés à 50% (voir plus bas, pour l'espacement
+      // égal de la rangée "x"), mais le signe doit se trouver au milieu EXACT entre "-∞"
+      // (à 50% de sa colonne) et la frontière réelle voisine (au centre de SA colonne,
+      // juste après) — en coordonnées absolues depuis le bord EXTÉRIEUR de la table :
+      // milieu = (We/2 + We+Wb/2)/2 = 0.75*We + 0.25*Wb, soit, en fraction de We (pour un
+      // positionnement relatif qui reste correct quelle que soit la largeur réellement
+      // rendue) : 0.75 + 0.25*(Wb/We). Voir .sign-chart-cell-edge/.sign-chart-target dans
+      // style.css pour comment cette fraction est appliquée (position relative + left).
+      var EDGE_SIGN_FRACTION = 0.75 + 0.25 * (BOUNDARY_W / EDGE_INTERVAL_W);
+      // `left` en pourcentage se serait basé sur la largeur de la case APRÈS padding (voir
+      // .sign-chart-cell, padding 18px 16px) — pas la largeur pleine de la colonne que
+      // EDGE_SIGN_FRACTION suppose — d'où ce décalage en PIXELS, qui compense
+      // explicitement ce padding gauche pour retomber pile sur la fraction voulue de la
+      // colonne entière (bord extérieur inclus).
+      var CELL_PADDING_X = 16;
       var table = document.createElement('div');
       table.className = 'sign-chart-table';
       var colTemplate = columns.map(function (col, idx) {
@@ -2256,9 +2268,11 @@
         table.appendChild(labelCell);
 
         columns.forEach(function (col, colIndex) {
+          var isEdgeInterval = col.type === 'interval' && (colIndex === 0 || colIndex === columns.length - 1);
           var cell = document.createElement('div');
           cell.className = 'sign-chart-cell sign-chart-data-cell' +
-            (isExcludedCol(col) ? ' sign-chart-col-excluded' : '') + (isLastRow ? ' sign-chart-row-last' : '');
+            (isExcludedCol(col) ? ' sign-chart-col-excluded' : '') + (isLastRow ? ' sign-chart-row-last' : '') +
+            (isEdgeInterval ? ' sign-chart-cell-edge' : '');
           // Identifie la CASE (position dans la grille) séparément de la cible cliquable
           // qu'elle contient (voir plus bas) : la case elle-même reste utile pour mesurer
           // l'alignement des colonnes, la cible pour l'interaction.
@@ -2279,8 +2293,10 @@
           if (value !== null) {
             window.katex.render(SIGN_CHART_CELL_LATEX[value] || '', target, { throwOnError: false });
             if (engineRoot.signChartCellCorrect(rowIndex, colIndex) === false) target.classList.add('sign-chart-target-wrong');
-          } else {
-            target.textContent = '·';
+          }
+          if (isEdgeInterval) {
+            var fraction = colIndex === 0 ? EDGE_SIGN_FRACTION : (1 - EDGE_SIGN_FRACTION);
+            target.style.left = (fraction * EDGE_INTERVAL_W - CELL_PADDING_X) + 'px';
           }
           target.setAttribute('data-sign-chart-row', String(rowIndex));
           target.setAttribute('data-sign-chart-col', String(colIndex));
@@ -2934,9 +2950,15 @@
     });
   }
 
+  // .sign-chart-table-wrap/.sign-chart-popup (jamais un enfant de .produit-nul-branch,
+  // voir renderSignChartTable) : sans eux ici, un premier clic sur le tableau lui-même
+  // (pas les colonnes facteur, déjà couvertes par .produit-nul-branch) déclenchait à tort
+  // renderAll() EN PHASE DE CAPTURE, détruisant la cible cliquée avant même que son propre
+  // gestionnaire n'ait pu s'exécuter (retour utilisateur : "pas cliquable en un seul clic
+  // si le tableau n'est pas déjà sélectionné/focalisé").
   var BRANCH_OUTLINE_KEEP_SELECTOR = '.produit-nul-branch, #controlPanel, #opButtons, ' +
     '#mathKeypadPanel, #mathKeypadPeekTab, #liveOpPill, .arrow-label-mirror, ' +
-    '#zoomInBtn, #zoomOutBtn';
+    '#zoomInBtn, #zoomOutBtn, .sign-chart-table-wrap, .sign-chart-popup';
   function initBranchOutlineDismissal() {
     document.addEventListener('click', function (e) {
       if (!document.querySelector('.produit-nul-branch')) return;

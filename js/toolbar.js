@@ -1190,7 +1190,16 @@
       // pour un panneau ayant perdu son ancrage — perçu comme la fenêtre d'actions
       // "dérivant" au zoom.
       var onZoomBtn = e.target.closest && e.target.closest('#zoomInBtn, #zoomOutBtn');
-      if (panel.contains(e.target) || opBtnsEl.contains(e.target) || onEquation || onMathKeypad || onZoomBtn) return;
+      // Le tableau de signes (voir renderSignChartTable dans render.js) et son popup de
+      // case/rangée (jamais un enfant de #history, ajoutés directement à document.body —
+      // voir openSignChartPopup) ne sont ni une équation ni #opButtons : sans cette
+      // exclusion, un premier clic dessus alors qu'une sélection/opération restait
+      // engagée AILLEURS (ex. juste après avoir travaillé dans une colonne facteur)
+      // déclenchait cancelOp() -> renderAll() ICI MÊME, EN PHASE DE CAPTURE — détruisant
+      // la cible cliquée avant même que son propre gestionnaire (phase de bulles) n'ait pu
+      // s'exécuter (retour utilisateur : "pas cliquable en un seul clic").
+      var onSignChart = e.target.closest && e.target.closest('.sign-chart-table-wrap, .sign-chart-popup');
+      if (panel.contains(e.target) || opBtnsEl.contains(e.target) || onEquation || onMathKeypad || onZoomBtn || onSignChart) return;
       App.History.cancelOp();
     }, true);
   }
