@@ -402,6 +402,40 @@ async function targetLatex(page, row, col) {
     getComputedStyle(document.querySelector('.sign-chart-x-label')).borderRightWidth);
   ok('the label column has its own right-side divider', parseFloat(labelBorderRight) > 0);
 
+  // --- Horizontal lines: every row EXCEPT the last one has a bottom border ---
+  const rowBorders = await page.evaluate(function () {
+    var labels = Array.from(document.querySelectorAll('.sign-chart-x-label, .sign-chart-row-label'));
+    return labels.map(function (el) { return getComputedStyle(el).borderBottomWidth; });
+  });
+  console.log('row bottom borders (header + each data row):', JSON.stringify(rowBorders));
+  ok('every row but the last has a horizontal line under it',
+    rowBorders.slice(0, -1).every(function (w) { return parseFloat(w) > 0; }) &&
+    parseFloat(rowBorders[rowBorders.length - 1]) === 0);
+
+  // --- The "x" header row no longer reads as grayed-out (same text color as the rest) ---
+  const headerColor = await page.evaluate(() => getComputedStyle(document.querySelector('.sign-chart-x-label')).color);
+  const bodyColor = await page.evaluate(() => getComputedStyle(document.querySelector('.sign-chart-row-label')).color);
+  ok('the header ("x") row uses the same text color as the rest of the table', headerColor === bodyColor);
+
+  // --- "x" itself is rendered via KaTeX, not plain italic text ---
+  ok('the "x" header cell is real KaTeX markup', await page.evaluate(() => !!document.querySelector('.sign-chart-x-label .katex')));
+
+  // --- Signs sit at the EXACT pixel midpoint between their two neighboring x-value
+  // labels (fixed-width boundary columns, never auto-sized to content) ---
+  const midpointCheck = await page.evaluate(function () {
+    function centerX(el) { var r = el.getBoundingClientRect(); return r.left + r.width / 2; }
+    var headers = Array.from(document.querySelectorAll('.sign-chart-header-cell'));
+    // headers[0] is "-\infty" (interval), headers[1] is boundary "-1", headers[2] is the
+    // interval between -1 and 1, headers[3] is boundary "1".
+    var leftBoundary = centerX(headers[1]);
+    var rightBoundary = centerX(headers[3]);
+    var middleInterval = centerX(headers[2]);
+    return { expectedMid: (leftBoundary + rightBoundary) / 2, actual: middleInterval };
+  });
+  console.log('midpoint check:', JSON.stringify(midpointCheck));
+  ok('a sign column sits at the EXACT midpoint between its two neighboring x-values',
+    Math.abs(midpointCheck.expectedMid - midpointCheck.actual) < 0.5);
+
   // --- Boundary (x-value) columns are visibly narrower than interval columns: a sign
   // can never look like it belongs directly under -\infty/+\infty (which live in the
   // outermost INTERVAL columns, not their own boundary column). ---
