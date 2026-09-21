@@ -97,6 +97,68 @@
   // apparaîtrait à tort sans son liseré initial.
   var hadBranches = false;
 
+  // Glyphe affiché pour chaque valeur de case du tableau de signes (voir
+  // renderSignChartTable plus bas) — 'undef' (jamais "‖" en interne, voir
+  // signChartSetCell dans history.js) s'affiche "‖" (double barre, convention du
+  // tableau français, voir le plan).
+  var SIGN_CHART_CELL_GLYPH = { '+': '+', '-': '−', '0': '0', undef: '‖' };
+
+  // Popup compact (2 boutons pour une case, ou une liste verticale pour "+ Ajouter une
+  // rangée", voir renderSignChartTable) : élément UNIQUE recréé à chaque ouverture, jamais
+  // conservé entre deux ouvertures. `position:fixed`, ancré sous `anchorEl` — UI
+  // transitoire, pas besoin de suivre le pan/zoom du canvas comme #liveOpPill
+  // (mathKeypad.js). Fermé par renderAll (voir son tout début) à chaque nouveau rendu :
+  // vivant dans document.body plutôt que dans #history (entièrement reconstruit à chaque
+  // rendu, voir plus bas), il survivrait sinon à un rendu qui rend ses row/col d'origine
+  // périmés.
+  var signChartPopup = null;
+  var signChartPopupDocListener = null;
+
+  function closeSignChartPopup() {
+    if (signChartPopup) { signChartPopup.remove(); signChartPopup = null; }
+    if (signChartPopupDocListener) {
+      document.removeEventListener('mousedown', signChartPopupDocListener, true);
+      signChartPopupDocListener = null;
+    }
+  }
+
+  // `options` : [{ label, value, latex? }, ...] — `latex` (optionnel) rend `label` via
+  // KaTeX plutôt que comme texte brut (voir "+ Ajouter une rangée", qui affiche chaque
+  // facteur sous sa vraie notation). `onPick(value)` : appelé puis le popup se referme.
+  // `opts.vertical` : liste empilée plutôt que rangée de boutons (voir le sélecteur de
+  // rangée à ajouter). Un clic HORS du popup le referme sans rien choisir, capté en phase
+  // capture (précède le propre gestionnaire click d'une case éventuellement visée en
+  // dessous) et différé d'un tick (sinon le MÊME clic qui vient d'ouvrir ce popup, encore
+  // en train de se propager, se rejouerait aussitôt comme un clic "en dehors").
+  function openSignChartPopup(anchorEl, options, onPick, opts) {
+    closeSignChartPopup();
+    var popup = document.createElement('div');
+    popup.className = 'sign-chart-popup' + (opts && opts.vertical ? ' sign-chart-popup-vertical' : '');
+    options.forEach(function (opt) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sign-chart-popup-btn';
+      if (opt.latex) window.katex.render(opt.label, btn, { throwOnError: false });
+      else btn.textContent = opt.label;
+      btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        onPick(opt.value);
+        closeSignChartPopup();
+      });
+      popup.appendChild(btn);
+    });
+    document.body.appendChild(popup);
+    var rect = anchorEl.getBoundingClientRect();
+    popup.style.left = (rect.left + rect.width / 2) + 'px';
+    popup.style.top = (rect.bottom + 6) + 'px';
+    signChartPopupDocListener = function (e) { if (!popup.contains(e.target)) closeSignChartPopup(); };
+    setTimeout(function () {
+      if (signChartPopup === popup) document.addEventListener('mousedown', signChartPopupDocListener, true);
+    }, 0);
+    signChartPopup = popup;
+  }
+
   // Incrémenté à CHAQUE appel de renderAll (voir son tout début) : les callbacks
   // différés via requestAnimationFrame plus bas capturent la valeur courante et se
   // désactivent d'eux-mêmes (voir isStaleRender) si un rendu PLUS RÉCENT a eu lieu entre
@@ -1684,6 +1746,7 @@
     var mySeq = renderSeq;
     function isStaleRender() { return mySeq !== renderSeq; }
     history.innerHTML = '';
+    closeSignChartPopup();
 
     var branches = Hist.getBranches();
     // Nouvelle scission (aucune branche juste avant) : réaffiche le liseré par défaut,
@@ -2049,6 +2112,163 @@
       group.style.visibility = 'visible';
     }
 
+    // "Tableau de signes" (voir Hist.getSignChart()/canSignChart dans history.js) : une
+    // colonne par facteur distinct, chacune une inéquation "<facteur> > 0" indépendante,
+    // rendue via renderBranchNode exactement comme une colonne "Condition d'existence"
+    // (même interactivité) — mais EN FLUX NORMAL, juste sous la chaîne principale plutôt
+    // qu'à côté (voir le plan : pas besoin de la mécanique d'ancrage absolu de
+    // positionDomainGroup, réservée à un groupe qui doit rester à côté d'une chaîne qui
+    // continue, elle, d'avancer). Jamais d'`eqGlyph` à forcer ici (contrairement à
+    // renderDomainSplit) : chaque moteur de facteur porte déjà son propre
+    // `currentOperator` ('>', voir signChartAction), lu directement via `step.operator`
+    // comme n'importe quelle inéquation.
+    function renderSignChartFactors(engineRoot, historyEl, signChart, focusedFactorIdx) {
+      var group = document.createElement('div');
+      group.className = 'sign-chart-factors-group';
+      historyEl.appendChild(group);
+
+      var header = document.createElement('div');
+      header.className = 'sign-chart-factors-header section-header';
+      header.textContent = 'Tableau de signes';
+      group.appendChild(header);
+
+      var wrap = document.createElement('div');
+      wrap.className = 'domain-split';
+      group.appendChild(wrap);
+
+      var focusedRes = null;
+      signChart.factors.forEach(function (f, idx) {
+        var col = document.createElement('div');
+        var isFocused = focusedFactorIdx === idx;
+        col.className = 'produit-nul-branch domain-branch' + (isFocused ? ' domain-branch-focused' : '');
+        col.setAttribute('data-signchart-factor-index', String(idx));
+        col.addEventListener('click', function () { engineRoot.setFocusedSignChartFactor(idx); });
+        var chainEl = document.createElement('div');
+        chainEl.className = 'produit-nul-chain';
+        col.appendChild(chainEl);
+        wrap.appendChild(col);
+
+        var childRes = renderBranchNode(f.engine, chainEl, {
+          noDrag: true,
+          onBeforeAction: function () { engineRoot.focusSignChartFactor(idx); },
+          notifyFocus: function () { engineRoot.setFocusedSignChartFactor(idx); },
+          focused: isFocused
+        });
+        if (isFocused) {
+          focusedRes = childRes;
+        } else {
+          childRes.leafEngines.forEach(function (leafEng) {
+            var leafSteps = leafEng.getSteps();
+            lastCenteredStepByEngine.set(leafEng, leafSteps[leafSteps.length - 1]);
+          });
+        }
+      });
+
+      return { group: group, focusedRes: focusedRes };
+    }
+
+    // Le tableau lui-même (voir Hist.getSignChartColumns()/signChartAddRow/
+    // signChartSetCell/signChartCellCorrect dans history.js) : n'apparaît qu'une fois
+    // CHAQUE facteur résolu (`columns` non-null, voir l'appelant). Grille CSS (voir
+    // .sign-chart-table dans style.css) : une colonne "étiquette de rangée" + 2N+1
+    // colonnes intervalle/frontière (voir getSignChartColumns) — "-∞"/"+∞" affichés comme
+    // texte dans la toute première/dernière case d'en-tête plutôt que des colonnes à part
+    // (voir le plan : ce ne sont que des repères d'axe, jamais une case à remplir).
+    function renderSignChartTable(engineRoot, historyEl, signChart, columns) {
+      var wrap = document.createElement('div');
+      wrap.className = 'sign-chart-table-wrap';
+      historyEl.appendChild(wrap);
+
+      var table = document.createElement('div');
+      table.className = 'sign-chart-table';
+      table.style.gridTemplateColumns = 'minmax(150px, auto) repeat(' + columns.length + ', minmax(64px, 1fr))';
+      wrap.appendChild(table);
+
+      var denRoots = signChart.factors.filter(function (f) { return f.kind === 'den'; })
+        .map(function (f) { return App.Equation.solvedValue(f.engine.lastEquation()); });
+      function isExcludedCol(col) { return col.type === 'boundary' && denRoots.indexOf(col.value) !== -1; }
+
+      var xHeader = document.createElement('div');
+      xHeader.className = 'sign-chart-cell sign-chart-header-cell sign-chart-x-label';
+      xHeader.textContent = 'x';
+      table.appendChild(xHeader);
+      columns.forEach(function (col, idx) {
+        var cell = document.createElement('div');
+        cell.className = 'sign-chart-cell sign-chart-header-cell' + (isExcludedCol(col) ? ' sign-chart-col-excluded' : '');
+        if (col.type === 'boundary') {
+          window.katex.render(String(col.value), cell, { throwOnError: false });
+        } else if (idx === 0) {
+          cell.classList.add('sign-chart-edge-left');
+          window.katex.render('-\\infty', cell, { throwOnError: false });
+        } else if (idx === columns.length - 1) {
+          cell.classList.add('sign-chart-edge-right');
+          window.katex.render('+\\infty', cell, { throwOnError: false });
+        }
+        table.appendChild(cell);
+      });
+
+      signChart.tableRows.forEach(function (row, rowIndex) {
+        var labelCell = document.createElement('div');
+        labelCell.className = 'sign-chart-cell sign-chart-row-label';
+        if (row.rowKind === 'total') {
+          labelCell.textContent = 'Expression totale';
+        } else {
+          window.katex.render(Expr.sideLatex(signChart.factors[row.factorIndex].capturedSide), labelCell, { throwOnError: false });
+        }
+        table.appendChild(labelCell);
+
+        columns.forEach(function (col, colIndex) {
+          var cell = document.createElement('div');
+          cell.className = 'sign-chart-cell sign-chart-data-cell' + (isExcludedCol(col) ? ' sign-chart-col-excluded' : '');
+          cell.setAttribute('data-sign-chart-row', String(rowIndex));
+          cell.setAttribute('data-sign-chart-col', String(colIndex));
+          var value = row.cells[colIndex];
+          if (value !== null) {
+            cell.textContent = SIGN_CHART_CELL_GLYPH[value] || '';
+            if (engineRoot.signChartCellCorrect(rowIndex, colIndex) === false) cell.classList.add('sign-chart-cell-wrong');
+          }
+          cell.addEventListener('click', function () {
+            var options = col.type === 'boundary'
+              ? [{ label: '0', value: '0' }, { label: '‖', value: 'undef' }]
+              : [{ label: '+', value: '+' }, { label: '−', value: '-' }];
+            openSignChartPopup(cell, options, function (v) {
+              engineRoot.signChartSetCell(rowIndex, colIndex, v);
+            });
+          });
+          table.appendChild(cell);
+        });
+      });
+
+      // "+ Ajouter une rangée" : liste chaque facteur pas encore ajouté, plus "Expression
+      // totale" si pas déjà présente — jamais affiché s'il n'y a plus rien à ajouter.
+      var usedFactors = {};
+      var hasTotal = false;
+      signChart.tableRows.forEach(function (r) {
+        if (r.rowKind === 'total') hasTotal = true;
+        else usedFactors[r.factorIndex] = true;
+      });
+      var availableOptions = [];
+      signChart.factors.forEach(function (f, idx) {
+        if (!usedFactors[idx]) {
+          availableOptions.push({ label: Expr.sideLatex(f.capturedSide), value: { rowKind: 'factor', factorIndex: idx }, latex: true });
+        }
+      });
+      if (!hasTotal) availableOptions.push({ label: 'Expression totale', value: { rowKind: 'total' } });
+
+      if (availableOptions.length) {
+        var addRowBtn = document.createElement('button');
+        addRowBtn.type = 'button';
+        addRowBtn.className = 'sign-chart-add-row-btn';
+        addRowBtn.textContent = '+ Ajouter une rangée';
+        addRowBtn.addEventListener('click', function () {
+          openSignChartPopup(addRowBtn, availableOptions, function (v) {
+            engineRoot.signChartAddRow(v);
+          }, { vertical: true });
+        });
+        wrap.appendChild(addRowBtn);
+      }
+    }
+
     if (!branches) {
       // Cas normal (pas de "produit nul" en cours) : une seule chaîne, comme avant — via
       // Hist.getLeaf() (jamais Hist directement) pour ne JAMAIS suivre la délégation
@@ -2060,7 +2280,7 @@
       // rendre la main (voir notifyFocus/Hist.focusMain), sans agir — même principe
       // qu'un premier clic dans une colonne "Produit nul" pas encore active.
       var mainEngine = Hist.getLeaf();
-      var mainFocused = Hist.getFocusedDomain() === null;
+      var mainFocused = Hist.getFocusedDomain() === null && Hist.getFocusedSignChartFactor() === null;
       var res = renderChain(mainEngine, history, {
         notifyFocus: function () { Hist.focusMain(); },
         focused: mainFocused
@@ -2091,9 +2311,28 @@
       if (domainConditionsArr && domainConditionsArr.length) {
         domainSplitResult = renderDomainSplit(Hist, history, domainConditionsArr, Hist.getFocusedDomain());
       }
+
+      // "Tableau de signes" (voir Hist.getSignChart() dans history.js) : rendu ICI aussi,
+      // même raison que "Condition d'existence" juste au-dessus (un facteur focalisé doit
+      // l'emporter sur la chaîne principale pour scrollTarget/opPrevRowEl/etc.) — EN FLUX
+      // NORMAL (voir renderSignChartFactors), donc APRÈS le groupe de domaine dans l'ordre
+      // d'insertion pour apparaître EN DESSOUS de lui à l'écran (positionné en absolu, son
+      // propre ordre DOM n'affecte pas la mise en page des frères en flux normal). Le
+      // tableau lui-même (renderSignChartTable) n'apparaît qu'une fois tous les facteurs
+      // résolus (getSignChartColumns non-null).
+      var signChartData = Hist.getSignChart();
+      var signChartFactorsResult = null;
+      if (signChartData) {
+        signChartFactorsResult = renderSignChartFactors(Hist, history, signChartData, Hist.getFocusedSignChartFactor());
+        var signChartColumns = Hist.getSignChartColumns();
+        if (signChartColumns) renderSignChartTable(Hist, history, signChartData, signChartColumns);
+      }
+
       var domainFocusedRes = domainSplitResult && domainSplitResult.focusedRes;
-      var activeEngine = domainFocusedRes ? domainFocusedRes.scrollEngine : mainEngine;
-      var activeRes = domainFocusedRes || res;
+      var signChartFocusedRes = signChartFactorsResult && signChartFactorsResult.focusedRes;
+      var activeEngine = domainFocusedRes ? domainFocusedRes.scrollEngine :
+        (signChartFocusedRes ? signChartFocusedRes.scrollEngine : mainEngine);
+      var activeRes = domainFocusedRes || signChartFocusedRes || res;
 
       scrollTarget = activeRes.framedRowEl;
       scrollTargetSolved = activeRes.framedSolved;

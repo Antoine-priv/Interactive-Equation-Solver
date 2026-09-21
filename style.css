@@ -639,6 +639,138 @@ button {
   .domain-branch.domain-branch-flash { animation: none; }
 }
 
+/* ---- "Tableau de signes" (voir renderSignChartFactors/renderSignChartTable dans
+   render.js, canSignChart/signChartAction/getSignChartColumns dans history.js) ----
+   Les colonnes "<facteur> > 0" réutilisent .domain-split/.produit-nul-branch tels quels
+   (même langage visuel qu'une colonne "Condition d'existence") — seul ce groupe-ci diffère
+   en restant EN FLUX NORMAL (jamais position:absolute) : il vit sous la chaîne principale,
+   pas à côté d'elle, donc aucune mécanique d'ancrage dédiée n'est nécessaire. */
+.sign-chart-factors-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 56px 0 0;
+}
+
+.sign-chart-table-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 40px 0 90px;
+}
+
+.sign-chart-table {
+  display: grid;
+  border: 2px solid var(--text);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.sign-chart-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 8px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  font-size: 1.1rem;
+}
+
+.sign-chart-header-cell {
+  font-weight: 600;
+  color: var(--text-muted);
+  border-top: none;
+  border-bottom: 2px solid var(--text);
+}
+.sign-chart-x-label {
+  font-style: italic;
+}
+/* "-∞"/"+∞" : affichés comme repères d'axe DANS la première/dernière case d'en-tête
+   (jamais une colonne à part, voir le plan) — poussés vers le bord externe de leur case
+   plutôt que centrés, pour lire comme une étiquette d'axe plutôt qu'une valeur de colonne. */
+.sign-chart-edge-left { justify-content: flex-start; }
+.sign-chart-edge-right { justify-content: flex-end; }
+
+.sign-chart-row-label {
+  font-weight: 600;
+  justify-content: flex-start;
+  padding-left: 16px;
+  border-left: none;
+}
+
+.sign-chart-data-cell {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.sign-chart-data-cell:hover {
+  background: var(--accent-soft);
+}
+.sign-chart-cell-wrong {
+  color: var(--danger);
+  box-shadow: inset 0 0 0 2px var(--danger);
+}
+
+/* Repère visuel "valeur exclue du domaine" (voir isExcludedCol dans render.js) : un
+   double-trait vertical à droite de la colonne frontière concernée, sur TOUTE la hauteur
+   du tableau (posé sur chaque case de cette colonne, en-tête compris) — convention
+   classique du tableau de signes français (voir le plan/l'image de référence). */
+.sign-chart-col-excluded {
+  border-right: 4px double var(--text);
+}
+
+.sign-chart-add-row-btn {
+  margin-top: 14px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1.5px dashed var(--border);
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.sign-chart-add-row-btn:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-soft-border);
+}
+
+/* Popup compact (voir openSignChartPopup dans render.js) : soit une rangée de 2 boutons
+   (+/- ou 0/‖ pour une case), soit une liste verticale (choix de la rangée à ajouter). */
+.sign-chart-popup {
+  position: fixed;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  box-shadow: var(--shadow-md);
+  z-index: 50;
+}
+.sign-chart-popup-vertical {
+  flex-direction: column;
+}
+.sign-chart-popup-btn {
+  min-width: 44px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--border);
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+.sign-chart-popup-btn:hover {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--accent-soft-border);
+}
+
 /* Aperçu de "Produit nul" au survol de son bouton (voir renderAll dans render.js) :
    mise en page simple et indépendante de .produit-nul-split (pas de padding de 50vw —
    voir le commentaire dans render.js), juste centrée là où elle apparaît. Légèrement
