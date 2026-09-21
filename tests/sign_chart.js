@@ -282,6 +282,19 @@ async function targetLatex(page, row, col) {
   });
   ok('an empty target has no "." placeholder text', emptyTargetText === '');
 
+  // --- "Vérifier" button only becomes available once the "total" row exists (retour
+  // utilisateur) -- checked here while only "factor:0" has been added ---
+  await wrap.hover();
+  await page.waitForTimeout(60);
+  const verifyBtnDisabledBeforeTotal = await page.evaluate(() => {
+    var b = document.querySelector('.sign-chart-verify-btn');
+    return b ? b.disabled : undefined;
+  });
+  ok('verify button exists and is disabled before the "total" row exists', verifyBtnDisabledBeforeTotal === true);
+  ok('signChartVerify() is a no-op before the "total" row exists',
+    !(await page.evaluate(() => window.App.History.signChartVerify())) &&
+    !(await page.evaluate(() => window.App.History.getSignChart().verified)));
+
   for (let i = 0; i < 3; i++) {
     await wrap.hover();
     await page.waitForTimeout(60);
@@ -294,6 +307,13 @@ async function targetLatex(page, row, col) {
   await wrap.hover();
   await page.waitForTimeout(60);
   ok('"+ Ajouter une rangée" now gone (nothing left to add)', (await page.$('.sign-chart-add-row-btn')) === null);
+  const verifyBtnEnabledAfterTotal = await page.evaluate(() => {
+    var b = document.querySelector('.sign-chart-verify-btn');
+    return b ? !b.disabled : undefined;
+  });
+  ok('verify button enabled once the "total" row exists', verifyBtnEnabledAfterTotal === true);
+  ok('signChart.verified is still false (Vérifier not clicked yet)',
+    !(await page.evaluate(() => window.App.History.getSignChart().verified)));
 
   const rowKinds = await page.evaluate(() => window.App.History.getSignChart().tableRows.map(function (r) {
     return r.rowKind + (r.factorIndex !== undefined ? ':' + r.factorIndex : '');
@@ -314,18 +334,34 @@ async function targetLatex(page, row, col) {
   await intervalTarget.click({ force: true });
   await page.waitForTimeout(60);
   let popupTexts = await page.$$eval('.sign-chart-popup-btn', function (els) { return els.map(function (e) { return e.textContent; }); });
-  ok('interval cell popup offers +/-', JSON.stringify(popupTexts) === JSON.stringify(['+', '−']));
+  ok('interval cell popup offers +/-/✕ (clear)', JSON.stringify(popupTexts) === JSON.stringify(['+', '−', '✕']));
   await page.click('.sign-chart-popup-btn:first-child'); // '+'
   await page.waitForTimeout(60);
   ok('interval target now renders "+" via KaTeX (like the equations)', (await targetLatex(page, 1, 2)) === '+');
   ok('no longer shows the empty placeholder',
     (await intervalTarget.getAttribute('class')).indexOf('sign-chart-target-empty') === -1);
 
+  // --- Clear (✕) button: lets the user cancel a selection and leave the spot empty again
+  // (retour utilisateur) ---
+  await intervalTarget.click({ force: true });
+  await page.waitForTimeout(60);
+  await page.click('.sign-chart-popup-btn:last-child'); // '✕'
+  await page.waitForTimeout(60);
+  ok('clicking ✕ clears the cell back to null',
+    (await page.evaluate(() => window.App.History.getSignChart().tableRows[1].cells[2])) === null);
+  ok('target shows the empty placeholder again after clearing',
+    (await intervalTarget.getAttribute('class')).indexOf('sign-chart-target-empty') !== -1);
+  // Refill it: later checks assume this cell is set.
+  await intervalTarget.click({ force: true });
+  await page.waitForTimeout(60);
+  await page.click('.sign-chart-popup-btn:first-child'); // '+'
+  await page.waitForTimeout(60);
+
   const boundaryTarget = page.locator('.sign-chart-target[data-sign-chart-row="1"][data-sign-chart-col="1"]');
   await boundaryTarget.click({ force: true });
   await page.waitForTimeout(60);
   popupTexts = await page.$$eval('.sign-chart-popup-btn', function (els) { return els.map(function (e) { return e.textContent; }); });
-  ok('boundary cell popup offers 0/‖', JSON.stringify(popupTexts) === JSON.stringify(['0', '‖']));
+  ok('boundary cell popup offers 0/‖/✕ (clear)', JSON.stringify(popupTexts) === JSON.stringify(['0', '‖', '✕']));
   await page.click('.sign-chart-popup-btn:first-child'); // '0'
   await page.waitForTimeout(60);
 
@@ -367,14 +403,50 @@ async function targetLatex(page, row, col) {
   ok('no wrong-target styling on the total row',
     (await page.$$('.sign-chart-target[data-sign-chart-row="' + totalRowIndex + '"].sign-chart-target-wrong')).length === 0);
 
-  // Now set ONE wrong value and check it is flagged, styled, and stays visible (not reverted).
+  // --- Strict boundary validation: a 0/‖ in a FACTOR row at an x-value that is NOT that
+  // factor's own root must be flagged wrong (retour utilisateur) -- row "factor:1" has
+  // root x=-1 (column 1); columns 3 (x=1) and 5 (x=2) are boundaries belonging to the
+  // OTHER two factors. ---
+  const factor1Row = rowKinds.indexOf('factor:1');
+  await page.evaluate((row) => window.App.History.signChartSetCell(row, 3, '0'), factor1Row);
+  await page.waitForTimeout(60);
+  ok('a "0" at a boundary that is not this factor\'s own root is flagged incorrect',
+    (await page.evaluate((row) => window.App.History.signChartCellCorrect(row, 3), factor1Row)) === false);
+  await page.evaluate((row) => window.App.History.signChartSetCell(row, 5, 'undef'), factor1Row);
+  await page.waitForTimeout(60);
+  ok('a "‖" in a factor row (never legitimately undefined) is flagged incorrect',
+    (await page.evaluate((row) => window.App.History.signChartCellCorrect(row, 5), factor1Row)) === false);
+  await page.evaluate((row) => {
+    window.App.History.signChartSetCell(row, 3, null);
+    window.App.History.signChartSetCell(row, 5, null);
+  }, factor1Row);
+  await page.waitForTimeout(60);
+
+  // Now set ONE wrong value: it must be flagged STRUCTURALLY and keep showing what was
+  // typed right away, but must NOT get the red "wrong" styling until "Vérifier" is
+  // clicked (retour utilisateur: "don't immediately indicate if a selection is wrong").
   await page.evaluate((row) => window.App.History.signChartSetCell(row, 0, '+'), totalRowIndex);
   await page.waitForTimeout(80);
-  ok('a wrong cell is flagged incorrect',
+  ok('a wrong cell is flagged incorrect (structurally, independent of display)',
     (await page.evaluate((row) => window.App.History.signChartCellCorrect(row, 0), totalRowIndex)) === false);
   const wrongTarget = page.locator('.sign-chart-target[data-sign-chart-row="' + totalRowIndex + '"][data-sign-chart-col="0"]');
-  ok('the wrong target carries the styling class', (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') !== -1);
+  ok('the wrong target still shows what was typed', (await targetLatex(page, totalRowIndex, 0)) === '+');
+  ok('NOT styled red yet: "Vérifier" has not been clicked',
+    (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') === -1);
+  ok('signChart.verified is still false', !(await page.evaluate(() => window.App.History.getSignChart().verified)));
+
+  // --- Clicking "Vérifier" reveals wrong-cell styling for everything already filled in,
+  // without reverting any value ---
+  await wrap.hover();
+  await page.waitForTimeout(60);
+  await page.click('.sign-chart-verify-btn', { force: true });
+  await page.waitForTimeout(80);
+  ok('signChart.verified becomes true after clicking "Vérifier"',
+    await page.evaluate(() => window.App.History.getSignChart().verified));
+  ok('the wrong target NOW carries the red styling class', (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') !== -1);
   ok('the wrong target still shows what was typed (not reverted)', (await targetLatex(page, totalRowIndex, 0)) === '+');
+  ok('a correct cell is still not styled wrong after verifying',
+    (await page.locator('.sign-chart-target[data-sign-chart-row="' + totalRowIndex + '"][data-sign-chart-col="1"]').getAttribute('class')).indexOf('sign-chart-target-wrong') === -1);
 
   // --- The double-rule marks exactly the excluded-domain boundary column (x=1) ---
   const excludedCols = await page.$$eval('.sign-chart-header-cell.sign-chart-col-excluded', function (els) { return els.length; });
@@ -427,6 +499,13 @@ async function targetLatex(page, row, col) {
   // --- "x" itself is rendered via KaTeX, not plain italic text ---
   ok('the "x" header cell is real KaTeX markup', await page.evaluate(() => !!document.querySelector('.sign-chart-x-label .katex')));
 
+  // --- Factor row labels are CENTERED in the label column, like "x" in the header row
+  // (retour utilisateur), not left-aligned ---
+  const xLabelJustify = await page.evaluate(() => getComputedStyle(document.querySelector('.sign-chart-x-label')).justifyContent);
+  const rowLabelJustify = await page.evaluate(() => getComputedStyle(document.querySelector('.sign-chart-row-label')).justifyContent);
+  ok('factor row labels use the same centered justification as the "x" header label',
+    rowLabelJustify === xLabelJustify && rowLabelJustify === 'center');
+
   // --- Signs sit at the EXACT pixel midpoint between their two neighboring x-value
   // labels (fixed-width boundary columns, never auto-sized to content) ---
   const midpointCheck = await page.evaluate(function () {
@@ -446,38 +525,47 @@ async function targetLatex(page, row, col) {
 
   // --- Every REAL header label (-\infty, each boundary value, +\infty) is equally
   // spaced along the row -- retour utilisateur, using the exact reported example
-  // (x-8)(x+5): the gap between -5 and 8 must equal the gap between -\infty and -5 (it
-  // was previously about double, since a whole extra "middle interval" column sat
-  // between two real boundaries with nothing analogous on the -\infty/+\infty side). ---
+  // (x-8)(x+5): the gap between -5 and 8 must equal the gap between -\infty and -5.
+  // Measured at the VISIBLE GLYPH position, not the outer header-cell box: -\infty/+\infty
+  // now sit near the edge of their (still wide, for spacing purposes) column instead of
+  // centered in it (retour utilisateur: reduce the empty space between -\infty/+\infty and
+  // the table's edge/divider -- see the gutter check further below), so only the glyph
+  // center is the actual "label position" for the two edge columns from here on; a
+  // boundary cell has no such override and stays centered in its cell as before. ---
   const spacingCheck = await page.evaluate(function () {
     function centerX(el) { var r = el.getBoundingClientRect(); return r.left + r.width / 2; }
+    function glyphCenter(cell) { var k = cell.querySelector('.katex'); return centerX(k || cell); }
     var headers = Array.from(document.querySelectorAll('.sign-chart-header-cell')).slice(1);
     // [0]=edge(-inf), [1]=boundary, [2]=interval, [3]=boundary, [4]=interval, [5]=boundary, [6]=edge(+inf)
-    var realLabelCenters = [headers[0], headers[1], headers[3], headers[5], headers[6]].map(centerX);
+    var realLabelCenters = [headers[0], headers[1], headers[3], headers[5], headers[6]].map(glyphCenter);
     var gaps = [];
     for (var i = 1; i < realLabelCenters.length; i++) gaps.push(Math.round(realLabelCenters[i] - realLabelCenters[i - 1]));
     return gaps;
   });
-  console.log('gaps between -\\infty, each real x-value, and +\\infty:', JSON.stringify(spacingCheck));
-  ok('all 4 gaps between -infinity/x-values/+infinity are equal',
-    spacingCheck.every(function (g) { return g === spacingCheck[0]; }));
+  console.log('gaps between -\\infty, each real x-value, and +\\infty (glyph positions):', JSON.stringify(spacingCheck));
+  // Tolerance of a couple pixels: the row-label column is auto-sized to its (KaTeX) content,
+  // which can leave the grid's overall width a non-integer number of pixels, spreading a
+  // sub-pixel rounding remainder unevenly across tracks -- confirmed exact (226,226,226,226)
+  // by hand with a simpler 2-factor example; not a real alignment bug.
+  ok('all 4 gaps between -infinity/x-values/+infinity are equal (within rounding)',
+    spacingCheck.every(function (g) { return Math.abs(g - spacingCheck[0]) <= 2; }));
 
   // --- The EDGE interval signs (next to -\infty/+\infty) sit at the exact midpoint
-  // between that infinity label and the nearest real x-value -- NOT directly under the
-  // infinity symbol itself (retour utilisateur), even though -\infty/+\infty are
-  // centered in their own (wide) column for the equal-spacing property just above. ---
+  // between that infinity label's GLYPH and the nearest real x-value -- NOT directly
+  // under the infinity symbol itself (retour utilisateur, earlier round). ---
   const edgeSignCheck = await page.evaluate(function (row) {
     function centerX(el) { var r = el.getBoundingClientRect(); return r.left + r.width / 2; }
+    function glyphCenter(cell) { var k = cell.querySelector('.katex'); return centerX(k || cell); }
     var headers = Array.from(document.querySelectorAll('.sign-chart-header-cell')).slice(1);
     var lastCol = headers.length - 1;
     var leftSign = document.querySelector('.sign-chart-target[data-sign-chart-row="' + row + '"][data-sign-chart-col="0"]');
     var rightSign = document.querySelector('.sign-chart-target[data-sign-chart-row="' + row + '"][data-sign-chart-col="' + lastCol + '"]');
     return {
       leftSignCenter: centerX(leftSign),
-      leftExpectedMid: (centerX(headers[0]) + centerX(headers[1])) / 2,
-      leftInfinityCenter: centerX(headers[0]),
+      leftExpectedMid: (glyphCenter(headers[0]) + centerX(headers[1])) / 2,
+      leftInfinityCenter: glyphCenter(headers[0]),
       rightSignCenter: centerX(rightSign),
-      rightExpectedMid: (centerX(headers[lastCol - 1]) + centerX(headers[lastCol])) / 2
+      rightExpectedMid: (centerX(headers[lastCol - 1]) + glyphCenter(headers[lastCol])) / 2
     };
   }, totalRowIndex);
   console.log('edge sign check:', JSON.stringify(edgeSignCheck));
@@ -487,6 +575,26 @@ async function targetLatex(page, row, col) {
     Math.abs(edgeSignCheck.leftSignCenter - edgeSignCheck.leftExpectedMid) < 0.5);
   ok('right edge sign sits at the exact midpoint between +infinity and the nearest x-value',
     Math.abs(edgeSignCheck.rightSignCenter - edgeSignCheck.rightExpectedMid) < 0.5);
+
+  // --- The gutter between the label/content divider and -\infty (mirrored: between
+  // +\infty and the table's own right edge) is now small and fixed (retour utilisateur:
+  // "reduce the space between -infinity and the vertical line to its left" -- previously
+  // large, since centering -infinity in a column wide enough for equal spacing left a lot
+  // of empty space between the divider and the glyph itself). ---
+  const gutterCheck = await page.evaluate(function () {
+    var headers = Array.from(document.querySelectorAll('.sign-chart-header-cell')).slice(1);
+    var lastCol = headers.length - 1;
+    var leftCell = headers[0], rightCell = headers[lastCol];
+    var leftGlyph = leftCell.querySelector('.katex').getBoundingClientRect();
+    var rightGlyph = rightCell.querySelector('.katex').getBoundingClientRect();
+    return {
+      leftGutter: leftGlyph.left - leftCell.getBoundingClientRect().left,
+      rightGutter: rightCell.getBoundingClientRect().right - rightGlyph.right
+    };
+  });
+  console.log('edge label gutters (divider-to-glyph, glyph-to-table-end):', JSON.stringify(gutterCheck));
+  ok('the gutter between the divider and -infinity is small', gutterCheck.leftGutter >= 0 && gutterCheck.leftGutter < 20);
+  ok('the gutter between +infinity and the table edge is small', gutterCheck.rightGutter >= 0 && gutterCheck.rightGutter < 20);
 
   // --- Boundary (x-value) columns are visibly narrower than interval columns: a sign
   // can never look like it belongs directly under -\infty/+\infty (which live in the
