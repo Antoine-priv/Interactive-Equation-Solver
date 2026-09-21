@@ -275,6 +275,13 @@ async function targetLatex(page, row, col) {
   ok('clicking a FACTOR option while a factor is still focused actually adds a row',
     (await page.evaluate(() => window.App.History.getSignChart().tableRows.length)) === 1);
 
+  // --- No "." placeholder in a freshly-added, still-empty row (retour utilisateur) ---
+  const emptyTargetText = await page.evaluate(() => {
+    var t = document.querySelector('.sign-chart-target-empty');
+    return t ? t.textContent : undefined;
+  });
+  ok('an empty target has no "." placeholder text', emptyTargetText === '');
+
   for (let i = 0; i < 3; i++) {
     await wrap.hover();
     await page.waitForTimeout(60);
@@ -455,6 +462,32 @@ async function targetLatex(page, row, col) {
   ok('all 4 gaps between -infinity/x-values/+infinity are equal',
     spacingCheck.every(function (g) { return g === spacingCheck[0]; }));
 
+  // --- The EDGE interval signs (next to -\infty/+\infty) sit at the exact midpoint
+  // between that infinity label and the nearest real x-value -- NOT directly under the
+  // infinity symbol itself (retour utilisateur), even though -\infty/+\infty are
+  // centered in their own (wide) column for the equal-spacing property just above. ---
+  const edgeSignCheck = await page.evaluate(function (row) {
+    function centerX(el) { var r = el.getBoundingClientRect(); return r.left + r.width / 2; }
+    var headers = Array.from(document.querySelectorAll('.sign-chart-header-cell')).slice(1);
+    var lastCol = headers.length - 1;
+    var leftSign = document.querySelector('.sign-chart-target[data-sign-chart-row="' + row + '"][data-sign-chart-col="0"]');
+    var rightSign = document.querySelector('.sign-chart-target[data-sign-chart-row="' + row + '"][data-sign-chart-col="' + lastCol + '"]');
+    return {
+      leftSignCenter: centerX(leftSign),
+      leftExpectedMid: (centerX(headers[0]) + centerX(headers[1])) / 2,
+      leftInfinityCenter: centerX(headers[0]),
+      rightSignCenter: centerX(rightSign),
+      rightExpectedMid: (centerX(headers[lastCol - 1]) + centerX(headers[lastCol])) / 2
+    };
+  }, totalRowIndex);
+  console.log('edge sign check:', JSON.stringify(edgeSignCheck));
+  ok('left edge sign is NOT under -infinity',
+    Math.abs(edgeSignCheck.leftSignCenter - edgeSignCheck.leftInfinityCenter) > 20);
+  ok('left edge sign sits at the exact midpoint between -infinity and the nearest x-value',
+    Math.abs(edgeSignCheck.leftSignCenter - edgeSignCheck.leftExpectedMid) < 0.5);
+  ok('right edge sign sits at the exact midpoint between +infinity and the nearest x-value',
+    Math.abs(edgeSignCheck.rightSignCenter - edgeSignCheck.rightExpectedMid) < 0.5);
+
   // --- Boundary (x-value) columns are visibly narrower than interval columns: a sign
   // can never look like it belongs directly under -\infty/+\infty (which live in the
   // outermost INTERVAL columns, not their own boundary column). ---
@@ -513,6 +546,62 @@ async function targetLatex(page, row, col) {
   console.log('factors row center:', rowCenter, 'viewport center:', viewportWidth / 2);
   ok('the factors row stays centered on the viewport even after one column grows wide',
     Math.abs(rowCenter - viewportWidth / 2) < 2);
+
+  // --- Isolated scenario: a sign-chart target/button responds to a SINGLE real click
+  // even while some OTHER pending state is active elsewhere (retour utilisateur: "make
+  // buttons inside the table clickable... even if the table isn't currently selected or
+  // focused"). Root cause was two capture-phase document click listeners (toolbar.js's
+  // cancelOp-on-outside-click, render.js's branch-outline dismissal) that could re-render
+  // -- destroying the just-clicked DOM node -- before its own bubble-phase listener ever
+  // ran. Reproduced two ways: a lingering term selection on the main chain, and
+  // branchOutlineVisible left true by a real click inside a factor column. ---
+  await page.evaluate(() => {
+    window.App.History.startNewEquation({
+      left: [{ sign: 1, factors: [
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 },
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 1 }
+      ] }],
+      right: [{ coeff: 0, pow: 0 }]
+    }, { operator: '\\geq' });
+    window.App.History.signChartAction();
+    var Hist = window.App.History;
+    Hist.setFocusedSignChartFactor(0);
+    Hist.selectOp('expr'); Hist.setExprChainText('-1'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.setFocusedSignChartFactor(1);
+    Hist.selectOp('expr'); Hist.setExprChainText('+2'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.focusMain();
+    Hist.signChartAddRow({ rowKind: 'total' });
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(150);
+
+  // Scenario A: a term selected on the MAIN chain (real API call, leaves pending non-empty).
+  await page.evaluate(() => window.App.History.toggleTermSelection('left', 0));
+  await page.waitForTimeout(80);
+  await page.locator('.sign-chart-target[data-sign-chart-row="0"][data-sign-chart-col="1"]').click();
+  await page.waitForTimeout(100);
+  ok('scenario A: popup opens on a single click with a term selected elsewhere',
+    await page.evaluate(() => !!document.querySelector('.sign-chart-popup')));
+  await page.mouse.click(10, 10); // close the popup, deselect
+  await page.waitForTimeout(80);
+  await page.evaluate(() => window.App.History.cancelOp());
+
+  // Scenario B: a REAL click inside a factor column (sets branchOutlineVisible=true via
+  // the actual DOM listener, not an API call) right before clicking the table.
+  await page.click('.domain-branch[data-signchart-factor-index="0"] .side[data-side="left"] .term[data-index="0"]', { force: true });
+  await page.waitForTimeout(80);
+  await page.locator('.sign-chart-target[data-sign-chart-row="0"][data-sign-chart-col="2"]').click({ force: true });
+  await page.waitForTimeout(100);
+  ok('scenario B: popup opens on a single click right after a real click inside a factor column',
+    await page.evaluate(() => !!document.querySelector('.sign-chart-popup')));
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
