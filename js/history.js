@@ -1945,6 +1945,11 @@
       getSteps: function () { return steps; },
       getPending: function () { return pending; },
       lastEquation: lastEquation,
+      // Opérateur en vigueur pour CE moteur ('\geq'/'\leq'/'<'/'>', ou null pour "="
+      // implicite) — voir la déclaration de `currentOperator` plus haut. Sert à
+      // newEquationModal.js pour réafficher la bonne relation en rouvrant la modale sur
+      // l'équation en cours d'édition (equationToLatex).
+      getCurrentOperator: function () { return currentOperator; },
       pushStep: pushStep,
       pushAsymmetricStep: pushAsymmetricStep,
       selectOp: selectOp,
@@ -2619,7 +2624,7 @@
     // profondeur arbitraire se fait via la pile d'appels JS normale (appeler la méthode
     // de l'enfant refait le même test un niveau plus bas), sans avoir à la dérouler ici.
     var DELEGATED_METHODS = [
-      'getSteps', 'getPending', 'lastEquation', 'selectOp', 'cancelOp',
+      'getSteps', 'getPending', 'lastEquation', 'getCurrentOperator', 'selectOp', 'cancelOp',
       'exitFactorKeepSelection', 'toggleTermSelection', 'toggleInnerSelection',
       'drillIntoGroup', 'drillIntoProductBranch', 'drillIntoInnerGroup', 'exitDrill',
       'confirmSimplifySelection', 'enterFactorWithSelection', 'getFactorTargetShape',

@@ -10,8 +10,11 @@
     return App.Expr.sideLatex(side);
   }
 
-  function equationToLatex(eq) {
-    return sideToLatex(eq.left) + '=' + sideToLatex(eq.right);
+  // `operator` : '\geq'/'\leq'/'<'/'>' (voir App.Ineq.OPERATORS) ou null/undefined pour
+  // "=" implicite — mêmes tokens que ceux reconnus par App.Parser.splitTopLevelRelation,
+  // pour que le round-trip (préremplissage puis reparsing à la validation) soit exact.
+  function equationToLatex(eq, operator) {
+    return sideToLatex(eq.left) + (operator || '=') + sideToLatex(eq.right);
   }
 
   // Doit rester en phase avec la transition CSS de .modal-overlay/.modal-box (voir
@@ -28,13 +31,14 @@
     var manualSubmit = document.getElementById('manualSubmit');
     var randomBtn = document.getElementById('randomGenerate');
     var closeBtn = document.getElementById('modalClose');
+    var relationButtons = document.querySelectorAll('#relationPicker .relation-btn');
     var prefersReducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     var closeTimer = null;
 
     function submitManual() {
       try {
         var eq = App.Parser.parseLatexEquation(App.MathKeypad.getLatex());
-        App.History.startNewEquation(eq);
+        App.History.startNewEquation({ left: eq.left, right: eq.right }, eq.operator ? { operator: eq.operator } : undefined);
         close();
       } catch (err) {
         manualError.textContent = err.message;
@@ -49,7 +53,7 @@
       box.classList.remove('modal-vanish');
       overlay.hidden = false;
       manualError.textContent = '';
-      App.MathKeypad.setActiveField(manualInputSlot, { onEnter: submitManual, onEscape: close }, equationToLatex(App.History.lastEquation()));
+      App.MathKeypad.setActiveField(manualInputSlot, { onEnter: submitManual, onEscape: close }, equationToLatex(App.History.lastEquation(), App.History.getCurrentOperator()));
       if (prefersReducedMotion) return;
       // Fondu d'entrée du fond (même classe que la fermeture, voir .modal-overlay-hiding
       // dans style.css) : posée puis retirée après un reflow forcé pour que le navigateur
@@ -101,6 +105,15 @@
     // valider (l'icône "↵" du pavé ancré n'est pas forcément évidente au premier abord).
     manualSubmit.addEventListener('mousedown', function (e) { e.preventDefault(); }); // ne vole pas le focus du champ
     manualSubmit.addEventListener('click', submitManual);
+    // Sélecteur de relation (=, >, <, ≥, ≤, voir index.html) : insère le token LaTeX du
+    // bouton au curseur du champ actif (voir insertAtCursor dans mathKeypad.js), même
+    // parade "mousedown préventif" que manualSubmit ci-dessus pour ne pas voler le focus.
+    Array.prototype.forEach.call(relationButtons, function (relBtn) {
+      relBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      relBtn.addEventListener('click', function () {
+        App.MathKeypad.insertAtCursor(relBtn.getAttribute('data-relation'));
+      });
+    });
     overlay.addEventListener('click', function (e) {
       if (e.target === overlay) close();
     });
@@ -118,7 +131,8 @@
     randomBtn.addEventListener('click', function () {
       // Remplit juste le champ (sans appliquer ni fermer) : l'élève peut relire/modifier
       // avant de valider lui-même, exactement comme une saisie manuelle.
-      App.MathKeypad.setLatex(equationToLatex(App.Generator.generateEquation()));
+      var gen = App.Generator.generateEquation();
+      App.MathKeypad.setLatex(equationToLatex(gen, gen.operator));
       manualError.textContent = '';
     });
   }

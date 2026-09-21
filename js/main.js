@@ -180,7 +180,8 @@
     initDrillDismissal();
     initCanvasPan();
 
-    App.History.init(App.Generator.generateEquation());
+    var startEq = App.Generator.generateEquation();
+    App.History.init(startEq, startEq.operator ? { operator: startEq.operator } : undefined);
 
     window.addEventListener('resize', function () {
       App.Render.renderAll();
