@@ -1490,11 +1490,42 @@
   // fraction, elle-même drillée — voir pending.drilled.branch pouvant désormais accompagner
   // un path de longueur > 1 dans history.js.
   function withProductBranchAtPath(side, path, branch, newBranchTerms) {
+    // Si factoriser CE facteur (ex. "(x²-36)" dans "(x²-36)(x+2)", identité a²-b²) a
+    // produit à son tour un ProductGroup ("(x-6)(x+6)"), ne JAMAIS l'imbriquer tel quel à
+    // la place de ce seul facteur (bug rapporté : "(x-6) et (x+6) ne sont pas séparés,
+    // sélectionner l'un sélectionne les deux ensemble" — productGroupBranchesLatex,
+    // render.js, n'attribue un \htmlId/data-branch propre qu'aux facteurs du NIVEAU
+    // SUPÉRIEUR d'un ProductGroup ; niché à l'intérieur d'un seul facteur, tout son
+    // contenu redevient un unique bloc opaque et indivisible côté clic — même limite pour
+    // l'extraction "tableau de signes", voir Expr.extractSignChartFactors, qui exige des
+    // facteurs LINÉAIRES au premier niveau). Fusionne à la place ses PROPRES facteurs dans
+    // la liste plate du produit englobant, à la place du seul facteur d'origine — la seule
+    // reconstruction pour laquelle "(a·b)·c" et "a·b·c" restent rigoureusement la même
+    // expression : le signe du groupe niché se répercute sur le signe du produit englobant
+    // (il n'y a plus de conteneur propre pour le porter une fois aplati), et l'exposant du
+    // facteur d'origine se distribue à chacun des nouveaux facteurs ((x²-36)² factorisé
+    // donnerait donc (x-6)²(x+6)², pas juste (x-6)(x+6)).
+    function flattenedBranchFactors(f) {
+      var terms = newBranchTerms.map(cloneNode);
+      if (terms.length !== 1 || !isProductGroup(terms[0])) return { extraSign: 1, factors: [{ terms: terms, exponent: f.exponent }] };
+      var nested = terms[0];
+      return {
+        extraSign: nested.sign,
+        factors: nested.factors.map(function (nf) {
+          return { terms: nf.terms.map(cloneNode), exponent: nf.exponent * f.exponent };
+        })
+      };
+    }
     function newProductNode(productNode) {
-      var newFactors = productNode.factors.map(function (f, idx) {
-        return idx === branch ? { terms: newBranchTerms.map(cloneNode), exponent: f.exponent } : cloneFactor(f);
+      var extraSign = 1;
+      var newFactors = [];
+      productNode.factors.forEach(function (f, idx) {
+        if (idx !== branch) { newFactors.push(cloneFactor(f)); return; }
+        var flattened = flattenedBranchFactors(f);
+        extraSign = flattened.extraSign;
+        newFactors = newFactors.concat(flattened.factors);
       });
-      return { sign: productNode.sign, factors: newFactors };
+      return { sign: productNode.sign * extraSign, factors: newFactors };
     }
     function recur(node, restPath) {
       var newInner = node.innerTerms.map(function (t, i) {
