@@ -20,7 +20,7 @@ function ok(label, cond) {
 // reference tableau's -,0,+,‖,-,0,+ exactly.
 (async () => {
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1500, height: 1400 } });
+  const page = await browser.newPage({ viewport: { width: 1500, height: 1800 } });
   const errs = [];
   page.on('pageerror', (e) => errs.push('[pageerror] ' + e.message));
   page.on('console', (m) => { if (m.type() === 'error') errs.push('[console.error] ' + m.text()); });
@@ -216,6 +216,21 @@ function ok(label, cond) {
   ok('a factor is still focused (not returned to the main chain)',
     (await page.evaluate(() => window.App.History.getFocusedSignChartFactor())) !== null);
 
+  // --- The button hides while working INSIDE the sign chart's own factors ---
+  ok('canSignChart is false while a factor is focused (even with a term selected)',
+    !(await page.evaluate(() => {
+      window.App.History.toggleTermSelection('left', 0);
+      return window.App.History.canSignChart();
+    })));
+  ok('button row hidden while focused inside the sign chart', await btnHidden());
+  await page.evaluate(() => window.App.History.focusMain());
+  await page.waitForTimeout(80);
+  ok('canSignChart true again once back on the main chain',
+    await page.evaluate(() => window.App.History.canSignChart()));
+  // Refocus factor 2 to resume the intended flow (table not built yet at this point).
+  await page.evaluate(() => window.App.History.setFocusedSignChartFactor(2));
+  await page.waitForTimeout(80);
+
   const roots = await page.evaluate(() =>
     window.App.History.getSignChart().factors.map(function (f) {
       return window.App.Equation.solvedValue(f.engine.lastEquation());
@@ -325,7 +340,68 @@ function ok(label, cond) {
   const excludedCols = await page.$$eval('.sign-chart-header-cell.sign-chart-col-excluded', function (els) { return els.length; });
   ok('exactly one excluded-domain header column (x=1)', excludedCols === 1);
 
+  // --- No outer border on the table itself (per-cell borders only) ---
+  const tableBorderWidth = await page.evaluate(() => getComputedStyle(document.querySelector('.sign-chart-table')).borderWidth);
+  ok('the table has no outer border of its own', tableBorderWidth === '0px');
+
+  // --- Boundary (x-value) columns are visibly narrower than interval columns: a sign
+  // can never look like it belongs directly under -\infty/+\infty (which live in the
+  // outermost INTERVAL columns, not their own boundary column). ---
+  const colWidths = await page.evaluate(() => {
+    var cells = Array.from(document.querySelectorAll('.sign-chart-header-cell')).slice(1); // skip the "x" label cell
+    return cells.map(function (c) { return c.getBoundingClientRect().width; });
+  });
+  console.log('column widths (interval,boundary,interval,...):', colWidths.map((w) => Math.round(w)));
+  // Columns alternate interval,boundary,interval,...,interval (7 for 3 roots).
+  const intervalWidths = colWidths.filter(function (_, i) { return i % 2 === 0; });
+  const boundaryWidths = colWidths.filter(function (_, i) { return i % 2 === 1; });
+  ok('every boundary column is narrower than every interval column',
+    Math.max.apply(null, boundaryWidths) < Math.min.apply(null, intervalWidths));
+
+  // --- The header ("x") row's data columns and the total row's data columns share the
+  // exact same left edges (same grid columns, nothing offset between them) ---
+  const headerDataLefts = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.sign-chart-header-cell')).slice(1)
+      .map((e) => Math.round(e.getBoundingClientRect().left)));
+  const totalRowDataLefts = await page.evaluate((row) =>
+    Array.from(document.querySelectorAll('.sign-chart-data-cell[data-sign-chart-row="' + row + '"]'))
+      .sort((a, b) => Number(a.getAttribute('data-sign-chart-col')) - Number(b.getAttribute('data-sign-chart-col')))
+      .map((e) => Math.round(e.getBoundingClientRect().left)), totalRowIndex);
+  console.log('header data-column lefts:', headerDataLefts, 'total-row data-column lefts:', totalRowDataLefts);
+  ok('the total row\'s columns line up exactly with the header row\'s columns',
+    JSON.stringify(totalRowDataLefts) === JSON.stringify(headerDataLefts));
+
   await page.screenshot({ path: `${SCRATCH}/sign_chart_full.png`, fullPage: true });
+
+  // --- Isolated scenario: the whole factors row stays visually centered even once one
+  // column grows much wider than the others, instead of drifting/pushing to one side.
+  // Uses a fresh simple equation rather than reusing the state above, to avoid any
+  // undo/cleanup fragility. ---
+  await page.evaluate(() => {
+    window.App.History.startNewEquation({
+      left: [{ sign: 1, factors: [
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 },
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 1 }
+      ] }],
+      right: [{ coeff: 0, pow: 0 }]
+    }, { operator: '\\geq' });
+    window.App.History.signChartAction();
+  });
+  await page.waitForTimeout(120);
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.setFocusedSignChartFactor(0);
+    Hist.selectOp('expr'); Hist.setExprChainText('+111111-222222+333333-444444'); Hist.confirm();
+    Hist.focusMain();
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(150);
+  const rowRect = await page.evaluate(() => document.querySelector('.sign-chart-factors-row').getBoundingClientRect());
+  const viewportWidth = page.viewportSize().width;
+  const rowCenter = rowRect.x + rowRect.width / 2;
+  console.log('factors row center:', rowCenter, 'viewport center:', viewportWidth / 2);
+  ok('the factors row stays centered on the viewport even after one column grows wide',
+    Math.abs(rowCenter - viewportWidth / 2) < 2);
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
