@@ -104,6 +104,24 @@
   // tableau français, voir le plan).
   var SIGN_CHART_CELL_LATEX = { '+': '+', '-': '-', '0': '0', undef: '\\Vert' };
 
+  // LaTeX de l'expression totale étudiée (retour utilisateur : remplacer le texte générique
+  // "Expression totale" par l'expression mathématique elle-même, partout où elle apparaît —
+  // rangée "total" une fois ajoutée, ET option du popup "+ Ajouter une rangée" avant ça,
+  // même traitement que chaque option "facteur" juste au-dessus qui affiche déjà sa vraie
+  // notation plutôt qu'un nom générique). Reconstruite à partir de `signChart.factors`
+  // (`capturedSide` de chaque facteur num/den, voir Expr.extractSignChartFactors) et
+  // `constantSign` plutôt que stockée telle quelle : ce sont ces mêmes morceaux, jamais le
+  // side d'origine, qui restent la source de vérité pour la validation des cases (voir
+  // signChartExpectedCell dans history.js).
+  function signChartTotalLatex(signChart) {
+    function factorLatex(f) { return '\\left(' + Expr.sideLatex(f.capturedSide) + '\\right)'; }
+    var numFactors = signChart.factors.filter(function (f) { return f.kind === 'num'; });
+    var denFactors = signChart.factors.filter(function (f) { return f.kind === 'den'; });
+    var numLatex = (signChart.constantSign < 0 ? '-' : '') + (numFactors.map(factorLatex).join('') || '1');
+    if (!denFactors.length) return numLatex;
+    return '\\frac{' + numLatex + '}{' + denFactors.map(factorLatex).join('') + '}';
+  }
+
   // Popup compact (2 boutons pour une case, ou une liste verticale pour "+ Ajouter une
   // rangée", voir renderSignChartTable) : élément UNIQUE recréé à chaque ouverture, jamais
   // conservé entre deux ouvertures. `position:fixed`, ancré sous `anchorEl` — UI
@@ -2206,7 +2224,15 @@
       var BOUNDARY_W = 76;
       var MIDDLE_INTERVAL_W = 150;
       var GAP = BOUNDARY_W + MIDDLE_INTERVAL_W;
-      var EDGE_LABEL_GUTTER = 28;
+      // Valeur choisie pour laisser un TOUT PETIT espace visible entre "-∞"/"+∞" et le
+      // bord de leur colonne (retour utilisateur, tour suivant : la version précédente —
+      // 28 — collait le symbole quasiment contre le bord ; toujours très loin, cela dit,
+      // du grand espace d'origine avant toute réduction). Le décalage VISIBLE réellement
+      // observé (bord -> bord gauche du glyphe rendu) vaut EDGE_LABEL_GUTTER - largeur du
+      // glyphe/2 (le translateX(-50%) plus bas centre le glyphe sur ce point, annulant sa
+      // propre largeur) : avec un glyphe "-\infty"/"+\infty" d'environ 52px de large à
+      // cette taille de police, 40 donne un espace visible d'environ 14px.
+      var EDGE_LABEL_GUTTER = 40;
       var EDGE_INTERVAL_W = EDGE_LABEL_GUTTER + BOUNDARY_W / 2 + MIDDLE_INTERVAL_W;
       // Le SIGNE d'une colonne de bord ne peut PAS rester au même endroit que "-∞"/"+∞"
       // (retour utilisateur, tour précédent : "le signe apparaît directement sous le
@@ -2266,7 +2292,7 @@
         var labelCell = document.createElement('div');
         labelCell.className = 'sign-chart-cell sign-chart-row-label' + (isLastRow ? ' sign-chart-row-last' : '');
         if (row.rowKind === 'total') {
-          labelCell.textContent = 'Expression totale';
+          window.katex.render(signChartTotalLatex(signChart), labelCell, { throwOnError: false });
         } else {
           window.katex.render(Expr.sideLatex(signChart.factors[row.factorIndex].capturedSide), labelCell, { throwOnError: false });
         }
@@ -2341,7 +2367,7 @@
           availableOptions.push({ label: Expr.sideLatex(f.capturedSide), value: { rowKind: 'factor', factorIndex: idx }, latex: true });
         }
       });
-      if (!hasTotal) availableOptions.push({ label: 'Expression totale', value: { rowKind: 'total' } });
+      if (!hasTotal) availableOptions.push({ label: signChartTotalLatex(signChart), value: { rowKind: 'total' }, latex: true });
 
       // "+ Ajouter une rangée" et "Vérifier" vivent dans une même rangée d'actions,
       // toutes deux révélées au survol du tableau (voir .sign-chart-table-actions dans

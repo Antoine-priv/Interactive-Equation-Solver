@@ -2527,6 +2527,9 @@
     // une case "frontière" que 0/‖ — appliqué ici aussi, pas seulement côté UI, pour rester
     // cohérent si jamais appelé autrement qu'à travers le popup prévu). `value` peut être
     // null (efface la case).
+    // Toute modification repasse `verified` à faux (retour utilisateur : après "Vérifier",
+    // pouvoir corriger une case sans que sa nouvelle valeur soit jugée immédiatement — il
+    // faut re-cliquer "Vérifier" pour re-juger l'ensemble, voir signChartVerify plus bas).
     // Jamais délégué non plus (voir signChartAddRow juste au-dessus pour la raison).
     function signChartSetCell(rowIndex, colIndex, value) {
       if (!signChart) return false;
@@ -2536,6 +2539,7 @@
       var allowed = cols[colIndex].type === 'boundary' ? ['0', 'undef'] : ['+', '-'];
       if (value !== null && allowed.indexOf(value) === -1) return false;
       row.cells[colIndex] = value;
+      signChart.verified = false;
       notify();
       return true;
     }
@@ -2557,12 +2561,13 @@
       return actual === signChartExpectedCell(row, cols[colIndex]);
     }
 
-    // Bouton "Vérifier" (voir render.js) : bascule signChart.verified à vrai UNE FOIS
-    // pour toutes (jamais remis à faux ensuite — un nouveau rendu tant qu'une case reste
-    // fausse continue de la signaler tant que l'élève la corrige, sans avoir à re-cliquer
-    // "Vérifier" à chaque essai) — n'a d'effet QUE si une rangée "Expression totale"
-    // existe déjà (retour utilisateur), jamais délégué (même raison que
-    // signChartAddRow plus haut : toujours CE noeud précis, jamais un facteur focalisé).
+    // Bouton "Vérifier" (voir render.js) : bascule signChart.verified à vrai — remis à
+    // faux par la moindre modification ensuite (voir signChartSetCell, retour
+    // utilisateur : re-cliquer "Vérifier" est nécessaire pour re-juger l'ensemble après
+    // une correction, jamais un jugement instantané case par case) — n'a d'effet QUE si
+    // une rangée "Expression totale" existe déjà (retour utilisateur), jamais délégué
+    // (même raison que signChartAddRow plus haut : toujours CE noeud précis, jamais un
+    // facteur focalisé).
     function signChartVerify() {
       if (!signChart) return false;
       var hasTotal = signChart.tableRows.some(function (r) { return r.rowKind === 'total'; });
