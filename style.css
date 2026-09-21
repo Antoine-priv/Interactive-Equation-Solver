@@ -155,6 +155,30 @@ button {
 #undoBtn:active:not(:disabled) { transform: translateY(0); }
 #undoBtn:disabled { opacity: 0.4; cursor: default; }
 
+/* ---- Bouton flottant "Tableau de signes" (voir canSignChart/signChartAction dans
+   history.js) : même gabarit/langage visuel neutre que #undoBtn, juste à sa droite. ---- */
+#signChartBtn {
+  position: fixed;
+  top: 22px;
+  left: 134px;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-md);
+  transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
+  z-index: 30;
+}
+#signChartBtn:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
+#signChartBtn:active:not(:disabled) { transform: translateY(0); }
+#signChartBtn:disabled { opacity: 0.4; cursor: default; }
+
 /* ---- Bouton flottant clair/sombre, en haut à droite ---- */
 #themeToggleBtn {
   position: fixed;

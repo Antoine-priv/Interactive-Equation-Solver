@@ -6,6 +6,10 @@
     'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
     '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>';
 
+  var SIGN_CHART_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" ' +
+    'stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M9 10v9M15 10v9"/></svg>';
+
   // Bouton flottant "annuler la dernière opération" (voir undo/canUndo dans history.js) :
   // annule la dernière étape confirmée du moteur actif (membre principal, ou branche
   // focalisée après un "Produit nul"/"Racine carrée"), ou — à défaut, si cette branche
@@ -17,6 +21,23 @@
     btn.innerHTML = UNDO_SVG;
     btn.addEventListener('click', function () { App.History.undo(); });
     App.History.subscribe(function () { btn.disabled = !App.History.canUndo(); });
+  }
+
+  // Bouton flottant "Tableau de signes" (voir canSignChart/signChartAction dans
+  // history.js) : grisé, avec une bulle d'aide native (`title`, même recette que #undoBtn)
+  // plutôt que le `data-tooltip` des boutons contextuels d'#opButtons — c'est un état
+  // global ("l'équation s'y prête, ET le domaine est établi"), pas une action liée à une
+  // sélection en cours.
+  function initSignChartButton() {
+    var btn = document.getElementById('signChartBtn');
+    if (!btn) return;
+    btn.innerHTML = SIGN_CHART_SVG;
+    btn.addEventListener('click', function () { App.History.signChartAction(); });
+    App.History.subscribe(function () {
+      var can = App.History.canSignChart();
+      btn.disabled = !can;
+      btn.title = can ? 'Tableau de signes' : 'Complétez d\'abord la condition d\'existence du domaine.';
+    });
   }
 
   // Ressortir d'un groupe "entré" (pending.drilled, voir history.js) sans avoir à viser
@@ -177,6 +198,7 @@
     App.Theme.init();
     App.Render.init();
     initUndoButton();
+    initSignChartButton();
     initDrillDismissal();
     initCanvasPan();
 

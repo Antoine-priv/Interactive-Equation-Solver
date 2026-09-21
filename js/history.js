@@ -2025,6 +2025,15 @@
     // sur CE noeud une fois `domainConditions` posé (voir canProduitNul/canSquareRoot).
     var domainConditions = null;
     var focusedDomain = null;
+    // "Tableau de signes" (voir canSignChart/signChartAction plus bas) : même principe de
+    // COEXISTENCE que `domainConditions` juste au-dessus (un noeud garde son `leaf` actif),
+    // et pour cause — signChartAction() exige `domainConditions` déjà entièrement résolu
+    // avant de pouvoir s'activer (voir canSignChart). null, ou { factors: [{ id,
+    // kind:'num'|'den', capturedSide, engine }, ...], constantSign, tableRows }, créé UNE
+    // SEULE FOIS par noeud (signChartAction() est un no-op si déjà posé, contrairement à
+    // `domainConditions` qui accumule une entrée par dénominateur/radicand distinct).
+    var signChart = null;
+    var focusedSignChartFactor = null;
     var listeners = [];
 
     function notify() {
@@ -2046,6 +2055,7 @@
     function activeChild() {
       if (branches) return focusedChild();
       if (domainConditions && focusedDomain !== null) return domainConditions[focusedDomain].engine;
+      if (signChart && focusedSignChartFactor !== null) return signChart.factors[focusedSignChartFactor].engine;
       return null;
     }
 
@@ -2055,6 +2065,8 @@
       branchSplitLabel = '';
       domainConditions = null;
       focusedDomain = null;
+      signChart = null;
+      focusedSignChartFactor = null;
       leaf.init(equation, opts);
     }
 
@@ -2087,9 +2099,21 @@
       if (domainConditions && index >= 0 && index < domainConditions.length) focusedDomain = index;
     }
 
+    // Même principe encore, cette fois pour `signChart.factors` (voir ce champ plus haut).
+    function setFocusedSignChartFactor(index) {
+      if (!signChart || index < 0 || index >= signChart.factors.length || focusedSignChartFactor === index) return;
+      focusedSignChartFactor = index;
+      notify();
+    }
+
+    function focusSignChartFactor(index) {
+      if (signChart && index >= 0 && index < signChart.factors.length) focusedSignChartFactor = index;
+    }
+
     function focusMain() {
-      if (focusedDomain === null) return;
+      if (focusedDomain === null && focusedSignChartFactor === null) return;
       focusedDomain = null;
+      focusedSignChartFactor = null;
       notify();
     }
 
@@ -2307,6 +2331,74 @@
       });
       splitIntoBranches(equations, '\\text{produit nul}');
       return true;
+    }
+
+    // Détecte si `eq` est de la forme "<expression factorisée> <op> 0" (comme
+    // detectProduitNul, mais SANS exiger "=0" — le côté "expression" peut être n'importe
+    // quel side, généralisé à une expression-quotient via Expr.extractSignChartFactors),
+    // pour "Tableau de signes" (voir canSignChart plus bas). Renvoie
+    // { factors: [{terms, kind}], constantSign } ou null.
+    function detectSignChartFactors(eq) {
+      function trySide(exprSide, zeroSide) {
+        var eSide = eq[exprSide], zSide = eq[zeroSide];
+        if (zSide.length !== 1 || Expr.isGroup(zSide[0]) || zSide[0].pow !== 0 || Expr.roundClean(zSide[0].coeff) !== 0) return null;
+        return Expr.extractSignChartFactors(eSide);
+      }
+      return trySide('left', 'right') || trySide('right', 'left');
+    }
+
+    // Vrai si CHAQUE facteur `kind:'den'` de `denFactors` a une colonne "Condition
+    // d'existence" correspondante (même dénominateur, voir Expr.sidesEquivalent) ET déjà
+    // résolue (App.Equation.isSolved, opérateur-agnostique comme partout ailleurs — pas
+    // besoin de la latex "Df=..." de renderDomainSplit, juste ce même test). Un
+    // `denFactors` vide (aucun dénominateur du tout) est trivialement prêt : le domaine
+    // est alors R tout entier, rien à établir.
+    function signChartDomainReady(denFactors) {
+      return denFactors.every(function (f) {
+        return !!(domainConditions && domainConditions.some(function (cond) {
+          return Expr.sidesEquivalent(cond.capturedArray, f.terms) && Eq.isSolved(cond.engine.lastEquation());
+        }));
+      });
+    }
+
+    // Bouton "Tableau de signes" : disponible une fois l'équation déjà de la forme
+    // "<produit/quotient de facteurs degré <= 1> <op> 0" ET (s'il y a un dénominateur) une
+    // fois le domaine de définition de CHAQUE dénominateur entièrement établi (voir
+    // signChartDomainReady) — contrairement à Produit nul/Racine carrée, PEUT coexister
+    // avec `domainConditions` sur ce même noeud (il en dépend, au contraire de les
+    // exclure) ; reste indisponible une fois `branches` posé (v1, même restriction que les
+    // deux autres scissions).
+    function canSignChart() {
+      if (activeChild()) return activeChild().canSignChart();
+      if (branches || signChart) return false;
+      var extracted = detectSignChartFactors(leaf.lastEquation());
+      if (!extracted) return false;
+      var denFactors = extracted.factors.filter(function (f) { return f.kind === 'den'; });
+      return signChartDomainReady(denFactors);
+    }
+
+    // Clic sur "Tableau de signes" : crée UNE colonne par facteur distinct détecté par
+    // detectSignChartFactors, chacune une inéquation "<facteur> > 0" indépendante (moteur
+    // d'inégalité habituel, voir init()/currentOperator plus haut) — convention fixe (voir
+    // CLAUDE.md/le plan) : toujours "> 0", jamais laissée au choix de l'élève, le signe en
+    // dessous du zéro se déduisant de la résolution elle-même. No-op si déjà posé sur ce
+    // noeud (voir `signChart` plus haut : une seule fois par noeud, contrairement à
+    // `domainConditions` qui accumule une entrée par clic).
+    function signChartAction() {
+      if (activeChild()) return activeChild().signChartAction();
+      if (signChart) return { spawned: false };
+      if (!canSignChart()) return { spawned: false };
+      var extracted = detectSignChartFactors(leaf.lastEquation());
+      var factors = extracted.factors.map(function (f, i) {
+        var eng = createBranchable();
+        eng.init({ left: Expr.cloneSide(f.terms), right: [{ coeff: 0, pow: 0 }] }, { operator: '>' });
+        eng.subscribe(notify);
+        return { id: i, kind: f.kind, capturedSide: Expr.cloneSide(f.terms), engine: eng };
+      });
+      signChart = { factors: factors, constantSign: extracted.constantSign, tableRows: [] };
+      focusedSignChartFactor = null;
+      notify();
+      return { spawned: true };
     }
 
     // Détecte si `eq` est de la forme (expr)² = c ou c = (expr)² (un carré parfait d'un
@@ -2658,6 +2750,13 @@
       getFocusedDomain: function () { return focusedDomain; },
       setFocusedDomain: setFocusedDomain,
       focusDomain: focusDomain,
+      // "Tableau de signes" propre à CE noeud (jamais délégué, même principe que
+      // getDomainConditions ci-dessus) : voir la déclaration de `signChart` plus haut pour
+      // sa forme.
+      getSignChart: function () { return signChart; },
+      getFocusedSignChartFactor: function () { return focusedSignChartFactor; },
+      setFocusedSignChartFactor: setFocusedSignChartFactor,
+      focusSignChartFactor: focusSignChartFactor,
       focusMain: focusMain,
       // Accès DIRECT à `leaf`, jamais délégué (contrairement à getSteps/getPending/etc.,
       // voir DELEGATED_METHODS plus bas) : sert à render.js pour continuer à afficher/
@@ -2672,6 +2771,8 @@
       confirmProduitNul: confirmProduitNul,
       canExistenceCondition: canExistenceCondition,
       existenceConditionAction: existenceConditionAction,
+      canSignChart: canSignChart,
+      signChartAction: signChartAction,
       canSquareRoot: canSquareRoot,
       squareRootStage: squareRootStage,
       squareRootAction: squareRootAction,
