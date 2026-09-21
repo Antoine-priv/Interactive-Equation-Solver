@@ -2401,6 +2401,134 @@
       return { spawned: true };
     }
 
+    // Coefficient du terme degré 1 d'un facteur linéaire déjà extrait par
+    // Expr.extractSignChartFactors (toujours présent et non nul, la restriction v1 excluant
+    // tout facteur qui n'en aurait pas) — détermine si le facteur est croissant (>0) ou
+    // décroissant (<0), donc son signe de part et d'autre de sa racine.
+    function factorLeadingCoeff(terms) {
+      var t = terms.filter(function (n) { return n.pow === 1; })[0];
+      return t ? t.coeff : 0;
+    }
+
+    // Signe (+1/-1) d'un facteur linéaire dans un intervalle (from, to) — `from`/`to` ne
+    // contiennent jamais la racine PROPRE d'un autre facteur strictement à l'intérieur
+    // (voir getSignChartColumns : les colonnes sont justement découpées à CHAQUE racine
+    // distincte), donc `root` (la racine de CE facteur) est toujours <= from ou >= to :
+    // comparer `from` à `root` suffit à savoir de quel côté tombe tout l'intervalle, qu'il
+    // soit borné ou infini (-Infinity/+Infinity se comparent normalement en JS).
+    function factorSignInInterval(terms, root, from) {
+      var above = from >= root;
+      var positiveWhenAbove = factorLeadingCoeff(terms) > 0;
+      return above === positiveWhenAbove ? 1 : -1;
+    }
+
+    // Dérive les colonnes du tableau de signes (2N+1, alternant intervalle/frontière — voir
+    // le commentaire de modèle de données en tête de fichier / le plan) à partir des racines
+    // déjà résolues de CHAQUE facteur (App.Equation.solvedValue) — null tant qu'il en manque
+    // au moins une (voir Eq.isSolved). Racines dédupliquées/triées (deux facteurs distincts
+    // peuvent coïncider, ex. un facteur numérateur et un facteur dénominateur — une seule
+    // colonne frontière pour cette valeur, voir signChartExpectedCell plus bas pour la
+    // distinction par rangée).
+    function getSignChartColumns() {
+      if (!signChart) return null;
+      var allSolved = signChart.factors.every(function (f) { return Eq.isSolved(f.engine.lastEquation()); });
+      if (!allSolved) return null;
+      var distinctRoots = [];
+      signChart.factors.forEach(function (f) {
+        var r = Eq.solvedValue(f.engine.lastEquation());
+        if (distinctRoots.indexOf(r) === -1) distinctRoots.push(r);
+      });
+      distinctRoots.sort(function (a, b) { return a - b; });
+      var cols = [{ type: 'interval', from: -Infinity, to: distinctRoots[0] }];
+      distinctRoots.forEach(function (r, i) {
+        cols.push({ type: 'boundary', value: r });
+        cols.push({ type: 'interval', from: r, to: i + 1 < distinctRoots.length ? distinctRoots[i + 1] : Infinity });
+      });
+      return cols;
+    }
+
+    // Valeur ATTENDUE d'une case du tableau, pour validation (voir signChartCellCorrect
+    // plus bas) — calculée structurellement à partir des racines déjà résolues, jamais à
+    // partir de ce que l'élève a rempli ailleurs (indépendant de l'ordre de remplissage).
+    // `row` = { rowKind:'factor', factorIndex } ou { rowKind:'total' }, `col` une entrée de
+    // getSignChartColumns(). Renvoie '+'|'-'|'0'|'undef' — ou null si cette case n'est PAS
+    // significative pour cette rangée (jamais imposée : une frontière qui n'est pas la
+    // racine PROPRE d'une rangée-facteur, voir le plan).
+    function signChartExpectedCell(row, col) {
+      if (row.rowKind === 'factor') {
+        var f = signChart.factors[row.factorIndex];
+        var root = Eq.solvedValue(f.engine.lastEquation());
+        if (col.type === 'boundary') return col.value === root ? '0' : null;
+        return factorSignInInterval(f.capturedSide, root, col.from) > 0 ? '+' : '-';
+      }
+      var denRoots = signChart.factors.filter(function (f) { return f.kind === 'den'; })
+        .map(function (f) { return Eq.solvedValue(f.engine.lastEquation()); });
+      if (col.type === 'boundary') return denRoots.indexOf(col.value) !== -1 ? 'undef' : '0';
+      var sign = signChart.constantSign;
+      signChart.factors.forEach(function (f) {
+        sign *= factorSignInInterval(f.capturedSide, Eq.solvedValue(f.engine.lastEquation()), col.from);
+      });
+      return sign > 0 ? '+' : '-';
+    }
+
+    // Ajoute une rangée au tableau (voir "cliquer pour ajouter une rangée, choisir un
+    // facteur" dans le plan) : une par facteur distinct au plus, plus au plus une rangée
+    // `rowKind:'total'` ("expression totale", voir signChartExpectedCell). `cells` démarre
+    // entièrement à null (rien n'est jamais pré-rempli pour l'élève, voir
+    // signChartSetCell). Retourne false sans rien faire si cette rangée existe déjà, ou si
+    // le tableau n'est pas encore prêt (tous les facteurs pas encore résolus, voir
+    // getSignChartColumns).
+    function signChartAddRow(row) {
+      if (activeChild()) return activeChild().signChartAddRow(row);
+      if (!signChart) return false;
+      var cols = getSignChartColumns();
+      if (!cols) return false;
+      var exists = row.rowKind === 'total'
+        ? signChart.tableRows.some(function (r) { return r.rowKind === 'total'; })
+        : signChart.tableRows.some(function (r) { return r.rowKind === 'factor' && r.factorIndex === row.factorIndex; });
+      if (exists) return false;
+      signChart.tableRows.push({
+        rowKind: row.rowKind,
+        factorIndex: row.rowKind === 'factor' ? row.factorIndex : undefined,
+        cells: cols.map(function () { return null; })
+      });
+      notify();
+      return true;
+    }
+
+    // Pose la valeur d'une case (voir le plan : une case "intervalle" n'accepte que +/-,
+    // une case "frontière" que 0/‖ — appliqué ici aussi, pas seulement côté UI, pour rester
+    // cohérent si jamais appelé autrement qu'à travers le popup prévu). `value` peut être
+    // null (efface la case).
+    function signChartSetCell(rowIndex, colIndex, value) {
+      if (activeChild()) return activeChild().signChartSetCell(rowIndex, colIndex, value);
+      if (!signChart) return false;
+      var row = signChart.tableRows[rowIndex];
+      var cols = getSignChartColumns();
+      if (!row || !cols || !cols[colIndex]) return false;
+      var allowed = cols[colIndex].type === 'boundary' ? ['0', 'undef'] : ['+', '-'];
+      if (value !== null && allowed.indexOf(value) === -1) return false;
+      row.cells[colIndex] = value;
+      notify();
+      return true;
+    }
+
+    // Tri-état pour le retour visuel (voir le plan : un flash bref sur une case erronée) :
+    // true (correcte), false (erronée), ou null (pas encore remplie, OU pas significative
+    // pour cette rangée — jamais signalée comme fausse, voir signChartExpectedCell).
+    function signChartCellCorrect(rowIndex, colIndex) {
+      if (activeChild()) return activeChild().signChartCellCorrect(rowIndex, colIndex);
+      if (!signChart) return null;
+      var row = signChart.tableRows[rowIndex];
+      var cols = getSignChartColumns();
+      if (!row || !cols || !cols[colIndex]) return null;
+      var actual = row.cells[colIndex];
+      if (actual === null) return null;
+      var expected = signChartExpectedCell(row, cols[colIndex]);
+      if (expected === null) return true;
+      return actual === expected;
+    }
+
     // Détecte si `eq` est de la forme (expr)² = c ou c = (expr)² (un carré parfait d'un
     // côté — soit un ProductGroup.isSquare "(a+bx)²", soit un simple "x²" nu de
     // coefficient 1 — une constante numérique de l'autre), PAS ENCORE enveloppée dans une
@@ -2773,6 +2901,10 @@
       existenceConditionAction: existenceConditionAction,
       canSignChart: canSignChart,
       signChartAction: signChartAction,
+      getSignChartColumns: getSignChartColumns,
+      signChartAddRow: signChartAddRow,
+      signChartSetCell: signChartSetCell,
+      signChartCellCorrect: signChartCellCorrect,
       canSquareRoot: canSquareRoot,
       squareRootStage: squareRootStage,
       squareRootAction: squareRootAction,
