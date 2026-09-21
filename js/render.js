@@ -2190,23 +2190,34 @@
       wrap.className = 'sign-chart-table-wrap';
       historyEl.appendChild(wrap);
 
-      // Largeur PAR TYPE de colonne, pas uniforme (retour utilisateur : une colonne
-      // frontière — une seule valeur de x — doit rester visuellement étroite/un simple
-      // repère, jamais aussi large qu'une colonne intervalle — sans quoi les deux se
-      // confondent, au point de sembler pouvoir placer un signe "sous -∞/+∞" alors que ce
-      // sont les deux colonnes intervalle extrêmes qui portent seulement CE texte en plus,
-      // voir le commentaire juste au-dessus).
+      // Largeurs FIXES (jamais `auto`/`1fr`, voir plus bas) dérivées pour que la rangée
+      // "x" (-∞, chaque frontière, +∞) tombe PARFAITEMENT à intervalles égaux (retour
+      // utilisateur : "je veux que tout soit espacé également sur cette rangée" — un
+      // écart-type visiblement plus grand entre deux frontières RÉELLES qu'entre -∞ et la
+      // première était sinon inévitable, une colonne intervalle "du milieu" comptant pour
+      // un écart entier alors qu'une colonne intervalle "de bord" n'en fournit qu'une
+      // MOITIÉ côté frontière voisine, l'autre moitié ne menant nulle part). Avec Wb la
+      // largeur (fixe) d'une colonne frontière et Wm celle d'une colonne intervalle
+      // "du milieu" (entre deux frontières réelles), l'écart entre deux frontières
+      // consécutives vaut Wb/2+Wm+Wb/2 = Wb+Wm — pour que l'écart -∞/+∞ <-> première/
+      // dernière frontière soit IDENTIQUE (We/2+Wb/2 = Wb+Wm), il faut We = Wb+2*Wm : une
+      // colonne "de bord" (qui n'a qu'UN voisin réel) doit donc être plus large qu'une
+      // colonne "du milieu" (qui en a deux), pas plus étroite comme on pourrait l'attendre
+      // à tort. Chaque signe reste centré dans sa propre colonne (voir .sign-chart-target
+      // dans style.css) : ce calcul ne change donc QUE l'espacement des ÉTIQUETTES de la
+      // rangée "x", jamais la logique "signe au milieu exact" déjà vérifiée par ailleurs
+      // (une colonne "de bord" n'a de toute façon pas de vraie valeur numérique en face
+      // pour définir un "milieu" — voir le plan : rester centré y reste la seule
+      // convention sensée, quelle que soit sa largeur).
+      var BOUNDARY_W = 76;
+      var MIDDLE_INTERVAL_W = 150;
+      var EDGE_INTERVAL_W = BOUNDARY_W + 2 * MIDDLE_INTERVAL_W;
       var table = document.createElement('div');
       table.className = 'sign-chart-table';
-      // Largeur FIXE (jamais `auto`) pour une colonne frontière : sinon une valeur à 2
-      // chiffres (ex. "12") élargirait très légèrement SA colonne par rapport aux autres
-      // (une seule, ex. "1") — brisant l'exactitude du calcul ci-dessous, qui suppose
-      // TOUTES les colonnes frontière rigoureusement identiques (voir le commentaire sur
-      // .sign-chart-target dans style.css : le milieu géométrique d'une colonne
-      // intervalle ne tombe EXACTEMENT au milieu de ses deux valeurs de x voisines QUE si
-      // les colonnes frontière de part et d'autre ont la même largeur).
-      var colTemplate = columns.map(function (col) {
-        return col.type === 'boundary' ? '76px' : 'minmax(150px, 1fr)';
+      var colTemplate = columns.map(function (col, idx) {
+        if (col.type === 'boundary') return BOUNDARY_W + 'px';
+        var isEdge = idx === 0 || idx === columns.length - 1;
+        return (isEdge ? EDGE_INTERVAL_W : MIDDLE_INTERVAL_W) + 'px';
       }).join(' ');
       table.style.gridTemplateColumns = 'minmax(200px, auto) ' + colTemplate;
       wrap.appendChild(table);
