@@ -672,9 +672,11 @@ button {
   display: grid;
 }
 
-/* Aucune bordure par défaut sur la case elle-même (retour utilisateur : "seulement une
-   ligne verticale entre les étiquettes et le contenu", voir .sign-chart-row-label/
-   .sign-chart-x-label plus bas pour CETTE seule ligne — jamais de grille complète). */
+/* Une seule ligne HORIZONTALE par rangée (retour utilisateur), sous chaque rangée SAUF
+   la toute dernière (voir .sign-chart-row-last plus bas) — un trait sous la dernière
+   recréerait un bord extérieur bas, justement retiré (retour utilisateur précédent). Pas
+   de bordure verticale générale ici : la seule verticale du tableau est celle, dédiée,
+   entre étiquettes et contenu (voir .sign-chart-row-label/.sign-chart-x-label plus bas). */
 .sign-chart-cell {
   display: flex;
   align-items: center;
@@ -682,25 +684,23 @@ button {
   padding: 18px 16px;
   min-height: 68px;
   font-size: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.sign-chart-row-last {
+  border-bottom: none;
 }
 
+/* Même couleur/poids que le reste du tableau (retour utilisateur : la rangée "x" se
+   lisait comme grisée/désactivée avec --text-muted, "elle doit ressembler au reste du
+   tableau") — reste seulement en gras, comme les étiquettes de rangée. */
 .sign-chart-header-cell {
   font-weight: 600;
-  color: var(--text-muted);
 }
-.sign-chart-x-label {
-  font-style: italic;
-}
-/* "-∞"/"+∞" : affichés comme repères d'axe DANS la première/dernière case d'en-tête
-   (jamais une colonne à part, voir le plan) — poussés vers le bord externe de leur case
-   plutôt que centrés, pour lire comme une étiquette d'axe plutôt qu'une valeur de colonne. */
-.sign-chart-edge-left { justify-content: flex-start; }
-.sign-chart-edge-right { justify-content: flex-end; }
 
-/* La SEULE ligne de la grille (retour utilisateur) : sépare la colonne des étiquettes
-   ("x", puis chaque facteur) du contenu (+/-/0/‖) — posée sur la colonne des étiquettes
-   elle-même (en-tête ET chaque rangée, jamais interrompue), pas sur le contenu, pour
-   rester continue sur toute la hauteur du tableau. */
+/* La SEULE ligne VERTICALE du tableau (retour utilisateur) : sépare la colonne des
+   étiquettes ("x", puis chaque facteur) du contenu (+/-/0/‖) — posée sur la colonne des
+   étiquettes elle-même (en-tête ET chaque rangée, jamais interrompue), pas sur le
+   contenu, pour rester continue sur toute la hauteur du tableau. */
 .sign-chart-row-label,
 .sign-chart-x-label {
   border-right: 2px solid var(--border);

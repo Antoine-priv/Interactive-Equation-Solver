@@ -2198,8 +2198,15 @@
       // voir le commentaire juste au-dessus).
       var table = document.createElement('div');
       table.className = 'sign-chart-table';
+      // Largeur FIXE (jamais `auto`) pour une colonne frontière : sinon une valeur à 2
+      // chiffres (ex. "12") élargirait très légèrement SA colonne par rapport aux autres
+      // (une seule, ex. "1") — brisant l'exactitude du calcul ci-dessous, qui suppose
+      // TOUTES les colonnes frontière rigoureusement identiques (voir le commentaire sur
+      // .sign-chart-target dans style.css : le milieu géométrique d'une colonne
+      // intervalle ne tombe EXACTEMENT au milieu de ses deux valeurs de x voisines QUE si
+      // les colonnes frontière de part et d'autre ont la même largeur).
       var colTemplate = columns.map(function (col) {
-        return col.type === 'boundary' ? 'minmax(76px, auto)' : 'minmax(150px, 1fr)';
+        return col.type === 'boundary' ? '76px' : 'minmax(150px, 1fr)';
       }).join(' ');
       table.style.gridTemplateColumns = 'minmax(200px, auto) ' + colTemplate;
       wrap.appendChild(table);
@@ -2207,10 +2214,11 @@
       var denRoots = signChart.factors.filter(function (f) { return f.kind === 'den'; })
         .map(function (f) { return App.Equation.solvedValue(f.engine.lastEquation()); });
       function isExcludedCol(col) { return col.type === 'boundary' && denRoots.indexOf(col.value) !== -1; }
+      var lastRowIndex = signChart.tableRows.length - 1;
 
       var xHeader = document.createElement('div');
       xHeader.className = 'sign-chart-cell sign-chart-header-cell sign-chart-x-label';
-      xHeader.textContent = 'x';
+      window.katex.render('x', xHeader, { throwOnError: false });
       table.appendChild(xHeader);
       columns.forEach(function (col, idx) {
         var cell = document.createElement('div');
@@ -2218,18 +2226,17 @@
         if (col.type === 'boundary') {
           window.katex.render(String(col.value), cell, { throwOnError: false });
         } else if (idx === 0) {
-          cell.classList.add('sign-chart-edge-left');
           window.katex.render('-\\infty', cell, { throwOnError: false });
         } else if (idx === columns.length - 1) {
-          cell.classList.add('sign-chart-edge-right');
           window.katex.render('+\\infty', cell, { throwOnError: false });
         }
         table.appendChild(cell);
       });
 
       signChart.tableRows.forEach(function (row, rowIndex) {
+        var isLastRow = rowIndex === lastRowIndex;
         var labelCell = document.createElement('div');
-        labelCell.className = 'sign-chart-cell sign-chart-row-label';
+        labelCell.className = 'sign-chart-cell sign-chart-row-label' + (isLastRow ? ' sign-chart-row-last' : '');
         if (row.rowKind === 'total') {
           labelCell.textContent = 'Expression totale';
         } else {
@@ -2239,7 +2246,8 @@
 
         columns.forEach(function (col, colIndex) {
           var cell = document.createElement('div');
-          cell.className = 'sign-chart-cell sign-chart-data-cell' + (isExcludedCol(col) ? ' sign-chart-col-excluded' : '');
+          cell.className = 'sign-chart-cell sign-chart-data-cell' +
+            (isExcludedCol(col) ? ' sign-chart-col-excluded' : '') + (isLastRow ? ' sign-chart-row-last' : '');
           // Identifie la CASE (position dans la grille) séparément de la cible cliquable
           // qu'elle contient (voir plus bas) : la case elle-même reste utile pour mesurer
           // l'alignement des colonnes, la cible pour l'interaction.
