@@ -424,9 +424,10 @@ async function targetLatex(page, row, col) {
   // labels (fixed-width boundary columns, never auto-sized to content) ---
   const midpointCheck = await page.evaluate(function () {
     function centerX(el) { var r = el.getBoundingClientRect(); return r.left + r.width / 2; }
-    var headers = Array.from(document.querySelectorAll('.sign-chart-header-cell'));
-    // headers[0] is "-\infty" (interval), headers[1] is boundary "-1", headers[2] is the
-    // interval between -1 and 1, headers[3] is boundary "1".
+    // .sign-chart-header-cell ALSO matches the "x" label cell (index 0) -- skip it.
+    // Remaining order for 3 roots: [0]=edge(-\infty), [1]=boundary(-1),
+    // [2]=middle interval(-1,1), [3]=boundary(1), ...
+    var headers = Array.from(document.querySelectorAll('.sign-chart-header-cell')).slice(1);
     var leftBoundary = centerX(headers[1]);
     var rightBoundary = centerX(headers[3]);
     var middleInterval = centerX(headers[2]);
@@ -435,6 +436,24 @@ async function targetLatex(page, row, col) {
   console.log('midpoint check:', JSON.stringify(midpointCheck));
   ok('a sign column sits at the EXACT midpoint between its two neighboring x-values',
     Math.abs(midpointCheck.expectedMid - midpointCheck.actual) < 0.5);
+
+  // --- Every REAL header label (-\infty, each boundary value, +\infty) is equally
+  // spaced along the row -- retour utilisateur, using the exact reported example
+  // (x-8)(x+5): the gap between -5 and 8 must equal the gap between -\infty and -5 (it
+  // was previously about double, since a whole extra "middle interval" column sat
+  // between two real boundaries with nothing analogous on the -\infty/+\infty side). ---
+  const spacingCheck = await page.evaluate(function () {
+    function centerX(el) { var r = el.getBoundingClientRect(); return r.left + r.width / 2; }
+    var headers = Array.from(document.querySelectorAll('.sign-chart-header-cell')).slice(1);
+    // [0]=edge(-inf), [1]=boundary, [2]=interval, [3]=boundary, [4]=interval, [5]=boundary, [6]=edge(+inf)
+    var realLabelCenters = [headers[0], headers[1], headers[3], headers[5], headers[6]].map(centerX);
+    var gaps = [];
+    for (var i = 1; i < realLabelCenters.length; i++) gaps.push(Math.round(realLabelCenters[i] - realLabelCenters[i - 1]));
+    return gaps;
+  });
+  console.log('gaps between -\\infty, each real x-value, and +\\infty:', JSON.stringify(spacingCheck));
+  ok('all 4 gaps between -infinity/x-values/+infinity are equal',
+    spacingCheck.every(function (g) { return g === spacingCheck[0]; }));
 
   // --- Boundary (x-value) columns are visibly narrower than interval columns: a sign
   // can never look like it belongs directly under -\infty/+\infty (which live in the
