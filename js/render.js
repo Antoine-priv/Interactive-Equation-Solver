@@ -124,14 +124,19 @@
 
   // Popup compact (2 boutons pour une case, ou une liste verticale pour "+ Ajouter une
   // rangée", voir renderSignChartTable) : élément UNIQUE recréé à chaque ouverture, jamais
-  // conservé entre deux ouvertures. `position:fixed`, ancré sous `anchorEl` — UI
-  // transitoire, pas besoin de suivre le pan/zoom du canvas comme #liveOpPill
-  // (mathKeypad.js). Fermé par renderAll (voir son tout début) à chaque nouveau rendu :
-  // vivant dans document.body plutôt que dans #history (entièrement reconstruit à chaque
-  // rendu, voir plus bas), il survivrait sinon à un rendu qui rend ses row/col d'origine
-  // périmés.
+  // conservé entre deux ouvertures. `position:fixed`, ancré sous `anchorEl` — vit dans
+  // document.body (jamais #history, entièrement reconstruit à chaque rendu, voir plus
+  // bas : il survivrait sinon à un rendu qui rend ses row/col d'origine périmés), donc PAS
+  // un descendant de #canvasLayer et ne bouge jamais "gratuitement" avec son transform
+  // (contrairement à CANVAS_PAN_EXCLUDE dans main.js — bouton "+ Ajouter une rangée" ou
+  // case cliquée inclus, ceux-là bien À L'INTÉRIEUR de #canvasLayer). Retour utilisateur :
+  // "le popup ne suit pas le bouton quand la page est glissée/déplacée" — corrigé en
+  // recalant sa position à CHAQUE frame tant qu'il reste ouvert (followSignChartPopup),
+  // même principe que positionLiveField (arrows.js) pour #liveOpPill, plutôt qu'un
+  // instantané figé à l'ouverture.
   var signChartPopup = null;
   var signChartPopupDocListener = null;
+  var signChartPopupAnchor = null;
 
   function closeSignChartPopup() {
     if (signChartPopup) { signChartPopup.remove(); signChartPopup = null; }
@@ -139,6 +144,20 @@
       document.removeEventListener('mousedown', signChartPopupDocListener, true);
       signChartPopupDocListener = null;
     }
+    signChartPopupAnchor = null;
+  }
+
+  // Repositionne le popup ouvert sous `signChartPopupAnchor` (même calcul qu'à l'ouverture,
+  // voir openSignChartPopup) et se replanifie tant que le popup reste ouvert — s'arrête de
+  // lui-même dès que closeSignChartPopup() l'a vidé (aucun rendu "périmé" à filtrer ici,
+  // contrairement aux callbacks différés plus bas : ce n'est qu'un recalage de position,
+  // sans effet s'il s'exécute une frame "de trop" juste après une fermeture).
+  function followSignChartPopup() {
+    if (!signChartPopup || !signChartPopupAnchor) return;
+    var rect = signChartPopupAnchor.getBoundingClientRect();
+    signChartPopup.style.left = (rect.left + rect.width / 2) + 'px';
+    signChartPopup.style.top = (rect.bottom + 6) + 'px';
+    requestAnimationFrame(followSignChartPopup);
   }
 
   // `options` : [{ label, value, latex? }, ...] — `latex` (optionnel) rend `label` via
@@ -176,6 +195,8 @@
       if (signChartPopup === popup) document.addEventListener('mousedown', signChartPopupDocListener, true);
     }, 0);
     signChartPopup = popup;
+    signChartPopupAnchor = anchorEl;
+    requestAnimationFrame(followSignChartPopup);
   }
 
   // Incrémenté à CHAQUE appel de renderAll (voir son tout début) : les callbacks
