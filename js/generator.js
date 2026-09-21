@@ -2,6 +2,8 @@
    pour garantir qu'elle se résout proprement avec les outils de l'appli. Formes possibles :
    - linéaire déjà simplifiée (ax+b=cx+d), ou pas encore (ex. "3x+5-2x=4x-1"), pour
      pratiquer "Simplifier" avant de résoudre comme d'habitude ;
+   - la même forme linéaire, mais comparée par une inéquation (>,<,\geq,\leq) plutôt
+     qu'une égalité (voir generateLinearInequality/App.Ineq.OPERATORS) ;
    - un trinôme degré 2 à factoriser (identité remarquable) puis résoudre (produit nul) ;
    - un produit de deux sommes à développer (double distributivité) ;
    - "(x+a)²=k²" ou "x²=k²" à résoudre directement par racine carrée ;
@@ -71,6 +73,19 @@
     if (d !== 0) right.push({ coeff: d, pow: 0 });
 
     return { left: left, right: right };
+  }
+
+  // Même forme que generateLinearEquation, mais comparée via une inéquation plutôt qu'une
+  // égalité (voir App.Ineq.OPERATORS dans inequality.js — mêmes 4 tokens que ceux acceptés
+  // par le parseur/la modale) : se résout par les mêmes étapes Opération que d'habitude, le
+  // moteur "currentOperator" (history.js) se chargeant d'inverser le sens si besoin. Reste
+  // à des pas ×/÷ par un NOMBRE (jamais une expression, seul cas pris en charge en mode
+  // inégalité pour l'instant, voir confirm() en mode 'expr') — déjà garanti ici puisque
+  // generateLinearEquation ne produit que ce type de forme.
+  function generateLinearInequality() {
+    var base = generateLinearEquation();
+    var operator = App.Ineq.OPERATORS[randInt(0, App.Ineq.OPERATORS.length - 1)];
+    return { left: base.left, right: base.right, operator: operator };
   }
 
   // Même équation que generateLinearEquation, mais avec le coefficient de x d'UN membre
@@ -418,6 +433,7 @@
   // désormais exactement la même chance d'apparaître via "Générer aléatoirement".
   var GENERATORS = [
     generateLinearEquation,
+    generateLinearInequality,
     generateSimplifyFirstLinear,
     generateFactorableQuadratic,
     generateSquareRootEquation,
@@ -443,6 +459,7 @@
   App.Generator = {
     generateEquation: generateEquation,
     generateLinearEquation: generateLinearEquation,
+    generateLinearInequality: generateLinearInequality,
     generateSimplifyFirstLinear: generateSimplifyFirstLinear,
     generateFactorableQuadratic: generateFactorableQuadratic,
     generateProductEquation: generateProductEquation,
