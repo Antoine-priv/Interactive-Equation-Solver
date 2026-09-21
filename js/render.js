@@ -2189,9 +2189,18 @@
       wrap.className = 'sign-chart-table-wrap';
       historyEl.appendChild(wrap);
 
+      // Largeur PAR TYPE de colonne, pas uniforme (retour utilisateur : une colonne
+      // frontière — une seule valeur de x — doit rester visuellement étroite/un simple
+      // repère, jamais aussi large qu'une colonne intervalle — sans quoi les deux se
+      // confondent, au point de sembler pouvoir placer un signe "sous -∞/+∞" alors que ce
+      // sont les deux colonnes intervalle extrêmes qui portent seulement CE texte en plus,
+      // voir le commentaire juste au-dessus).
       var table = document.createElement('div');
       table.className = 'sign-chart-table';
-      table.style.gridTemplateColumns = 'minmax(150px, auto) repeat(' + columns.length + ', minmax(64px, 1fr))';
+      var colTemplate = columns.map(function (col) {
+        return col.type === 'boundary' ? 'minmax(76px, auto)' : 'minmax(150px, 1fr)';
+      }).join(' ');
+      table.style.gridTemplateColumns = 'minmax(200px, auto) ' + colTemplate;
       wrap.appendChild(table);
 
       var denRoots = signChart.factors.filter(function (f) { return f.kind === 'den'; })

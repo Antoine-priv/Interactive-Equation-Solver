@@ -2369,6 +2369,15 @@
     // exclure) ; reste indisponible une fois `branches` posé (v1, même restriction que les
     // deux autres scissions).
     function canSignChart() {
+      // Jamais depuis L'INTÉRIEUR d'un des propres facteurs d'un tableau déjà posé ICI
+      // (focusedSignChartFactor !== null, voir sa déclaration plus haut) : sa mini-
+      // inéquation "<facteur> > 0" est un contexte de RÉSOLUTION, pas un nouveau point de
+      // départ pour "Tableau de signes" — sans cette garde, un facteur linéaire isolé (ex.
+      // "x+1 > 0") reste lui-même trivialement "chartable" au sens de
+      // Expr.extractSignChartFactors (un seul facteur = lui-même), le bouton restait donc
+      // à tort offert en travaillant DANS le tableau (retour utilisateur). Testée AVANT
+      // activeChild() ci-dessous, qui déléguerait justement vers ce facteur.
+      if (focusedSignChartFactor !== null) return false;
       if (activeChild()) return activeChild().canSignChart();
       if (branches) return false;
       // Déjà posé sur ce noeud : reste disponible (jamais false) plutôt que de disparaître
@@ -2390,6 +2399,9 @@
     // noeud (voir `signChart` plus haut : une seule fois par noeud, contrairement à
     // `domainConditions` qui accumule une entrée par clic).
     function signChartAction() {
+      // Même garde que canSignChart juste au-dessus, pour la même raison (jamais imbriqué
+      // dans l'un de ses propres facteurs).
+      if (focusedSignChartFactor !== null) return { spawned: false };
       if (activeChild()) return activeChild().signChartAction();
       if (signChart) return { spawned: false };
       if (!canSignChart()) return { spawned: false };

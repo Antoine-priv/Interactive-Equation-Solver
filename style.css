@@ -635,11 +635,9 @@ button {
 .sign-chart-factors-row {
   display: flex;
   flex-wrap: nowrap;
-  justify-content: center;
   align-items: flex-start;
   gap: 64px;
   width: max-content;
-  margin: 0 auto;
 }
 
 .sign-chart-table-wrap {
@@ -668,19 +666,16 @@ button {
 
 .sign-chart-table {
   display: grid;
-  border: 2px solid var(--text);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
 }
 
 .sign-chart-cell {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 8px;
-  min-height: 44px;
+  padding: 18px 16px;
+  min-height: 68px;
   border: 1px solid var(--border);
-  font-size: 1.1rem;
+  font-size: 1.5rem;
 }
 
 .sign-chart-header-cell {
