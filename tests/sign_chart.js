@@ -276,6 +276,34 @@ async function targetLatex(page, row, col) {
       var last = btns[btns.length - 1];
       return !!last.querySelector('.katex') && last.textContent.indexOf('Expression totale') === -1;
     }));
+
+  // --- Retour utilisateur : the popup must FOLLOW the "+ Ajouter une rangée" button when
+  // the page is dragged/panned, not stay frozen at its screen position from when it
+  // opened (it lives in document.body, position:fixed, outside #canvasLayer -- see
+  // followSignChartPopup in render.js). Pan by an arbitrary amount while it's open and
+  // confirm it moved by EXACTLY the same on-screen delta as the button itself. ---
+  const beforePan = await page.evaluate(() => ({
+    popup: document.querySelector('.sign-chart-popup').getBoundingClientRect(),
+    btn: document.querySelector('.sign-chart-add-row-btn').getBoundingClientRect()
+  }));
+  const panBefore = await page.evaluate(() => ({ x: window.App.Canvas.getX(), y: window.App.Canvas.getY() }));
+  await page.evaluate(() => window.App.Canvas.set(window.App.Canvas.getX() - 220, window.App.Canvas.getY() - 90));
+  await page.waitForTimeout(120); // a few rAF ticks for followSignChartPopup to catch up
+  const afterPan = await page.evaluate(() => ({
+    popup: document.querySelector('.sign-chart-popup') ? document.querySelector('.sign-chart-popup').getBoundingClientRect() : null,
+    btn: document.querySelector('.sign-chart-add-row-btn').getBoundingClientRect()
+  }));
+  console.log('popup follow-pan check:', JSON.stringify({ beforePan, afterPan }));
+  ok('popup is still open after panning (did not get dismissed)', afterPan.popup !== null);
+  const btnDeltaX = afterPan.btn.left - beforePan.btn.left, btnDeltaY = afterPan.btn.top - beforePan.btn.top;
+  const popupDeltaX = afterPan.popup.left - beforePan.popup.left, popupDeltaY = afterPan.popup.top - beforePan.popup.top;
+  ok('the button itself actually moved (pan had an effect, sanity check)', Math.abs(btnDeltaX) > 50 || Math.abs(btnDeltaY) > 50);
+  ok('the popup moved by the SAME horizontal delta as the button (it followed the pan)', Math.abs(popupDeltaX - btnDeltaX) < 1);
+  ok('the popup moved by the SAME vertical delta as the button (it followed the pan)', Math.abs(popupDeltaY - btnDeltaY) < 1);
+  // Restore the canvas position so the rest of this scenario proceeds unaffected.
+  await page.evaluate((p) => window.App.Canvas.set(p.x, p.y), panBefore);
+  await page.waitForTimeout(80);
+
   await page.click('.sign-chart-popup-btn:first-child', { force: true });
   await page.waitForTimeout(100);
   ok('clicking a FACTOR option while a factor is still focused actually adds a row',
