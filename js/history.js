@@ -2412,7 +2412,7 @@
         eng.subscribe(notify);
         return { id: i, kind: f.kind, capturedSide: Expr.cloneSide(f.terms), engine: eng };
       });
-      signChart = { factors: factors, constantSign: extracted.constantSign, tableRows: [] };
+      signChart = { factors: factors, constantSign: extracted.constantSign, tableRows: [], verified: false };
       focusedSignChartFactor = null;
       notify();
       return { spawned: true };
@@ -2468,14 +2468,18 @@
     // plus bas) — calculée structurellement à partir des racines déjà résolues, jamais à
     // partir de ce que l'élève a rempli ailleurs (indépendant de l'ordre de remplissage).
     // `row` = { rowKind:'factor', factorIndex } ou { rowKind:'total' }, `col` une entrée de
-    // getSignChartColumns(). Renvoie '+'|'-'|'0'|'undef' — ou null si cette case n'est PAS
-    // significative pour cette rangée (jamais imposée : une frontière qui n'est pas la
-    // racine PROPRE d'une rangée-facteur, voir le plan).
+    // getSignChartColumns(). Renvoie '+'|'-'|'0'|'undef' — ou 'none' si NI '0' NI 'undef'
+    // n'est correct à cette frontière pour cette rangée-facteur (retour utilisateur :
+    // "0"/"‖" à une valeur de x qui n'est ni la racine ni un point d'exclusion DOIT être
+    // signalé faux, jamais silencieusement accepté — un facteur linéaire simple n'est de
+    // toute façon jamais "indéfini" nulle part, seule sa PROPRE racine y vaut "0" ; laisser
+    // la case VIDE, elle, reste toujours accepté, voir signChartCellCorrect : seul un
+    // ACTUAL non-null est comparé à 'none').
     function signChartExpectedCell(row, col) {
       if (row.rowKind === 'factor') {
         var f = signChart.factors[row.factorIndex];
         var root = Eq.solvedValue(f.engine.lastEquation());
-        if (col.type === 'boundary') return col.value === root ? '0' : null;
+        if (col.type === 'boundary') return col.value === root ? '0' : 'none';
         return factorSignInInterval(f.capturedSide, root, col.from) > 0 ? '+' : '-';
       }
       var denRoots = signChart.factors.filter(function (f) { return f.kind === 'den'; })
@@ -2536,10 +2540,13 @@
       return true;
     }
 
-    // Tri-état pour le retour visuel (voir le plan : un flash bref sur une case erronée) :
-    // true (correcte), false (erronée), ou null (pas encore remplie, OU pas significative
-    // pour cette rangée — jamais signalée comme fausse, voir signChartExpectedCell).
-    // Jamais délégué non plus (voir signChartAddRow plus haut pour la raison).
+    // Tri-état : true (correcte), false (erronée), ou null (case encore VIDE — jamais
+    // signalée comme fausse, voir signChartSetCell(..., null) pour l'effacer). Le
+    // rendu (voir render.js) ne montre ce résultat que si signChart.verified est vrai
+    // (bouton "Vérifier", retour utilisateur : "ne pas indiquer immédiatement qu'une
+    // case est fausse") — cette fonction, elle, reste pure et toujours calculable, cette
+    // décision d'AFFICHAGE n'est pas de son ressort. Jamais délégué non plus (voir
+    // signChartAddRow plus haut pour la raison).
     function signChartCellCorrect(rowIndex, colIndex) {
       if (!signChart) return null;
       var row = signChart.tableRows[rowIndex];
@@ -2547,9 +2554,22 @@
       if (!row || !cols || !cols[colIndex]) return null;
       var actual = row.cells[colIndex];
       if (actual === null) return null;
-      var expected = signChartExpectedCell(row, cols[colIndex]);
-      if (expected === null) return true;
-      return actual === expected;
+      return actual === signChartExpectedCell(row, cols[colIndex]);
+    }
+
+    // Bouton "Vérifier" (voir render.js) : bascule signChart.verified à vrai UNE FOIS
+    // pour toutes (jamais remis à faux ensuite — un nouveau rendu tant qu'une case reste
+    // fausse continue de la signaler tant que l'élève la corrige, sans avoir à re-cliquer
+    // "Vérifier" à chaque essai) — n'a d'effet QUE si une rangée "Expression totale"
+    // existe déjà (retour utilisateur), jamais délégué (même raison que
+    // signChartAddRow plus haut : toujours CE noeud précis, jamais un facteur focalisé).
+    function signChartVerify() {
+      if (!signChart) return false;
+      var hasTotal = signChart.tableRows.some(function (r) { return r.rowKind === 'total'; });
+      if (!hasTotal) return false;
+      signChart.verified = true;
+      notify();
+      return true;
     }
 
     // Détecte si `eq` est de la forme (expr)² = c ou c = (expr)² (un carré parfait d'un
@@ -2928,6 +2948,7 @@
       signChartAddRow: signChartAddRow,
       signChartSetCell: signChartSetCell,
       signChartCellCorrect: signChartCellCorrect,
+      signChartVerify: signChartVerify,
       canSquareRoot: canSquareRoot,
       squareRootStage: squareRootStage,
       squareRootAction: squareRootAction,

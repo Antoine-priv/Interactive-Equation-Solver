@@ -705,10 +705,10 @@ button {
 .sign-chart-x-label {
   border-right: 2px solid var(--border);
 }
+/* Centrée comme "x" en en-tête (retour utilisateur), pas alignée à gauche : reprend donc
+   simplement le centrage de base de .sign-chart-cell, juste en gras en plus. */
 .sign-chart-row-label {
   font-weight: 600;
-  justify-content: flex-start;
-  padding-left: 16px;
 }
 
 /* La case en tant que telle n'est plus l'élément cliquable/interactif (voir
@@ -758,6 +758,20 @@ button {
   transform: translateX(-50%);
 }
 
+/* Même principe pour "-∞"/"+∞" eux-mêmes en en-tête (voir EDGE_LABEL_GUTTER dans
+   render.js, retour utilisateur : réduire l'espace vide entre eux et le bord de la
+   table) : positionnés à une distance FIXE et modeste de ce bord plutôt que centrés dans
+   toute la largeur de leur colonne. Cible ".katex" (jamais une règle bare `.katex`,
+   utilisée PARTOUT ailleurs dans l'appli) : scopée sous cette seule classe, sans risque
+   pour le reste du rendu KaTeX. */
+.sign-chart-header-cell-edge {
+  justify-content: flex-start;
+}
+.sign-chart-header-cell-edge .katex {
+  position: relative;
+  transform: translateX(-50%);
+}
+
 /* Repère visuel "valeur exclue du domaine" (voir isExcludedCol dans render.js) : un
    double-trait vertical à droite de la colonne frontière concernée, sur TOUTE la hauteur
    du tableau (posé sur chaque case de cette colonne, en-tête compris) — convention
@@ -766,12 +780,25 @@ button {
   border-right: 4px double var(--text);
 }
 
-/* N'apparaît qu'au survol du tableau (retour utilisateur) : `visibility` (pas juste
-   `opacity`) pour rester hors du flux de tabulation/clic tant qu'invisible — .sign-chart-
-   table-wrap englobe tableau ET bouton, donc le survol reste continu en descendant
-   dessus une fois apparu. */
-.sign-chart-add-row-btn {
+/* "+ Ajouter une rangée" et "Vérifier" (retour utilisateur : ce dernier À DROITE du
+   premier) côte à côte, toutes deux révélées au survol du tableau (voir juste en dessous)
+   — `visibility` (pas juste `opacity`) pour rester hors du flux de tabulation/clic tant
+   qu'invisible — .sign-chart-table-wrap englobe tableau ET cette rangée, donc le survol
+   reste continu en descendant dessus une fois apparue. */
+.sign-chart-table-actions {
+  display: flex;
+  gap: 10px;
   margin-top: 14px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+}
+.sign-chart-table-wrap:hover .sign-chart-table-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
+.sign-chart-add-row-btn {
   padding: 8px 16px;
   border-radius: var(--radius-sm);
   border: 1.5px dashed var(--border);
@@ -780,18 +807,36 @@ button {
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  opacity: 0;
-  visibility: hidden;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
-}
-.sign-chart-table-wrap:hover .sign-chart-add-row-btn {
-  opacity: 1;
-  visibility: visible;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .sign-chart-add-row-btn:hover {
   background: var(--accent-soft);
   color: var(--accent);
   border-color: var(--accent-soft-border);
+}
+
+/* "Vérifier" (retour utilisateur) : langage visuel plus "action" (fond plein) que "+
+   Ajouter une rangée" — c'est un geste délibéré et ponctuel (déclenche l'affichage des
+   cases fausses), pas un utilitaire discret. Grisé/bulle d'aide tant qu'aucune rangée
+   "Expression totale" n'existe (voir signChartVerify dans history.js), même recette que
+   #undoBtn. */
+.sign-chart-verify-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+.sign-chart-verify-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.sign-chart-verify-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 /* Popup compact (voir openSignChartPopup dans render.js) : soit une rangée de 2 boutons

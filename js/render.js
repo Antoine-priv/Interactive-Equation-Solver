@@ -2190,40 +2190,43 @@
       wrap.className = 'sign-chart-table-wrap';
       historyEl.appendChild(wrap);
 
-      // Largeurs FIXES (jamais `auto`/`1fr`, voir plus bas) dérivées pour que la rangée
-      // "x" (-∞, chaque frontière, +∞) tombe PARFAITEMENT à intervalles égaux (retour
-      // utilisateur : "je veux que tout soit espacé également sur cette rangée" — un
-      // écart-type visiblement plus grand entre deux frontières RÉELLES qu'entre -∞ et la
-      // première était sinon inévitable, une colonne intervalle "du milieu" comptant pour
-      // un écart entier alors qu'une colonne intervalle "de bord" n'en fournit qu'une
-      // MOITIÉ côté frontière voisine, l'autre moitié ne menant nulle part). Avec Wb la
-      // largeur (fixe) d'une colonne frontière et Wm celle d'une colonne intervalle
-      // "du milieu" (entre deux frontières réelles), l'écart entre deux frontières
-      // consécutives vaut Wb/2+Wm+Wb/2 = Wb+Wm — pour que l'écart -∞/+∞ <-> première/
-      // dernière frontière soit IDENTIQUE (We/2+Wb/2 = Wb+Wm), il faut We = Wb+2*Wm : une
-      // colonne "de bord" (qui n'a qu'UN voisin réel) doit donc être plus large qu'une
-      // colonne "du milieu" (qui en a deux), pas plus étroite comme on pourrait l'attendre
-      // à tort.
+      // Largeurs FIXES (jamais `auto`/`1fr`) dérivées pour que la rangée "x" (-∞, chaque
+      // frontière, +∞) tombe à intervalles ÉGAUX (Wb = largeur d'une colonne frontière,
+      // Wm = largeur d'une colonne intervalle "du milieu", entre deux frontières réelles ;
+      // l'écart entre deux frontières consécutives vaut alors Wb/2+Wm+Wb/2 = Wb+Wm, voir
+      // GAP plus bas) SANS pour autant réserver un grand espace vide entre "-∞"/"+∞" et le
+      // bord de la table (retour utilisateur : "réduire l'espace entre -∞ et la ligne
+      // verticale à sa gauche" — centrer "-∞" dans sa colonne, comme avant, rendait cette
+      // colonne nécessairement très large). "-∞"/"+∞" sont donc positionnés à une distance
+      // FIXE et modeste (EDGE_LABEL_GUTTER) du bord EXTÉRIEUR de leur colonne plutôt qu'à
+      // son centre — la largeur de cette colonne (EDGE_INTERVAL_W) se déduit alors de
+      // cette contrainte : pour que l'écart "-∞ <-> première frontière" reste IDENTIQUE à
+      // GAP, il faut EDGE_INTERVAL_W = EDGE_LABEL_GUTTER + Wb/2 + Wm (le signe de cette
+      // colonne suit la même logique un cran plus loin, voir EDGE_SIGN_OFFSET plus bas).
       var BOUNDARY_W = 76;
       var MIDDLE_INTERVAL_W = 150;
-      var EDGE_INTERVAL_W = BOUNDARY_W + 2 * MIDDLE_INTERVAL_W;
-      // Le SIGNE d'une colonne de bord, lui, ne peut PAS rester centré dans sa colonne
-      // (retour utilisateur : "le signe apparaît directement sous le symbole infini") —
-      // "-∞"/"+∞" (en-tête) restent eux centrés à 50% (voir plus bas, pour l'espacement
-      // égal de la rangée "x"), mais le signe doit se trouver au milieu EXACT entre "-∞"
-      // (à 50% de sa colonne) et la frontière réelle voisine (au centre de SA colonne,
-      // juste après) — en coordonnées absolues depuis le bord EXTÉRIEUR de la table :
-      // milieu = (We/2 + We+Wb/2)/2 = 0.75*We + 0.25*Wb, soit, en fraction de We (pour un
-      // positionnement relatif qui reste correct quelle que soit la largeur réellement
-      // rendue) : 0.75 + 0.25*(Wb/We). Voir .sign-chart-cell-edge/.sign-chart-target dans
-      // style.css pour comment cette fraction est appliquée (position relative + left).
-      var EDGE_SIGN_FRACTION = 0.75 + 0.25 * (BOUNDARY_W / EDGE_INTERVAL_W);
-      // `left` en pourcentage se serait basé sur la largeur de la case APRÈS padding (voir
-      // .sign-chart-cell, padding 18px 16px) — pas la largeur pleine de la colonne que
-      // EDGE_SIGN_FRACTION suppose — d'où ce décalage en PIXELS, qui compense
-      // explicitement ce padding gauche pour retomber pile sur la fraction voulue de la
-      // colonne entière (bord extérieur inclus).
+      var GAP = BOUNDARY_W + MIDDLE_INTERVAL_W;
+      var EDGE_LABEL_GUTTER = 28;
+      var EDGE_INTERVAL_W = EDGE_LABEL_GUTTER + BOUNDARY_W / 2 + MIDDLE_INTERVAL_W;
+      // Le SIGNE d'une colonne de bord ne peut PAS rester au même endroit que "-∞"/"+∞"
+      // (retour utilisateur, tour précédent : "le signe apparaît directement sous le
+      // symbole infini") — il doit se trouver au milieu EXACT entre "-∞" (à
+      // EDGE_LABEL_GUTTER de ce même bord) et la frontière réelle voisine (au centre de SA
+      // colonne, juste après) : (EDGE_LABEL_GUTTER + EDGE_INTERVAL_W+Wb/2)/2, qui se
+      // simplifie, une fois EDGE_INTERVAL_W substitué, en EDGE_LABEL_GUTTER + GAP/2.
+      var EDGE_SIGN_OFFSET = EDGE_LABEL_GUTTER + GAP / 2;
+      // `left` (position relative, voir plus bas) se mesure depuis le bord intérieur de la
+      // case (après son propre padding, voir .sign-chart-cell : 18px 16px) — jamais depuis
+      // le bord EXTÉRIEUR de la colonne que les calculs ci-dessus supposent tous, d'où ce
+      // décalage en PIXELS à leur soustraire systématiquement.
       var CELL_PADDING_X = 16;
+      // Position (depuis le bord GAUCHE de la case, padding déjà déduit) d'un repère fixé
+      // à `fromOuterPx` du bord EXTÉRIEUR de sa colonne — colIndex 0 (colonne de gauche) :
+      // tel quel : dernière colonne (colonne de droite) : reflet symétrique.
+      function edgeOffsetPx(fromOuterPx, colIndex) {
+        var fromLeft = colIndex === 0 ? fromOuterPx : (EDGE_INTERVAL_W - fromOuterPx);
+        return fromLeft - CELL_PADDING_X;
+      }
       var table = document.createElement('div');
       table.className = 'sign-chart-table';
       var colTemplate = columns.map(function (col, idx) {
@@ -2245,13 +2248,15 @@
       table.appendChild(xHeader);
       columns.forEach(function (col, idx) {
         var cell = document.createElement('div');
-        cell.className = 'sign-chart-cell sign-chart-header-cell' + (isExcludedCol(col) ? ' sign-chart-col-excluded' : '');
+        var isEdge = col.type === 'interval' && (idx === 0 || idx === columns.length - 1);
+        cell.className = 'sign-chart-cell sign-chart-header-cell' +
+          (isExcludedCol(col) ? ' sign-chart-col-excluded' : '') + (isEdge ? ' sign-chart-header-cell-edge' : '');
         if (col.type === 'boundary') {
           window.katex.render(String(col.value), cell, { throwOnError: false });
-        } else if (idx === 0) {
-          window.katex.render('-\\infty', cell, { throwOnError: false });
-        } else if (idx === columns.length - 1) {
-          window.katex.render('+\\infty', cell, { throwOnError: false });
+        } else if (idx === 0 || idx === columns.length - 1) {
+          window.katex.render(idx === 0 ? '-\\infty' : '+\\infty', cell, { throwOnError: false });
+          var katexEl = cell.querySelector('.katex');
+          if (katexEl) katexEl.style.left = edgeOffsetPx(EDGE_LABEL_GUTTER, idx) + 'px';
         }
         table.appendChild(cell);
       });
@@ -2292,19 +2297,27 @@
           target.className = 'sign-chart-target' + (value === null ? ' sign-chart-target-empty' : '');
           if (value !== null) {
             window.katex.render(SIGN_CHART_CELL_LATEX[value] || '', target, { throwOnError: false });
-            if (engineRoot.signChartCellCorrect(rowIndex, colIndex) === false) target.classList.add('sign-chart-target-wrong');
+            // Rouge seulement une fois "Vérifier" cliqué (voir signChartVerify dans
+            // history.js, retour utilisateur : "ne pas indiquer immédiatement qu'une
+            // case est fausse") — signChartCellCorrect reste, lui, toujours calculable.
+            if (signChart.verified && engineRoot.signChartCellCorrect(rowIndex, colIndex) === false) {
+              target.classList.add('sign-chart-target-wrong');
+            }
           }
           if (isEdgeInterval) {
-            var fraction = colIndex === 0 ? EDGE_SIGN_FRACTION : (1 - EDGE_SIGN_FRACTION);
-            target.style.left = (fraction * EDGE_INTERVAL_W - CELL_PADDING_X) + 'px';
+            target.style.left = edgeOffsetPx(EDGE_SIGN_OFFSET, colIndex) + 'px';
           }
           target.setAttribute('data-sign-chart-row', String(rowIndex));
           target.setAttribute('data-sign-chart-col', String(colIndex));
           target.addEventListener('click', function (e) {
             e.stopPropagation();
-            var options = col.type === 'boundary'
+            // "Effacer" (retour utilisateur) : une 3e option, toujours offerte, qui remet
+            // la case à null (voir signChartSetCell dans history.js, qui accepte déjà
+            // explicitement null) plutôt que de forcer un choix parmi +/-/0/‖.
+            var options = (col.type === 'boundary'
               ? [{ label: '0', value: '0' }, { label: '‖', value: 'undef' }]
-              : [{ label: '+', value: '+' }, { label: '−', value: '-' }];
+              : [{ label: '+', value: '+' }, { label: '−', value: '-' }]
+            ).concat([{ label: '✕', value: null }]);
             openSignChartPopup(target, options, function (v) {
               engineRoot.signChartSetCell(rowIndex, colIndex, v);
             });
@@ -2330,17 +2343,45 @@
       });
       if (!hasTotal) availableOptions.push({ label: 'Expression totale', value: { rowKind: 'total' } });
 
-      if (availableOptions.length) {
-        var addRowBtn = document.createElement('button');
-        addRowBtn.type = 'button';
-        addRowBtn.className = 'sign-chart-add-row-btn';
-        addRowBtn.textContent = '+ Ajouter une rangée';
-        addRowBtn.addEventListener('click', function () {
-          openSignChartPopup(addRowBtn, availableOptions, function (v) {
-            engineRoot.signChartAddRow(v);
-          }, { vertical: true });
-        });
-        wrap.appendChild(addRowBtn);
+      // "+ Ajouter une rangée" et "Vérifier" vivent dans une même rangée d'actions,
+      // toutes deux révélées au survol du tableau (voir .sign-chart-table-actions dans
+      // style.css) — jamais affichées côte à côte sinon (retour utilisateur : "Vérifier"
+      // à droite de "Ajouter une rangée").
+      if (availableOptions.length || signChart.tableRows.length) {
+        var actionsRow = document.createElement('div');
+        actionsRow.className = 'sign-chart-table-actions';
+        wrap.appendChild(actionsRow);
+
+        if (availableOptions.length) {
+          var addRowBtn = document.createElement('button');
+          addRowBtn.type = 'button';
+          addRowBtn.className = 'sign-chart-add-row-btn';
+          addRowBtn.textContent = '+ Ajouter une rangée';
+          addRowBtn.addEventListener('click', function () {
+            openSignChartPopup(addRowBtn, availableOptions, function (v) {
+              engineRoot.signChartAddRow(v);
+            }, { vertical: true });
+          });
+          actionsRow.appendChild(addRowBtn);
+        }
+
+        // "Vérifier" (retour utilisateur) : ne révèle le rouge des cases fausses qu'à la
+        // demande (voir signChart.verified/signChartVerify dans history.js) — grisé avec
+        // une bulle d'aide (même recette que #undoBtn/#signChartBtn) tant qu'aucune rangée
+        // "Expression totale" n'existe, plutôt que simplement absent : ce bouton, une fois
+        // le tableau créé, est une action attendue en permanence, pas contextuelle à une
+        // sélection (le "+" ci-dessus, lui, disparaît naturellement une fois plus rien à
+        // ajouter — deux logiques différentes, assumées).
+        var verifyBtn = document.createElement('button');
+        verifyBtn.type = 'button';
+        verifyBtn.className = 'sign-chart-verify-btn';
+        verifyBtn.textContent = 'Vérifier';
+        verifyBtn.disabled = !hasTotal;
+        verifyBtn.title = hasTotal
+          ? 'Vérifier les cases déjà remplies'
+          : 'Ajoutez d\'abord la rangée "Expression totale"';
+        verifyBtn.addEventListener('click', function () { engineRoot.signChartVerify(); });
+        actionsRow.appendChild(verifyBtn);
       }
     }
 
