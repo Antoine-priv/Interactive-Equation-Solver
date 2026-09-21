@@ -17,6 +17,12 @@
     return FLIP[op] || op;
   }
 
+  // Les 4 opérateurs d'inégalité reconnus par l'app (hors "=", implicite/null partout où
+  // un `operator` est optionnel) — source unique partagée par parser.js
+  // (splitTopLevelRelation), le sélecteur de relation de la modale "Nouvelle équation"
+  // (newEquationModal.js) et le générateur d'inéquations (generator.js).
+  var OPERATORS = ['\\geq', '\\leq', '<', '>'];
+
   // Notation en intervalle d'une inégalité linéaire déjà résolue ("x <op> r", voir
   // App.Equation.solvedValue) — demi-droite : utilisé par la combinaison "Df=..." dans
   // renderDomainSplit (render.js).
@@ -30,6 +36,7 @@
 
   App.Ineq = {
     flipOperator: flipOperator,
-    halfLineLatex: halfLineLatex
+    halfLineLatex: halfLineLatex,
+    OPERATORS: OPERATORS
   };
 })(window.App = window.App || {});

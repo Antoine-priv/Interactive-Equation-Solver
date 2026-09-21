@@ -83,7 +83,7 @@
   // dénominateur-expression affiché, "\frac{x}{\htmlData{fracpart=den}{3x}}") échouait
   // TOUJOURS : le premier argument d'un \htmlData contient lui-même un "=" (ex.
   // "fracpart=den"), vu à tort comme un second signe "=" par parseEquation/
-  // parseLatexEquation (voir splitTopLevelEquals plus bas, qui n'aurait sinon aucune
+  // parseLatexEquation (voir splitTopLevelRelation plus bas, qui n'aurait sinon aucune
   // raison de l'ignorer).
   function stripHtmlWrappers(s) {
     var out = s;
@@ -102,23 +102,33 @@
     return out;
   }
 
-  // Découpe `s` sur son signe "=" de PREMIER NIVEAU (hors de toute accolade) : un "="
-  // niché dans un argument de commande LaTeX (ex. avant stripHtmlWrappers ci-dessus,
-  // "fracpart=den") ne doit jamais compter comme un second signe d'équation. Renvoie
-  // [gauche, droite] ou null (aucun "=" de premier niveau, ou plus d'un).
-  function splitTopLevelEquals(s) {
-    var depth = 0, eqIdx = -1;
+  // Découpe `s` sur sa relation ("=" ou une inégalité \geq/\leq/</>) de PREMIER NIVEAU
+  // (hors de toute accolade) : une relation nichée dans un argument de commande LaTeX
+  // (ex. avant stripHtmlWrappers ci-dessus, "fracpart=den") ne doit jamais compter comme
+  // un second signe d'équation. Renvoie { left, right, operator } (operator null pour
+  // "=") ou null (aucune relation de premier niveau, ou plus d'une). \geq/\leq sont
+  // matchées comme des sous-chaînes littérales (4 caractères) avant le simple caractère
+  // suivant, sans ambiguïté possible : ni l'un ni l'autre ne contient de "=", "<" ou ">".
+  function splitTopLevelRelation(s) {
+    var depth = 0, relIdx = -1, relLen = 0, relOp = null;
     for (var i = 0; i < s.length; i++) {
       var c = s[i];
-      if (c === '{') depth++;
-      else if (c === '}') depth--;
-      else if (c === '=' && depth === 0) {
-        if (eqIdx !== -1) return null;
-        eqIdx = i;
+      if (c === '{') { depth++; continue; }
+      if (c === '}') { depth--; continue; }
+      if (depth !== 0) continue;
+      var matched = null;
+      if (s.slice(i, i + 4) === '\\geq') matched = '\\geq';
+      else if (s.slice(i, i + 4) === '\\leq') matched = '\\leq';
+      else if (c === '=' || c === '<' || c === '>') matched = c;
+      if (matched) {
+        if (relIdx !== -1) return null;
+        relIdx = i;
+        relLen = matched.length;
+        relOp = matched === '=' ? null : matched;
       }
     }
-    if (eqIdx === -1) return null;
-    return [s.slice(0, eqIdx), s.slice(eqIdx + 1)];
+    if (relIdx === -1) return null;
+    return { left: s.slice(0, relIdx), right: s.slice(relIdx + relLen), operator: relOp };
   }
 
   // Suffixe d'exposant optionnel "^N" (N à un ou plusieurs chiffres) ou "²" (toujours 2)
@@ -357,13 +367,13 @@
   }
 
   function parseEquation(str) {
-    var parts = splitTopLevelEquals(stripHtmlWrappers(str));
+    var parts = splitTopLevelRelation(stripHtmlWrappers(str));
     if (!parts) {
-      throw new Error('L\'équation doit contenir exactement un signe =.');
+      throw new Error('L\'équation doit contenir exactement un signe =, >, <, ≥ ou ≤.');
     }
-    var left = parseSide(parts[0]);
-    var right = parseSide(parts[1]);
-    return { left: left, right: right };
+    var left = parseSide(parts.left);
+    var right = parseSide(parts.right);
+    return { left: left, right: right, operator: parts.operator };
   }
 
   // ---- Pont clavier mathématique unifié (MathLive) -------------------------------------
@@ -538,11 +548,11 @@
   }
 
   function parseLatexEquation(latex) {
-    var parts = splitTopLevelEquals(stripHtmlWrappers(String(latex)));
+    var parts = splitTopLevelRelation(stripHtmlWrappers(String(latex)));
     if (!parts) {
-      throw new Error('L\'équation doit contenir exactement un signe =.');
+      throw new Error('L\'équation doit contenir exactement un signe =, >, <, ≥ ou ≤.');
     }
-    return { left: parseLatexSide(parts[0]), right: parseLatexSide(parts[1]) };
+    return { left: parseLatexSide(parts.left), right: parseLatexSide(parts.right), operator: parts.operator };
   }
 
   App.Parser = {
