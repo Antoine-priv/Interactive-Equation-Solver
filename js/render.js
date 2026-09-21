@@ -97,11 +97,12 @@
   // apparaîtrait à tort sans son liseré initial.
   var hadBranches = false;
 
-  // Glyphe affiché pour chaque valeur de case du tableau de signes (voir
-  // renderSignChartTable plus bas) — 'undef' (jamais "‖" en interne, voir
-  // signChartSetCell dans history.js) s'affiche "‖" (double barre, convention du
+  // LaTeX rendu (via KaTeX, comme tout le reste de l'appli — voir le retour utilisateur
+  // "comme on le fait dans les équations") pour chaque valeur de case du tableau de
+  // signes (voir renderSignChartTable plus bas) — 'undef' (jamais "‖" en interne, voir
+  // signChartSetCell dans history.js) s'affiche "\Vert" (double barre, convention du
   // tableau français, voir le plan).
-  var SIGN_CHART_CELL_GLYPH = { '+': '+', '-': '−', '0': '0', undef: '‖' };
+  var SIGN_CHART_CELL_LATEX = { '+': '+', '-': '-', '0': '0', undef: '\\Vert' };
 
   // Popup compact (2 boutons pour une case, ou une liste verticale pour "+ Ajouter une
   // rangée", voir renderSignChartTable) : élément UNIQUE recréé à chaque ouverture, jamais
@@ -2239,21 +2240,41 @@
         columns.forEach(function (col, colIndex) {
           var cell = document.createElement('div');
           cell.className = 'sign-chart-cell sign-chart-data-cell' + (isExcludedCol(col) ? ' sign-chart-col-excluded' : '');
+          // Identifie la CASE (position dans la grille) séparément de la cible cliquable
+          // qu'elle contient (voir plus bas) : la case elle-même reste utile pour mesurer
+          // l'alignement des colonnes, la cible pour l'interaction.
           cell.setAttribute('data-sign-chart-row', String(rowIndex));
           cell.setAttribute('data-sign-chart-col', String(colIndex));
+          // Seule une petite cible CENTRÉE dans la case est cliquable/sélectionnable (voir
+          // .sign-chart-target dans style.css) — jamais la case entière (retour
+          // utilisateur) : une case pleine largeur, pour une colonne intervalle large,
+          // rendait la zone cliquable visuellement asymétrique (ex. cliquable jusque
+          // "sous -∞", qui n'est pourtant qu'un repère de texte dans le COIN de cette même
+          // colonne, voir isExcludedCol/l'en-tête plus haut) — une cible fixe et centrée
+          // reste symétrique quelle que soit la largeur réelle de la colonne, et se
+          // rapproche du geste "cliquer un terme" déjà utilisé partout ailleurs dans
+          // l'appli plutôt qu'un vague clic "n'importe où dans la case".
+          var target = document.createElement('span');
           var value = row.cells[colIndex];
+          target.className = 'sign-chart-target' + (value === null ? ' sign-chart-target-empty' : '');
           if (value !== null) {
-            cell.textContent = SIGN_CHART_CELL_GLYPH[value] || '';
-            if (engineRoot.signChartCellCorrect(rowIndex, colIndex) === false) cell.classList.add('sign-chart-cell-wrong');
+            window.katex.render(SIGN_CHART_CELL_LATEX[value] || '', target, { throwOnError: false });
+            if (engineRoot.signChartCellCorrect(rowIndex, colIndex) === false) target.classList.add('sign-chart-target-wrong');
+          } else {
+            target.textContent = '·';
           }
-          cell.addEventListener('click', function () {
+          target.setAttribute('data-sign-chart-row', String(rowIndex));
+          target.setAttribute('data-sign-chart-col', String(colIndex));
+          target.addEventListener('click', function (e) {
+            e.stopPropagation();
             var options = col.type === 'boundary'
               ? [{ label: '0', value: '0' }, { label: '‖', value: 'undef' }]
               : [{ label: '+', value: '+' }, { label: '−', value: '-' }];
-            openSignChartPopup(cell, options, function (v) {
+            openSignChartPopup(target, options, function (v) {
               engineRoot.signChartSetCell(rowIndex, colIndex, v);
             });
           });
+          cell.appendChild(target);
           table.appendChild(cell);
         });
       });

@@ -625,7 +625,11 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin: 56px 0 0;
+  /* Généreux (retour utilisateur : encore plus d'air qu'avant) — même ordre de grandeur
+     que .produit-nul-split (150px) au-dessus de la chaîne principale pour un "saut" vers
+     une scission, un espacement similaire se justifie ici pour la même raison (marque
+     clairement "on quitte l'équation pour entrer dans le tableau de signes"). */
+  margin: 130px 0 0;
 }
 
 /* PAS .domain-split (flex-wrap:wrap) : les colonnes de facteurs restent TOUJOURS alignées
@@ -668,21 +672,21 @@ button {
   display: grid;
 }
 
+/* Aucune bordure par défaut sur la case elle-même (retour utilisateur : "seulement une
+   ligne verticale entre les étiquettes et le contenu", voir .sign-chart-row-label/
+   .sign-chart-x-label plus bas pour CETTE seule ligne — jamais de grille complète). */
 .sign-chart-cell {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 18px 16px;
   min-height: 68px;
-  border: 1px solid var(--border);
   font-size: 1.5rem;
 }
 
 .sign-chart-header-cell {
   font-weight: 600;
   color: var(--text-muted);
-  border-top: none;
-  border-bottom: 2px solid var(--text);
 }
 .sign-chart-x-label {
   font-style: italic;
@@ -693,21 +697,51 @@ button {
 .sign-chart-edge-left { justify-content: flex-start; }
 .sign-chart-edge-right { justify-content: flex-end; }
 
+/* La SEULE ligne de la grille (retour utilisateur) : sépare la colonne des étiquettes
+   ("x", puis chaque facteur) du contenu (+/-/0/‖) — posée sur la colonne des étiquettes
+   elle-même (en-tête ET chaque rangée, jamais interrompue), pas sur le contenu, pour
+   rester continue sur toute la hauteur du tableau. */
+.sign-chart-row-label,
+.sign-chart-x-label {
+  border-right: 2px solid var(--border);
+}
 .sign-chart-row-label {
   font-weight: 600;
   justify-content: flex-start;
   padding-left: 16px;
-  border-left: none;
 }
 
-.sign-chart-data-cell {
+/* La case en tant que telle n'est plus l'élément cliquable/interactif (voir
+   .sign-chart-target ci-dessous, retour utilisateur) : purement un conteneur de mise en
+   page désormais. */
+.sign-chart-data-cell {}
+
+/* Cible cliquable, CENTRÉE et de taille fixe (retour utilisateur : rester sélectionnable
+   de façon symétrique, jamais toute la largeur d'une case intervalle, sans quoi la zone
+   cliquable semble décalée vers "-∞"/le bord — voir renderSignChartTable dans render.js)
+   — même esprit qu'un terme sélectionnable d'équation (.term.selectable) : un élément
+   compact qu'on clique DIRECTEMENT, pas une case pleine largeur. */
+.sign-chart-target {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.4em;
+  min-height: 2.1em;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: background 0.12s ease;
+  transition: background 0.12s ease, box-shadow 0.12s ease, color 0.12s ease;
 }
-.sign-chart-data-cell:hover {
+.sign-chart-target:hover {
   background: var(--accent-soft);
 }
-.sign-chart-cell-wrong {
+/* Case pas encore remplie : un repère discret (jamais vide/invisible, pour que la cible
+   cliquable reste toujours localisable) — un simple point, pas une vraie valeur. */
+.sign-chart-target-empty {
+  box-shadow: inset 0 0 0 1.5px var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+.sign-chart-target-wrong {
   color: var(--danger);
   box-shadow: inset 0 0 0 2px var(--danger);
 }
