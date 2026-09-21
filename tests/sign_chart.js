@@ -7,6 +7,21 @@ function ok(label, cond) {
   if (!cond) process.exitCode = 1;
 }
 
+// Valeur exacte rendue dans un .sign-chart-target (voir SIGN_CHART_CELL_LATEX dans
+// render.js) : lue via l'annotation KaTeX (le LaTeX brut passé à katex.render), jamais
+// .textContent -- qui agrège AUSSI le MathML caché et l'annotation en plus du HTML
+// visuellement affiché, donc jamais une valeur exacte unique à comparer. Renvoie null si
+// la case est encore vide (pas de <math> rendu, juste le repère "." textuel).
+async function targetLatex(page, row, col) {
+  return page.evaluate(function (args) {
+    var target = document.querySelector(
+      '.sign-chart-target[data-sign-chart-row="' + args.row + '"][data-sign-chart-col="' + args.col + '"]');
+    if (!target) return undefined;
+    var annotation = target.querySelector('annotation');
+    return annotation ? annotation.textContent : null;
+  }, { row: row, col: col });
+}
+
 // "Tableau de signes" end to end, using the reference example -(x+1)(x-2)/(1-x) >= 0
 // (injected as an AST since a variable-denominator/leading-sign inequality of this shape
 // isn't producible through the manual parser yet): the button lives in the contextual
@@ -283,18 +298,24 @@ function ok(label, cond) {
     JSON.stringify(rowKinds) === JSON.stringify(['factor:0', 'factor:1', 'factor:2', 'total']));
   const totalRowIndex = rowKinds.indexOf('total');
 
-  // --- Cell popups: interval offers +/-, boundary offers 0/‖ ---
-  const intervalCell = page.locator('.sign-chart-data-cell[data-sign-chart-row="1"][data-sign-chart-col="2"]');
-  await intervalCell.click({ force: true });
+  // --- Cell popups: interval offers +/-, boundary offers 0/‖ -- clicking the small
+  // centered .sign-chart-target (never the whole .sign-chart-data-cell, retour
+  // utilisateur) opens them. ---
+  const intervalTarget = page.locator('.sign-chart-target[data-sign-chart-row="1"][data-sign-chart-col="2"]');
+  ok('empty target shows the discreet placeholder, not a real value',
+    (await intervalTarget.getAttribute('class')).indexOf('sign-chart-target-empty') !== -1);
+  await intervalTarget.click({ force: true });
   await page.waitForTimeout(60);
   let popupTexts = await page.$$eval('.sign-chart-popup-btn', function (els) { return els.map(function (e) { return e.textContent; }); });
   ok('interval cell popup offers +/-', JSON.stringify(popupTexts) === JSON.stringify(['+', '−']));
   await page.click('.sign-chart-popup-btn:first-child'); // '+'
   await page.waitForTimeout(60);
-  ok('interval cell now shows +', (await intervalCell.textContent()) === '+');
+  ok('interval target now renders "+" via KaTeX (like the equations)', (await targetLatex(page, 1, 2)) === '+');
+  ok('no longer shows the empty placeholder',
+    (await intervalTarget.getAttribute('class')).indexOf('sign-chart-target-empty') === -1);
 
-  const boundaryCell = page.locator('.sign-chart-data-cell[data-sign-chart-row="1"][data-sign-chart-col="1"]');
-  await boundaryCell.click({ force: true });
+  const boundaryTarget = page.locator('.sign-chart-target[data-sign-chart-row="1"][data-sign-chart-col="1"]');
+  await boundaryTarget.click({ force: true });
   await page.waitForTimeout(60);
   popupTexts = await page.$$eval('.sign-chart-popup-btn', function (els) { return els.map(function (e) { return e.textContent; }); });
   ok('boundary cell popup offers 0/‖', JSON.stringify(popupTexts) === JSON.stringify(['0', '‖']));
@@ -302,7 +323,7 @@ function ok(label, cond) {
   await page.waitForTimeout(60);
 
   // Click-outside closes without picking.
-  await page.locator('.sign-chart-data-cell[data-sign-chart-row="1"][data-sign-chart-col="0"]').click({ force: true });
+  await page.locator('.sign-chart-target[data-sign-chart-row="1"][data-sign-chart-col="0"]').click({ force: true });
   await page.waitForTimeout(60);
   ok('popup open', (await page.$('.sign-chart-popup')) !== null);
   await page.mouse.click(10, 10);
@@ -310,6 +331,18 @@ function ok(label, cond) {
   ok('popup closed on outside click, no value set',
     (await page.$('.sign-chart-popup')) === null &&
     (await page.evaluate(() => window.App.History.getSignChart().tableRows[1].cells[0])) === null);
+
+  // --- Clicking OUTSIDE the target but still inside the (wide) cell does nothing (only
+  // the small centered target is interactive, retour utilisateur) ---
+  await page.evaluate(() => {
+    var cell = document.querySelector('.sign-chart-target[data-sign-chart-row="1"][data-sign-chart-col="2"]').closest('.sign-chart-data-cell');
+    var rect = cell.getBoundingClientRect();
+    var ev = new MouseEvent('click', { bubbles: true, clientX: rect.left + 3, clientY: rect.top + rect.height / 2 });
+    cell.dispatchEvent(ev);
+  });
+  await page.waitForTimeout(60);
+  ok('clicking the cell edge (outside the target) does not open a popup',
+    (await page.$('.sign-chart-popup')) === null);
 
   // --- Validation: fill the "total" row with the EXACT reference-image values ---
   const expectedTotal = ['-', '0', '+', 'undef', '-', '0', '+'];
@@ -324,17 +357,17 @@ function ok(label, cond) {
     return r;
   }, totalRowIndex);
   ok('reference tableau row (-,0,+,‖,-,0,+) is entirely correct', totalCorrectness.every(function (c) { return c === true; }));
-  ok('no wrong-cell styling on the total row',
-    (await page.$$('.sign-chart-data-cell[data-sign-chart-row="' + totalRowIndex + '"].sign-chart-cell-wrong')).length === 0);
+  ok('no wrong-target styling on the total row',
+    (await page.$$('.sign-chart-target[data-sign-chart-row="' + totalRowIndex + '"].sign-chart-target-wrong')).length === 0);
 
   // Now set ONE wrong value and check it is flagged, styled, and stays visible (not reverted).
   await page.evaluate((row) => window.App.History.signChartSetCell(row, 0, '+'), totalRowIndex);
   await page.waitForTimeout(80);
   ok('a wrong cell is flagged incorrect',
     (await page.evaluate((row) => window.App.History.signChartCellCorrect(row, 0), totalRowIndex)) === false);
-  const wrongCell = page.locator('.sign-chart-data-cell[data-sign-chart-row="' + totalRowIndex + '"][data-sign-chart-col="0"]');
-  ok('the wrong cell carries the styling class', (await wrongCell.getAttribute('class')).indexOf('sign-chart-cell-wrong') !== -1);
-  ok('the wrong cell still shows what was typed (not reverted)', (await wrongCell.textContent()) === '+');
+  const wrongTarget = page.locator('.sign-chart-target[data-sign-chart-row="' + totalRowIndex + '"][data-sign-chart-col="0"]');
+  ok('the wrong target carries the styling class', (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') !== -1);
+  ok('the wrong target still shows what was typed (not reverted)', (await targetLatex(page, totalRowIndex, 0)) === '+');
 
   // --- The double-rule marks exactly the excluded-domain boundary column (x=1) ---
   const excludedCols = await page.$$eval('.sign-chart-header-cell.sign-chart-col-excluded', function (els) { return els.length; });
@@ -343,6 +376,31 @@ function ok(label, cond) {
   // --- No outer border on the table itself (per-cell borders only) ---
   const tableBorderWidth = await page.evaluate(() => getComputedStyle(document.querySelector('.sign-chart-table')).borderWidth);
   ok('the table has no outer border of its own', tableBorderWidth === '0px');
+
+  // --- Only the label/content divider exists -- no border along the table's own outer
+  // edges (top, right, bottom), which would otherwise still show through even without an
+  // explicit .sign-chart-table border (retour utilisateur : "je vois encore des bouts de
+  // la bordure extérieure") ---
+  const edgeBorders = await page.evaluate((row) => {
+    var lastHeaderCell = document.querySelectorAll('.sign-chart-header-cell');
+    var topRight = lastHeaderCell[lastHeaderCell.length - 1];
+    var lastRowLastCell = document.querySelector('.sign-chart-data-cell[data-sign-chart-row="' + row + '"]:last-of-type');
+    function borders(el) {
+      var s = getComputedStyle(el);
+      return { top: s.borderTopWidth, right: s.borderRightWidth, bottom: s.borderBottomWidth };
+    }
+    return { topRight: borders(topRight), bottomRight: lastRowLastCell ? borders(lastRowLastCell) : null };
+  }, totalRowIndex);
+  console.log('edge borders:', JSON.stringify(edgeBorders));
+  ok('no top/right border on the top-right header cell',
+    edgeBorders.topRight.top === '0px' && edgeBorders.topRight.right === '0px');
+  ok('no right/bottom border on the bottom-right data cell',
+    edgeBorders.bottomRight && edgeBorders.bottomRight.right === '0px' && edgeBorders.bottomRight.bottom === '0px');
+
+  // --- The single divider sits between the label column and the content columns ---
+  const labelBorderRight = await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.sign-chart-x-label')).borderRightWidth);
+  ok('the label column has its own right-side divider', parseFloat(labelBorderRight) > 0);
 
   // --- Boundary (x-value) columns are visibly narrower than interval columns: a sign
   // can never look like it belongs directly under -\infty/+\infty (which live in the
