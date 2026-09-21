@@ -511,6 +511,18 @@
     render();
   }
 
+  // Insère `latex` au curseur du champ actif — même geste que handleKey ci-dessus pour une
+  // touche `insert` ordinaire, exposé pour un bouton VIVANT EN DEHORS du pavé de touches
+  // (ex. le sélecteur de relation =/>/</\geq/\leq de la modale "Nouvelle équation", voir
+  // newEquationModal.js — ces tokens ne vivent pas dans KEY_ROWS pour ne pas apparaître
+  // aussi dans le champ "Opération" en cours de résolution, où une relation n'a pas de
+  // sens).
+  function insertAtCursor(latex) {
+    if (!activeField) return;
+    activeField.focus();
+    activeField.executeCommand(['insert', latex]);
+  }
+
   function getLatex() {
     return mathField ? mathField.value : '';
   }
@@ -523,6 +535,7 @@
     init: init,
     setActiveField: setActiveField,
     clearActiveField: clearActiveField,
+    insertAtCursor: insertAtCursor,
     getLatex: getLatex,
     setLatex: setLatex,
     setError: setError,

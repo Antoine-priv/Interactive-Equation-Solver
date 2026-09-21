@@ -51,6 +51,14 @@
     <button id="modalClose" type="button" class="modal-close" title="Fermer">✕</button>
     <h2>Nouvelle équation</h2>
     <div class="modal-section">
+      <div class="relation-picker-label">Relation</div>
+      <div class="relation-picker" id="relationPicker">
+        <button type="button" class="relation-btn" data-relation="=">=</button>
+        <button type="button" class="relation-btn" data-relation="&gt;">&gt;</button>
+        <button type="button" class="relation-btn" data-relation="&lt;">&lt;</button>
+        <button type="button" class="relation-btn" data-relation="\geq">&ge;</button>
+        <button type="button" class="relation-btn" data-relation="\leq">&le;</button>
+      </div>
       <div id="manualInputSlot"></div>
       <div id="manualError" class="panel-error"></div>
     </div>

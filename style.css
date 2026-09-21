@@ -1743,6 +1743,39 @@ button {
 }
 .modal-section button:hover { background: var(--accent-hover); }
 
+/* Sélecteur de relation (=, >, <, \geq, \leq) de la modale "Nouvelle équation" : chaque
+   bouton INSÈRE son token LaTeX dans le champ au curseur (voir insertAtCursor dans
+   mathKeypad.js) plutôt que de "sélectionner" un état séparé — le même langage bordé/
+   discret que .key-btn (pavé mathématique), pas le style rempli/accent des boutons
+   d'action .modal-section button ci-dessus (surchargé explicitement ici, même
+   spécificité mais règle plus spécifique .modal-section .relation-picker button). */
+.relation-picker-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.relation-picker { display: flex; gap: 6px; }
+.modal-section .relation-picker button {
+  flex: 1;
+  padding: 8px 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--border);
+  cursor: pointer;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+.modal-section .relation-picker button:hover {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--accent-soft-border);
+}
+.modal-section .relation-picker button:active { transform: scale(0.94); }
+
 /* Même langage visuel que les autres boutons-icônes carrés de l'appli (#newEquationBtn,
    #themeToggleBtn) : coins arrondis (pas un cercle), fond distinct du panneau. */
 .modal-close {
