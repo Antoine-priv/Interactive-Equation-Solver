@@ -88,7 +88,8 @@
     expand: 'Développe un groupe factorisé ou une fraction.',
     expr: 'Composez librement une suite d\'opérations.',
     produitnul: 'Sépare l\'équation pour résoudre chaque facteur individuellement.',
-    existence: 'Calcule la condition d\'existence (domaine de définition) de ce dénominateur/radicand, dans une nouvelle colonne.'
+    existence: 'Calcule la condition d\'existence (domaine de définition) de ce dénominateur/radicand, dans une nouvelle colonne.',
+    signchart: 'Construit un tableau de signes : une inéquation par facteur, puis un tableau à remplir.'
   };
 
   // Caractère "←" (utilisé pour la flèche retour, voir buildFactorBackRow) : selon la
@@ -297,7 +298,7 @@
       var isDen = pending.drilled.part === 'den' && groupNode && App.Expr.isExpressionQuotient(groupNode);
       var isSqrt = pending.drilled.part === 'sqrt' && groupNode && App.Expr.isSqrtGroup(groupNode);
       if (!groupNode || (!isBranch && !isDen && !isSqrt && !App.Expr.isFactorGroup(groupNode))) {
-        return { canSimplify: false, canFactor: false, canExpand: false, canProduitNul: false, canExistenceCondition: false };
+        return { canSimplify: false, canFactor: false, canExpand: false, canProduitNul: false, canExistenceCondition: false, canSignChart: false };
       }
       var inner = App.Expr.drilledWorkingArray(groupNode, pending.drilled);
       var sel = pending.selectedInner;
@@ -329,7 +330,11 @@
           allNumericFactorGroups(inner, sel) || allProductGroups(inner, sel),
         canExpand: innerCanExpand,
         canProduitNul: false,
-        canExistenceCondition: App.History.canExistenceCondition()
+        canExistenceCondition: App.History.canExistenceCondition(),
+        // Jamais disponible "entré" dans un groupe (même exclusion que Produit nul juste
+        // au-dessus) : le Tableau de signes porte sur l'équation ENTIÈRE, pas un facteur
+        // isolé qu'on est en train d'inspecter.
+        canSignChart: false
       };
     }
 
@@ -410,7 +415,8 @@
       canFactor: canFactor,
       canExpand: canExpand,
       canProduitNul: canProduitNul,
-      canExistenceCondition: false
+      canExistenceCondition: false,
+      canSignChart: App.History.canSignChart()
     };
   }
 
@@ -703,6 +709,7 @@
       else if (op === 'expand') unusable = !info.canExpand;
       else if (op === 'produitnul') unusable = !info.canProduitNul;
       else if (op === 'existence') unusable = !info.canExistenceCondition;
+      else if (op === 'signchart') unusable = !info.canSignChart;
       else unusable = false;
       // Délibérément PAS de "si un autre mode est engagé, cache/grise ce bouton" ici :
       // unusable ne dépend que de la sélection courante (info.canX), jamais de
@@ -1129,6 +1136,13 @@
           // manuellement (bug rapporté).
           var result = App.History.existenceConditionAction();
           if (result && (result.spawned || result.pan)) App.Render.panToDomainColumn(result.index);
+        } else if (op === 'signchart') {
+          // Comme "Condition d'existence" juste au-dessus : (re)crée si besoin, PUIS
+          // recentre la vue dessus dans tous les cas — un second clic une fois déjà posé
+          // (rien à créer, signChartAction() est alors un no-op) sert ainsi à retrouver
+          // le tableau/les facteurs plutôt qu'à ne rien faire du tout.
+          App.History.signChartAction();
+          App.Render.panToSignChart();
         }
       });
     });

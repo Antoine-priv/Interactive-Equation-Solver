@@ -155,30 +155,6 @@ button {
 #undoBtn:active:not(:disabled) { transform: translateY(0); }
 #undoBtn:disabled { opacity: 0.4; cursor: default; }
 
-/* ---- Bouton flottant "Tableau de signes" (voir canSignChart/signChartAction dans
-   history.js) : même gabarit/langage visuel neutre que #undoBtn, juste à sa droite. ---- */
-#signChartBtn {
-  position: fixed;
-  top: 22px;
-  left: 134px;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-md);
-  transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
-  z-index: 30;
-}
-#signChartBtn:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
-#signChartBtn:active:not(:disabled) { transform: translateY(0); }
-#signChartBtn:disabled { opacity: 0.4; cursor: default; }
-
 /* ---- Bouton flottant clair/sombre, en haut à droite ---- */
 #themeToggleBtn {
   position: fixed;
@@ -641,10 +617,10 @@ button {
 
 /* ---- "Tableau de signes" (voir renderSignChartFactors/renderSignChartTable dans
    render.js, canSignChart/signChartAction/getSignChartColumns dans history.js) ----
-   Les colonnes "<facteur> > 0" réutilisent .domain-split/.produit-nul-branch tels quels
-   (même langage visuel qu'une colonne "Condition d'existence") — seul ce groupe-ci diffère
-   en restant EN FLUX NORMAL (jamais position:absolute) : il vit sous la chaîne principale,
-   pas à côté d'elle, donc aucune mécanique d'ancrage dédiée n'est nécessaire. */
+   Les colonnes "<facteur> > 0" réutilisent .produit-nul-branch tel quel (même langage
+   visuel qu'une colonne "Condition d'existence") — seul ce groupe-ci diffère en restant EN
+   FLUX NORMAL (jamais position:absolute) : il vit sous la chaîne principale, pas à côté
+   d'elle, donc aucune mécanique d'ancrage dédiée n'est nécessaire. */
 .sign-chart-factors-group {
   display: flex;
   flex-direction: column;
@@ -652,11 +628,42 @@ button {
   margin: 56px 0 0;
 }
 
+/* PAS .domain-split (flex-wrap:wrap) : les colonnes de facteurs restent TOUJOURS alignées
+   horizontalement côte à côte, quitte à déborder de la largeur visible — #historyScroll
+   pan(ote) déjà tout contenu large (voir renderSignChartFactors dans render.js pour le
+   même raisonnement que .produit-nul-split-nested). */
+.sign-chart-factors-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 64px;
+  width: max-content;
+  margin: 0 auto;
+}
+
 .sign-chart-table-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   margin: 40px 0 90px;
+}
+
+/* Recentrage sur le tableau/les facteurs (voir panToSignChart dans render.js, déclenché
+   par un second clic sur le bouton "Tableau de signes" une fois déjà posé) : même
+   principe de pulsation brève que .domain-branch-flash, mais sur un conteneur SANS
+   box-shadow de base (d'où le liseré transparent -> accent plutôt que le simple
+   grossissement d'un liseré déjà présent). */
+@keyframes signChartFlash {
+  0%, 100% { box-shadow: inset 0 0 0 2px transparent; }
+  50% { box-shadow: inset 0 0 0 3px var(--accent); }
+}
+.sign-chart-flash {
+  animation: signChartFlash 0.5s ease-in-out 2;
+  border-radius: var(--radius-lg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .sign-chart-flash { animation: none; }
 }
 
 .sign-chart-table {
@@ -718,6 +725,10 @@ button {
   border-right: 4px double var(--text);
 }
 
+/* N'apparaît qu'au survol du tableau (retour utilisateur) : `visibility` (pas juste
+   `opacity`) pour rester hors du flux de tabulation/clic tant qu'invisible — .sign-chart-
+   table-wrap englobe tableau ET bouton, donc le survol reste continu en descendant
+   dessus une fois apparu. */
 .sign-chart-add-row-btn {
   margin-top: 14px;
   padding: 8px 16px;
@@ -728,7 +739,13 @@ button {
   font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  opacity: 0;
+  visibility: hidden;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+.sign-chart-table-wrap:hover .sign-chart-add-row-btn {
+  opacity: 1;
+  visibility: visible;
 }
 .sign-chart-add-row-btn:hover {
   background: var(--accent-soft);

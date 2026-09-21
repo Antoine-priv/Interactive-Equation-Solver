@@ -1647,7 +1647,12 @@
       var preview = (pending.opType === null && App.Toolbar.getHoveredOp() === 'expr')
         ? { equation: lastEq, opLeft: null, opRight: null }
         : engine.computePreview();
-      var pendingRow = createRow(preview.equation, { pending: true, solved: false });
+      // Même priorité que pour une étape confirmée un peu plus bas (step.operator d'abord,
+      // opts.eqGlyph en repli — voir son commentaire) : currentOperator (moteur en mode
+      // inégalité, ex. un facteur "Tableau de signes") l'emporte sur le glyphe d'AFFICHAGE
+      // fourni par l'appelant (ex. "≠" d'une colonne "Condition d'existence" côté
+      // dénominateur, qui reste elle un moteur "=" normal en interne).
+      var pendingRow = createRow(preview.equation, { pending: true, solved: false, eqGlyph: engine.getCurrentOperator() || opts.eqGlyph });
       // "Pop" à l'apparition (voir .preview-pop-in dans style.css) : la ligne "pending"
       // est entièrement reconstruite à chaque rendu (jamais réutilisée, voir plus haut),
       // donc rejouer l'animation à CHAQUE rendu la ferait aussi rejouer alors que la ligne,
@@ -2132,8 +2137,13 @@
       header.textContent = 'Tableau de signes';
       group.appendChild(header);
 
+      // PAS .domain-split (flex-wrap:wrap, voir style.css) : les facteurs doivent toujours
+      // rester alignés horizontalement côte à côte, jamais retomber sur plusieurs lignes
+      // si la fenêtre est trop étroite (retour utilisateur) — .sign-chart-factors-row
+      // (nowrap) laisse à la place la rangée déborder, #historyScroll gérant déjà tout
+      // débordement horizontal via le panoramique (comme n'importe quel contenu large).
       var wrap = document.createElement('div');
-      wrap.className = 'domain-split';
+      wrap.className = 'sign-chart-factors-row';
       group.appendChild(wrap);
 
       var focusedRes = null;
@@ -2846,6 +2856,35 @@
     });
   }
 
+  // Recentre la vue sur le "Tableau de signes" (voir signChartAction dans history.js,
+  // câblé depuis toolbar.js) : même recette que panToDomainColumn ci-dessus, mais cible le
+  // TABLEAU une fois qu'il existe (tous les facteurs résolus, voir .sign-chart-table-wrap),
+  // sinon les colonnes de facteurs encore en cours de résolution
+  // (.sign-chart-factors-group) — l'un ou l'autre est toujours "ce qu'il y a de plus
+  // pertinent à regarder" à cet instant. Appelé à CHAQUE clic sur le bouton (premier ET
+  // suivants) : un clic une fois déjà posé ne crée rien de nouveau (signChartAction() est
+  // alors un no-op, voir canSignChart) mais sert à retrouver le tableau/les facteurs
+  // plutôt qu'à ne rien faire.
+  function panToSignChart() {
+    requestAnimationFrame(function () {
+      var target = document.querySelector('.sign-chart-table-wrap') || document.querySelector('.sign-chart-factors-group');
+      var scroller = document.getElementById('historyScroll');
+      if (!target || !scroller) return;
+      var scale = App.Canvas.getScale();
+      var scrollerRect = scroller.getBoundingClientRect();
+      var rect = target.getBoundingClientRect();
+      var centerX = (rect.left - scrollerRect.left) / scale + App.Canvas.getX() + rect.width / (2 * scale);
+      var centerY = (rect.top - scrollerRect.top) / scale + App.Canvas.getY() + rect.height / (2 * scale);
+      App.Canvas.scrollTo({
+        left: centerX - scroller.clientWidth / (2 * scale),
+        top: centerY - scroller.clientHeight / (2 * scale),
+        behavior: 'smooth'
+      });
+      target.classList.add('sign-chart-flash');
+      setTimeout(function () { target.classList.remove('sign-chart-flash'); }, 1000);
+    });
+  }
+
   var BRANCH_OUTLINE_KEEP_SELECTOR = '.produit-nul-branch, #controlPanel, #opButtons, ' +
     '#mathKeypadPanel, #mathKeypadPeekTab, #liveOpPill, .arrow-label-mirror, ' +
     '#zoomInBtn, #zoomOutBtn';
@@ -2863,6 +2902,7 @@
     renderAll: renderAll,
     formatOpLabel: formatOpLabel,
     panToDomainColumn: panToDomainColumn,
+    panToSignChart: panToSignChart,
     init: initBranchOutlineDismissal
   };
 })(window.App = window.App || {});

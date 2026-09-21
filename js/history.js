@@ -2370,7 +2370,12 @@
     // deux autres scissions).
     function canSignChart() {
       if (activeChild()) return activeChild().canSignChart();
-      if (branches || signChart) return false;
+      if (branches) return false;
+      // Déjà posé sur ce noeud : reste disponible (jamais false) plutôt que de disparaître
+      // une fois utilisé — un second clic (voir signChartAction/App.Render.panToSignChart
+      // dans toolbar.js) sert alors à retrouver le tableau/les facteurs plutôt qu'à en
+      // recréer un second (signChartAction() est déjà lui-même un no-op dans ce cas).
+      if (signChart) return true;
       var extracted = detectSignChartFactors(leaf.lastEquation());
       if (!extracted) return false;
       var denFactors = extracted.factors.filter(function (f) { return f.kind === 'den'; });
@@ -2478,8 +2483,14 @@
     // signChartSetCell). Retourne false sans rien faire si cette rangée existe déjà, ou si
     // le tableau n'est pas encore prêt (tous les facteurs pas encore résolus, voir
     // getSignChartColumns).
+    // JAMAIS délégué via activeChild() (contrairement à canSignChart/signChartAction, qui
+    // ciblent l'équation ACTIVE) : le tableau rendu à l'écran est TOUJOURS celui de CE
+    // noeud précis (voir Hist.getSignChart(), non délégué lui non plus, utilisé tel quel
+    // par renderAll) — jamais celui d'un facteur focalisé pour être résolu (focusedSignChartFactor),
+    // qui n'a de toute façon pas son propre `signChart`. Déléguer ici aurait fait silencieusement
+    // échouer tout ajout de rangée/remplissage de case tant qu'un facteur restait focalisé
+    // après l'avoir résolu (bug rapporté : "rien ne se passe").
     function signChartAddRow(row) {
-      if (activeChild()) return activeChild().signChartAddRow(row);
       if (!signChart) return false;
       var cols = getSignChartColumns();
       if (!cols) return false;
@@ -2500,8 +2511,8 @@
     // une case "frontière" que 0/‖ — appliqué ici aussi, pas seulement côté UI, pour rester
     // cohérent si jamais appelé autrement qu'à travers le popup prévu). `value` peut être
     // null (efface la case).
+    // Jamais délégué non plus (voir signChartAddRow juste au-dessus pour la raison).
     function signChartSetCell(rowIndex, colIndex, value) {
-      if (activeChild()) return activeChild().signChartSetCell(rowIndex, colIndex, value);
       if (!signChart) return false;
       var row = signChart.tableRows[rowIndex];
       var cols = getSignChartColumns();
@@ -2516,8 +2527,8 @@
     // Tri-état pour le retour visuel (voir le plan : un flash bref sur une case erronée) :
     // true (correcte), false (erronée), ou null (pas encore remplie, OU pas significative
     // pour cette rangée — jamais signalée comme fausse, voir signChartExpectedCell).
+    // Jamais délégué non plus (voir signChartAddRow plus haut pour la raison).
     function signChartCellCorrect(rowIndex, colIndex) {
-      if (activeChild()) return activeChild().signChartCellCorrect(rowIndex, colIndex);
       if (!signChart) return null;
       var row = signChart.tableRows[rowIndex];
       var cols = getSignChartColumns();
