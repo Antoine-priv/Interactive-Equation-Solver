@@ -1264,6 +1264,74 @@
     return JSON.stringify(a) === JSON.stringify(b);
   }
 
+  // Décompose `side` (un SEUL côté d'équation déjà de la forme "expression <op> 0", voir
+  // canSignChart dans history.js) en ses facteurs linéaires distincts, pour "Tableau de
+  // signes" — généralisation de detectProduitNul (history.js) : accepte en plus un
+  // dénominateur-expression (Expr.isExpressionQuotient, ex. "(x+1)(x-2)/(1-x)"), dont les
+  // facteurs sont extraits récursivement eux aussi et marqués `kind:'den'` (les facteurs du
+  // numérateur restent `kind:'num'`) plutôt que simplement exclus comme dans Produit nul.
+  // Renvoie null si `side` ne se réduit pas ENTIÈREMENT à un produit/quotient de facteurs
+  // DEGRÉ <= 1 (restriction v1, même principe que isLinearRadicand dans history.js — un
+  // facteur degré >= 2 ferait sortir du cadre "un seul zéro, signe constant de part et
+  // d'autre" que ce tableau suppose) ou si aucun facteur dépendant de x ne subsiste. Un
+  // facteur purement numérique (à n'importe quel niveau : FactorGroup.factor, un facteur
+  // terminal de ProductGroup, ou le sign porté par un groupe) ne devient jamais une ligne
+  // du tableau (il ne change jamais de signe) mais son signe est plié dans `constantSign`
+  // (produit de tous ces signes) — nécessaire pour la ligne combinée "expression totale",
+  // qui doit refléter par ex. le "-" de tête de "-(x+1)(x-2)/(1-x)".
+  function extractSignChartFactors(side) {
+    var constantSign = 1;
+    var factors = []; // [{ terms: Side, kind: 'num'|'den' }]
+
+    function isLinearSide(s) {
+      return s.every(function (n) { return !isGroup(n) && n.pow <= 1; });
+    }
+
+    function pushFactor(terms, kind) {
+      if (terms.length === 1 && !isGroup(terms[0]) && terms[0].pow === 0) {
+        constantSign *= terms[0].coeff < 0 ? -1 : 1;
+        return true;
+      }
+      if (!isLinearSide(terms)) return false;
+      factors.push({ terms: terms, kind: kind });
+      return true;
+    }
+
+    function walkSide(s, kind) {
+      if (s.length === 1) return walkNode(s[0], kind);
+      if (isLinearSide(s)) return pushFactor(s, kind);
+      return false;
+    }
+
+    function walkNode(node, kind) {
+      if (isSqrtGroup(node)) return false; // hors-cadre v1 : jamais étudiée comme facteur
+      if (isProductGroup(node)) {
+        if (node.sign < 0) constantSign *= -1;
+        return flattenProductFactors(node).every(function (terms) { return pushFactor(terms, kind); });
+      }
+      if (isFactorGroup(node)) {
+        if (node.sign < 0) constantSign *= -1;
+        if (isExpressionQuotient(node)) {
+          if (!walkSide(node.factorTerms, 'den')) return false;
+        } else if (node.factor.pow === 0) {
+          constantSign *= node.factor.coeff < 0 ? -1 : 1;
+        } else if (!pushFactor([node.factor], kind)) {
+          return false;
+        }
+        return walkSide(node.innerTerms, kind);
+      }
+      return pushFactor([node], kind);
+    }
+
+    if (!walkSide(side, 'num')) return null;
+    if (!factors.length) return null;
+    var distinct = [];
+    factors.forEach(function (f) {
+      if (!distinct.some(function (d) { return d.kind === f.kind && sidesEquivalent(d.terms, f.terms); })) distinct.push(f);
+    });
+    return { factors: distinct, constantSign: constantSign };
+  }
+
   // Descend `path` (ex. [2] = side[2], [2,1] = side[2].innerTerms[1], [2,1,0] = encore un
   // niveau plus bas...) dans `side`, en exigeant un FactorGroup à chaque étape
   // intermédiaire (seul type de groupe où l'on peut "entrer", voir "drilled" dans
@@ -1489,6 +1557,7 @@
     sideIsSingleTerm: sideIsSingleTerm,
     flattenProductFactors: flattenProductFactors,
     sidesEquivalent: sidesEquivalent,
+    extractSignChartFactors: extractSignChartFactors,
     nodeAtPath: nodeAtPath,
     withGroupInnerTermsAtPath: withGroupInnerTermsAtPath,
     withQuotientDenominatorAtPath: withQuotientDenominatorAtPath,
