@@ -270,6 +270,12 @@ async function targetLatex(page, row, col) {
   await page.waitForTimeout(80);
   const optCount = (await page.$$('.sign-chart-popup-btn')).length;
   ok('4 options offered the first time (3 factors + total)', optCount === 4);
+  ok('the "total" option (last one) is real KaTeX, not the generic "Expression totale" text',
+    await page.evaluate(() => {
+      var btns = document.querySelectorAll('.sign-chart-popup-btn');
+      var last = btns[btns.length - 1];
+      return !!last.querySelector('.katex') && last.textContent.indexOf('Expression totale') === -1;
+    }));
   await page.click('.sign-chart-popup-btn:first-child', { force: true });
   await page.waitForTimeout(100);
   ok('clicking a FACTOR option while a factor is still focused actually adds a row',
@@ -324,6 +330,24 @@ async function targetLatex(page, row, col) {
   ok('rows are factor:0 (den), factor:1 (num), factor:2 (num), total, in add order',
     JSON.stringify(rowKinds) === JSON.stringify(['factor:0', 'factor:1', 'factor:2', 'total']));
   const totalRowIndex = rowKinds.indexOf('total');
+
+  // --- The "total" row's label shows the ACTUAL expression (-(x+1)(x-2)/(1-x), see the
+  // eligibility setup above), not the generic "Expression totale" text (retour
+  // utilisateur) ---
+  const totalRowLabelLatex = await page.evaluate((idx) => {
+    var cell = document.querySelectorAll('.sign-chart-row-label')[idx];
+    var a = cell.querySelector('annotation');
+    return a ? a.textContent : null;
+  }, totalRowIndex);
+  console.log('total row label LaTeX:', totalRowLabelLatex);
+  ok('total row label is not the generic placeholder text', totalRowLabelLatex !== 'Expression totale');
+  ok('total row label is real KaTeX (not plain text)',
+    await page.evaluate((idx) => !!document.querySelectorAll('.sign-chart-row-label')[idx].querySelector('.katex'), totalRowIndex));
+  ok('total row label renders as a fraction (has a denominator factor)', /\\frac/.test(totalRowLabelLatex));
+  ok('total row label includes every factor (num "x+1", num "x-2", den "1-x")',
+    /x\s*\+\s*1/.test(totalRowLabelLatex) && /x\s*-\s*2/.test(totalRowLabelLatex) && /-x\s*\+\s*1|1\s*-\s*x/.test(totalRowLabelLatex));
+  ok('total row label carries the leading minus sign from the original expression',
+    /^\\frac\{-/.test(totalRowLabelLatex));
 
   // --- Cell popups: interval offers +/-, boundary offers 0/‖ -- clicking the small
   // centered .sign-chart-target (never the whole .sign-chart-data-cell, retour
@@ -447,6 +471,31 @@ async function targetLatex(page, row, col) {
   ok('the wrong target still shows what was typed (not reverted)', (await targetLatex(page, totalRowIndex, 0)) === '+');
   ok('a correct cell is still not styled wrong after verifying',
     (await page.locator('.sign-chart-target[data-sign-chart-row="' + totalRowIndex + '"][data-sign-chart-col="1"]').getAttribute('class')).indexOf('sign-chart-target-wrong') === -1);
+
+  // --- Editing ANY cell after "Vérifier" was clicked hides ALL red styling again until
+  // "Vérifier" is clicked a second time (retour utilisateur: "allow the user to modify the
+  // signs... without instantly showing if the new choice is correct... must click Verify
+  // again"). Re-picking the SAME (still wrong) value is enough to demonstrate this: nothing
+  // about the value itself changed, only the fact that it was touched. ---
+  await wrongTarget.click({ force: true });
+  await page.waitForTimeout(60);
+  await page.click('.sign-chart-popup-btn:first-child'); // '+' again (still wrong)
+  await page.waitForTimeout(80);
+  ok('signChart.verified resets to false as soon as a cell is edited',
+    !(await page.evaluate(() => window.App.History.getSignChart().verified)));
+  ok('the red styling disappears immediately (no instant re-judgement)',
+    (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') === -1);
+  ok('the value itself is preserved (still shows "+")', (await targetLatex(page, totalRowIndex, 0)) === '+');
+  // Re-clicking "Vérifier" re-flags it, proving the gate isn't just permanently disabled.
+  await wrap.hover();
+  await page.waitForTimeout(60);
+  await page.click('.sign-chart-verify-btn', { force: true });
+  await page.waitForTimeout(80);
+  ok('clicking "Vérifier" again re-flags the still-wrong cell',
+    (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') !== -1);
+  // Leave it correct again for the structural checks further down.
+  await page.evaluate((row) => window.App.History.signChartSetCell(row, 0, '-'), totalRowIndex);
+  await page.waitForTimeout(60);
 
   // --- The double-rule marks exactly the excluded-domain boundary column (x=1) ---
   const excludedCols = await page.$$eval('.sign-chart-header-cell.sign-chart-col-excluded', function (els) { return els.length; });
@@ -577,10 +626,10 @@ async function targetLatex(page, row, col) {
     Math.abs(edgeSignCheck.rightSignCenter - edgeSignCheck.rightExpectedMid) < 0.5);
 
   // --- The gutter between the label/content divider and -\infty (mirrored: between
-  // +\infty and the table's own right edge) is now small and fixed (retour utilisateur:
-  // "reduce the space between -infinity and the vertical line to its left" -- previously
-  // large, since centering -infinity in a column wide enough for equal spacing left a lot
-  // of empty space between the divider and the glyph itself). ---
+  // +\infty and the table's own right edge) is small but no longer near-zero (retour
+  // utilisateur, this round: "a very small amount of space... but not as much as there
+  // was originally" -- a prior round had shrunk it to ~2px, reading as glued to the edge;
+  // still nowhere near the large gap from before ANY reduction). ---
   const gutterCheck = await page.evaluate(function () {
     var headers = Array.from(document.querySelectorAll('.sign-chart-header-cell')).slice(1);
     var lastCol = headers.length - 1;
@@ -593,8 +642,10 @@ async function targetLatex(page, row, col) {
     };
   });
   console.log('edge label gutters (divider-to-glyph, glyph-to-table-end):', JSON.stringify(gutterCheck));
-  ok('the gutter between the divider and -infinity is small', gutterCheck.leftGutter >= 0 && gutterCheck.leftGutter < 20);
-  ok('the gutter between +infinity and the table edge is small', gutterCheck.rightGutter >= 0 && gutterCheck.rightGutter < 20);
+  ok('the gutter between the divider and -infinity is small but visible (not glued to the edge)',
+    gutterCheck.leftGutter >= 8 && gutterCheck.leftGutter < 25);
+  ok('the gutter between +infinity and the table edge is small but visible (not glued to the edge)',
+    gutterCheck.rightGutter >= 8 && gutterCheck.rightGutter < 25);
 
   // --- Boundary (x-value) columns are visibly narrower than interval columns: a sign
   // can never look like it belongs directly under -\infty/+\infty (which live in the
