@@ -2314,6 +2314,11 @@
       // l'est déjà — voir aussi canSignChart, qui refuse symétriquement tant que
       // `branches` est posé.
       if (signChart) return false;
+      // Réservé aux ÉGALITÉS (symétrique à la restriction inverse de canSignChart plus
+      // bas) : la propriété "produit nul" n'a de sens que pour "=0" — une inéquation
+      // ("<op> 0" avec currentOperator non nul, voir init()/leaf plus haut) se résout par
+      // "Tableau de signes" à la place, jamais par Produit nul.
+      if (leaf.getCurrentOperator()) return false;
       return !!detectProduitNul(leaf.lastEquation());
     }
 

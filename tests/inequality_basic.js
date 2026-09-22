@@ -169,6 +169,56 @@ function ok(label, cond) {
   ok('generateLinearInequality() always returns one of App.Ineq.OPERATORS and always loads', genCheck.ok);
   if (!genCheck.ok) console.log(JSON.stringify(genCheck));
 
+  // --- "Produit nul" is reserved for equalities: the SAME "(x+2)(x+3) <op> 0" shape
+  // that's produit-nul-eligible as an equality must hide/disable the button once it's an
+  // inequality instead (retour utilisateur) — "Tableau de signes" is the right tool
+  // there, exactly like canSignChart already refuses symmetrically for a plain "=". ---
+  await page.evaluate(() => window.App.History.startNewEquation(
+    { left: [{ sign: 1, factors: [
+      { terms: [{ coeff: 1, pow: 1 }, { coeff: 2, pow: 0 }], exponent: 1 },
+      { terms: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], exponent: 1 }
+    ] }], right: [{ coeff: 0, pow: 0 }] },
+    { operator: '\\geq' }));
+  await page.waitForTimeout(120);
+  ok('canProduitNul() is false for "(x+2)(x+3) \\geq 0" (an inequality)',
+    !(await page.evaluate(() => window.App.History.canProduitNul())));
+  ok('the "Produit nul" button row is hidden for this inequality',
+    await page.evaluate(() => {
+      var row = document.querySelector('button[data-op="produitnul"]').closest('.op-row');
+      return row.hidden || row.classList.contains('row-hidden');
+    }));
+
+  // Same exact shape, but as a plain equality: Produit nul must be available again.
+  await page.evaluate(() => window.App.History.startNewEquation(
+    { left: [{ sign: 1, factors: [
+      { terms: [{ coeff: 1, pow: 1 }, { coeff: 2, pow: 0 }], exponent: 1 },
+      { terms: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], exponent: 1 }
+    ] }], right: [{ coeff: 0, pow: 0 }] }));
+  await page.waitForTimeout(120);
+  ok('canProduitNul() is true for the same shape as a plain equality "=0"',
+    await page.evaluate(() => window.App.History.canProduitNul()));
+  ok('the "Produit nul" button row is visible again for the equality',
+    await page.evaluate(() => {
+      var row = document.querySelector('button[data-op="produitnul"]').closest('.op-row');
+      return !row.hidden && !row.classList.contains('row-hidden');
+    }));
+
+  // --- Generator: generateEquation() draws roughly half inequalities, half equalities
+  // (retour utilisateur) — a loose statistical band (not exactly 50%, to avoid flakiness
+  // on a fixed sample size) over a large sample. ---
+  const ratioCheck = await page.evaluate(() => {
+    var N = 1000, ineqCount = 0;
+    for (var i = 0; i < N; i++) {
+      var eq = window.App.Generator.generateEquation();
+      if (eq.operator) ineqCount++;
+    }
+    return { N: N, ineqCount: ineqCount };
+  });
+  const ineqRatio = ratioCheck.ineqCount / ratioCheck.N;
+  console.log('generateEquation() inequality ratio over ' + ratioCheck.N + ' draws:', ineqRatio);
+  ok('roughly half of generateEquation() draws are inequalities (within [0.4, 0.6])',
+    ineqRatio >= 0.4 && ineqRatio <= 0.6);
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;
