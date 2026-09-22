@@ -2304,6 +2304,16 @@
       // d'existence" (voir la restriction en tête de createBranchable) — pas de conflit
       // de délégation possible plus bas (activeChild() aurait déjà intercepté).
       if (domainConditions) return false;
+      // Même restriction pour un "Tableau de signes" déjà posé ICI (retour utilisateur :
+      // survoler "Produit nul" une fois le tableau construit montrait un aperçu de flèches
+      // mal positionné, et cliquer dessus faisait carrément DISPARAÎTRE le tableau —
+      // `splitIntoBranches` pose `branches`, que le rendu affiche À LA PLACE de la chaîne
+      // principale/du tableau, sans jamais toucher `signChart` lui-même : ses données
+      // restaient donc intactes mais plus rien ne les affichait). Les deux scissions
+      // restent mutuellement exclusives sur un même noeud, comme `domainConditions`
+      // l'est déjà — voir aussi canSignChart, qui refuse symétriquement tant que
+      // `branches` est posé.
+      if (signChart) return false;
       return !!detectProduitNul(leaf.lastEquation());
     }
 
@@ -2324,6 +2334,7 @@
     function confirmProduitNul() {
       if (activeChild()) return activeChild().confirmProduitNul();
       if (domainConditions) return false;
+      if (signChart) return false;
       var detected = detectProduitNul(leaf.lastEquation());
       if (!detected) return false;
       var equations = detected.factors.map(function (side) {
@@ -2378,6 +2389,14 @@
       // à tort offert en travaillant DANS le tableau (retour utilisateur). Testée AVANT
       // activeChild() ci-dessous, qui déléguerait justement vers ce facteur.
       if (focusedSignChartFactor !== null) return false;
+      // Même raison, cette fois pour une colonne "Condition d'existence" focalisée (retour
+      // utilisateur : le bouton "Tableau de signes" ne doit pas apparaître À L'INTÉRIEUR de
+      // cette section) — sa propre mini-équation, une fois résolue jusqu'à "x - 1 = 0" par
+      // exemple, reste elle-même trivialement "chartable" au sens de
+      // Expr.extractSignChartFactors (un facteur linéaire nu = lui-même), exactement le même
+      // piège que focusedSignChartFactor juste au-dessus, sur un contexte de résolution
+      // différent. Testée AVANT activeChild(), qui déléguerait justement vers cette colonne.
+      if (focusedDomain !== null) return false;
       if (activeChild()) return activeChild().canSignChart();
       if (branches) return false;
       // Déjà posé sur ce noeud : reste disponible (jamais false) plutôt que de disparaître
@@ -2399,9 +2418,11 @@
     // noeud (voir `signChart` plus haut : une seule fois par noeud, contrairement à
     // `domainConditions` qui accumule une entrée par clic).
     function signChartAction() {
-      // Même garde que canSignChart juste au-dessus, pour la même raison (jamais imbriqué
-      // dans l'un de ses propres facteurs).
+      // Mêmes gardes que canSignChart juste au-dessus, pour les mêmes raisons (jamais
+      // imbriqué dans l'un de ses propres facteurs, ni déclenché depuis une colonne
+      // "Condition d'existence" focalisée).
       if (focusedSignChartFactor !== null) return { spawned: false };
+      if (focusedDomain !== null) return { spawned: false };
       if (activeChild()) return activeChild().signChartAction();
       if (signChart) return { spawned: false };
       if (!canSignChart()) return { spawned: false };
