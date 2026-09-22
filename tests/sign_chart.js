@@ -554,9 +554,24 @@ async function targetLatex(page, row, col) {
   }, totalRowIndex);
   await page.waitForTimeout(60);
 
-  // --- The double-rule marks exactly the excluded-domain boundary column (x=1) ---
-  const excludedCols = await page.$$eval('.sign-chart-header-cell.sign-chart-col-excluded', function (els) { return els.length; });
-  ok('exactly one excluded-domain header column (x=1)', excludedCols === 1);
+  // --- Retour utilisateur: no automatic double-bar marker on the excluded-domain boundary
+  // column (x=1) -- it's the student's own job to figure out and enter "‖" there via the
+  // cell popup, never a giveaway the app draws for them. Structural validation (a den root
+  // must still grade as "undef"/'‖' correct, "0" wrong there) stays entirely unaffected --
+  // already covered by the reference-tableau row check above. ---
+  const excludedCols = await page.$$eval('.sign-chart-col-excluded', function (els) { return els.length; });
+  ok('no automatic "excluded column" marker anywhere in the table', excludedCols === 0);
+  const denBoundaryBorder = await page.evaluate(function (row) {
+    var headers = Array.from(document.querySelectorAll('.sign-chart-header-cell')).slice(1);
+    // x=1 is a den root in this equation -- find its header cell by its rendered value.
+    var target = headers.find(function (h) {
+      var a = h.querySelector('annotation');
+      return a && a.textContent === '1';
+    });
+    return target ? getComputedStyle(target).borderRightStyle : null;
+  });
+  ok('that boundary column has an ordinary (non-double) right border, same as any other',
+    denBoundaryBorder !== 'double');
 
   // --- No outer border on the table itself (per-cell borders only) ---
   const tableBorderWidth = await page.evaluate(() => getComputedStyle(document.querySelector('.sign-chart-table')).borderWidth);
@@ -1120,6 +1135,164 @@ async function targetLatex(page, row, col) {
     !rowsRightAfterSwitch.some(function (r) { return r.cls.indexOf('row-hidden') !== -1 && !r.hidden; }));
   ok('no row keeps the "row-appearing" pop class either after a context switch',
     !rowsRightAfterSwitch.some(function (r) { return r.cls.indexOf('row-appearing') !== -1; }));
+
+  // --- Isolated scenario: clicking "+ Ajouter une rangée" right after a real drag/pan
+  // gesture must open the popup NEXT TO THE BUTTON, not at the top-left of the screen
+  // (retour utilisateur). Root cause: a real mousedown-then-drag landing on a factor
+  // column (matching .produit-nul-branch, in CANVAS_PAN_EXCLUDE so no actual panning
+  // happens) ends with a native "phantom" click on plain background -- which
+  // initBranchOutlineDismissal (a capture-phase document listener) reads as "outside",
+  // hiding the branch outline. The VERY NEXT click, landing back inside a "keep" zone
+  // like the add-row button, used to re-render SYNCHRONOUSLY in that same capture phase
+  // to restore the outline -- destroying the button (and the click handler's own
+  // `anchorEl` closure) before its own bubble-phase handler could run, so
+  // openSignChartPopup anchored to an already-detached node (getBoundingClientRect() all
+  // zero -> popup pinned near the screen origin). ---
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.startNewEquation({
+      left: [{ sign: 1, factors: [
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 },
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 1 }
+      ] }],
+      right: [{ coeff: 0, pow: 0 }]
+    }, { operator: '\\geq' });
+    Hist.signChartAction();
+    Hist.setFocusedSignChartFactor(0);
+    Hist.selectOp('expr'); Hist.setExprChainText('-1'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.setFocusedSignChartFactor(1);
+    Hist.selectOp('expr'); Hist.setExprChainText('+2'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.focusMain();
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(150);
+  // Real mousedown+move+up starting ON a factor column (excluded from panning, but still
+  // produces the native phantom click on release) -- NOT the App.Canvas.set() API, which
+  // wouldn't reproduce this at all (no real click/mousedown sequence involved).
+  const panStartBox = await page.evaluate(() => {
+    var el = document.querySelector('.domain-branch[data-signchart-factor-index="0"]');
+    var r = el.getBoundingClientRect();
+    return { x: r.left + 10, y: r.top + 10 };
+  });
+  await page.mouse.move(panStartBox.x, panStartBox.y);
+  await page.mouse.down();
+  await page.mouse.move(panStartBox.x - 150, panStartBox.y - 150, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const panWrap = page.locator('.sign-chart-table-wrap');
+  await panWrap.hover();
+  await page.waitForTimeout(150);
+  const addRowBtnRect = await page.evaluate(() => document.querySelector('.sign-chart-add-row-btn').getBoundingClientRect());
+  await page.click('.sign-chart-add-row-btn', { force: true });
+  await page.waitForTimeout(100);
+  const popupAfterPanRect = await page.evaluate(() => {
+    var p = document.querySelector('.sign-chart-popup');
+    return p ? p.getBoundingClientRect() : null;
+  });
+  console.log('add-row button rect:', JSON.stringify(addRowBtnRect), 'popup rect after pan+click:', JSON.stringify(popupAfterPanRect));
+  ok('the popup opened at all (not silently swallowed)', popupAfterPanRect !== null);
+  ok('the popup is anchored next to the button, not pinned near the screen origin',
+    popupAfterPanRect !== null &&
+    Math.abs((popupAfterPanRect.left + popupAfterPanRect.width / 2) - (addRowBtnRect.left + addRowBtnRect.width / 2)) < 50);
+  // Picking an option still works normally afterward.
+  await page.click('.sign-chart-popup-btn:first-child', { force: true });
+  await page.waitForTimeout(80);
+  ok('picking an option from that popup still adds the row correctly',
+    (await page.evaluate(() => window.App.History.getSignChart().tableRows.length)) > 0);
+
+  // --- Isolated scenario: the "Condition d'existence" group must clear not just the sign
+  // chart factor columns' own layout box, but the ARROWS drawn inside them too (retour
+  // utilisateur: "still a bit of overlap between the arrows of the rightmost inequality...
+  // and the leftmost arrows in the existence condition section") -- those arrows live in
+  // an `overflow:visible` <svg>, so their operation-label text can paint well past their
+  // column's own CSS layout width without ever growing it. ---
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.startNewEquation({
+      left: [{
+        sign: -1, isDivision: true,
+        factorTerms: [{ coeff: -1, pow: 1 }, { coeff: 1, pow: 0 }],
+        innerTerms: [{ sign: 1, factors: [
+          { terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 },
+          { terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 1 }
+        ] }]
+      }],
+      right: [{ coeff: 0, pow: 0 }]
+    }, { operator: '\\geq' });
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(80);
+  await page.click(domDenSel, { force: true });
+  await page.click(domDenSel, { force: true });
+  await page.click('button[data-op="existence"]');
+  await page.waitForTimeout(120);
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.setFocusedDomain(0);
+    Hist.selectOp('expr'); Hist.setExprChainText('-1'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.selectOp('expr'); Hist.setExprChainText('\\div-1'); Hist.confirm();
+    Hist.focusMain();
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(150);
+  await page.evaluate(() => window.App.History.signChartAction());
+  await page.waitForTimeout(80);
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.setFocusedSignChartFactor(0);
+    Hist.selectOp('expr'); Hist.setExprChainText('-1'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.selectOp('expr'); Hist.setExprChainText('\\div-1'); Hist.confirm();
+    Hist.setFocusedSignChartFactor(1);
+    Hist.selectOp('expr'); Hist.setExprChainText('-1'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.setFocusedSignChartFactor(2);
+    Hist.selectOp('expr'); Hist.setExprChainText('+2'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.focusMain();
+    Hist.signChartAddRow({ rowKind: 'total' });
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(200);
+  const arrowClearance = await page.evaluate(() => {
+    function rightEdge(el) { return el ? el.getBoundingClientRect().right : null; }
+    var domain = document.querySelector('.domain-group');
+    var cols = Array.from(document.querySelectorAll('.sign-chart-factors-group .produit-nul-branch'));
+    var lastCol = cols[cols.length - 1];
+    var svg = lastCol ? lastCol.querySelector('svg.arrows-overlay') : null;
+    var painted = svg ? Array.from(svg.querySelectorAll('path, text, tspan')) : [];
+    var arrowMaxRight = null;
+    painted.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      if (arrowMaxRight === null || r.right > arrowMaxRight) arrowMaxRight = r.right;
+    });
+    return { domainLeft: domain ? domain.getBoundingClientRect().left : null, arrowMaxRight: arrowMaxRight };
+  });
+  console.log('domain group vs rightmost factor arrows:', JSON.stringify(arrowClearance));
+  ok('the rightmost factor column actually drew some arrow content (sanity check)', arrowClearance.arrowMaxRight !== null);
+  ok('the domain group sits to the right of that arrow content, not just the column\'s own layout box',
+    arrowClearance.domainLeft !== null && arrowClearance.domainLeft > arrowClearance.arrowMaxRight);
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
