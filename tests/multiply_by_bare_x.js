@@ -77,9 +77,13 @@ function ok(label, cond) {
   const stepDivX = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
   console.log('equation apres ÷x:', JSON.stringify(stepDivX.equation));
   ok('÷x is now accepted (no pending error)', !afterDivX.error);
-  ok('÷x wraps both sides as a quotient with x as the denominator',
+  // Le membre gauche ("x", identique au diviseur) s'annule proprement en 1 plutôt que de
+  // rester une fraction "x/x" (voir le cas d'annulation ajouté à Expr.wrapSideInQuotient,
+  // couvert en détail par tests/divide_by_expression.js Test 3b) — seul le membre droit
+  // ("5", différent du diviseur) s'enveloppe réellement en quotient.
+  ok('÷x cancels the left side ("x", same as the divisor) to 1, and wraps the right side ("5") as a quotient with x as the denominator',
     JSON.stringify(stepDivX.equation) === JSON.stringify({
-      left: [{ sign: 1, factorTerms: [{ coeff: 1, pow: 1 }], innerTerms: [{ coeff: 1, pow: 1 }], isDivision: true }],
+      left: [{ coeff: 1, pow: 0 }],
       right: [{ sign: 1, factorTerms: [{ coeff: 1, pow: 1 }], innerTerms: [{ coeff: 5, pow: 0 }], isDivision: true }]
     }));
 

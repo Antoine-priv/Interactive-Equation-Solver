@@ -27,7 +27,13 @@ function ok(label, cond) {
   // --- 1) "\sqrt{x-7}=4" (saisie manuelle, round-trip désormais supporté — voir
   // parseWholeSqrtSide dans parser.js) : "(‥)²" résout l'équation en un clic. ---
   await page.evaluate(() => {
-    window.App.History.startNewEquation(window.App.Parser.parseLatexEquation('\\sqrt{x-7}=4'));
+    // { left, right } only, NOT the raw parseLatexEquation() result (which also carries
+    // an `operator` key, null here) — init() stores whatever object it's given as-is
+    // (see history.js), so passing the raw parse result would leak that extra key into
+    // lastEquation() below and break its exact-JSON comparison. Same convention as
+    // newEquationModal.js/submitManual (operator threaded via a separate `opts` arg).
+    var eq0 = window.App.Parser.parseLatexEquation('\\sqrt{x-7}=4');
+    window.App.History.startNewEquation({ left: eq0.left, right: eq0.right }, eq0.operator ? { operator: eq0.operator } : undefined);
   });
   await page.click('button[data-op="expr"]');
   await page.waitForTimeout(150);

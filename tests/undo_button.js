@@ -15,7 +15,15 @@ function ok(label, cond) {
   page.on('console', (m) => { if (m.type() === 'error') errs.push('[console.error] ' + m.text()); });
 
   await page.goto(FILE);
-  await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, 'x+2=5');
+  // { left, right } only, NOT the raw parseEquation() result (which also carries an
+  // `operator` key, null here) — init() stores whatever object it's given as-is (see
+  // history.js), so passing the raw parse result would leak that extra key into
+  // lastEquation() below (line 42) and break its exact-JSON comparison. Same convention
+  // as newEquationModal.js/submitManual (operator threaded via a separate `opts` arg).
+  await page.evaluate((eq) => {
+    var parsed = window.App.Parser.parseEquation(eq);
+    window.App.History.startNewEquation({ left: parsed.left, right: parsed.right }, parsed.operator ? { operator: parsed.operator } : undefined);
+  }, 'x+2=5');
   await page.waitForTimeout(100);
 
   // 1) Juste apres une nouvelle equation (1 seul step) : undo doit etre desactive.

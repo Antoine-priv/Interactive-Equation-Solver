@@ -33,7 +33,8 @@ function ok(label, cond) {
   ok('"\\frac{5}{x+3}=2" parses to a FactorGroup with factorTerms (never folded)',
     r.ok && JSON.stringify(r.eq) === JSON.stringify({
       left: [{ sign: 1, factorTerms: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], innerTerms: [{ coeff: 5, pow: 0 }], isDivision: true }],
-      right: [{ coeff: 2, pow: 0 }]
+      right: [{ coeff: 2, pow: 0 }],
+      operator: null
     }));
 
   r = await parse('\\frac{7x-3}{x+5}=0');
@@ -52,7 +53,8 @@ function ok(label, cond) {
   ok('pasting internally-generated LaTeX with a "\\htmlData{fracpart=den}{...}" wrapper parses correctly',
     r.ok && JSON.stringify(r.eq) === JSON.stringify({
       left: [{ sign: -1, factorTerms: [{ coeff: 3, pow: 1 }], innerTerms: [{ coeff: 1, pow: 1 }], isDivision: true }],
-      right: [{ coeff: 0, pow: 0 }]
+      right: [{ coeff: 0, pow: 0 }],
+      operator: null
     }));
 
   r = await parse('\\frac{-3}{\\htmlData{fracpart=den}{x + 4}}=9'); // note the spaces around "+", as sideLatex actually emits
@@ -63,7 +65,7 @@ function ok(label, cond) {
 
   r = await parse('\\htmlId{r5-left-0}{x}+3=8'); // a bare \htmlId wrapper (term-level rendering id), not just \htmlData
   ok('a "\\htmlId{...}{...}" wrapper (not just \\htmlData) is also stripped correctly',
-    r.ok && JSON.stringify(r.eq) === JSON.stringify({ left: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], right: [{ coeff: 8, pow: 0 }] }));
+    r.ok && JSON.stringify(r.eq) === JSON.stringify({ left: [{ coeff: 1, pow: 1 }, { coeff: 3, pow: 0 }], right: [{ coeff: 8, pow: 0 }], operator: null }));
 
   r = await parse('\\frac{5}{x-5+5}=2'); // denominator content that is NOT trivially "0" textually but IS zero-valued after folding constants: x-5+5 -> just "x" (not zero) -- sanity: should NOT throw
   ok('a denominator that folds to a non-zero variable expression does not throw', r.ok);
