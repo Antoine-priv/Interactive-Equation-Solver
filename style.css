@@ -582,6 +582,16 @@ button {
   margin-top: 28px;
 }
 
+/* "S=..." du tableau de signes (voir renderSignChartTable dans render.js) : réutilise
+   ".solution-set" comme "Df=..." juste au-dessus, même raison — son margin-top négatif de
+   base (pensé pour coller sous la DERNIÈRE ligne confirmée d'une chaîne) collerait ici
+   contre la rangée d'actions "+ Ajouter une rangée"/"Vérifier" juste au-dessus ; pas besoin
+   du grand margin-bottom de base non plus, ce résumé est toujours le tout dernier élément
+   de .sign-chart-table-wrap. */
+.sign-chart-solution-set {
+  margin: 20px auto 0;
+}
+
 /* Titres "Équation"/"Domaine de définition" (voir renderAll dans render.js) : IDENTIQUES
    (même police/marge) à dessein — positionDomainGroup aligne le second sur le premier
    (même rect.top), et cette identité de hauteur/marge est ce qui fait que la toute
@@ -678,6 +688,7 @@ button {
    de bordure verticale générale ici : la seule verticale du tableau est celle, dédiée,
    entre étiquettes et contenu (voir .sign-chart-row-label/.sign-chart-x-label plus bas). */
 .sign-chart-cell {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -742,6 +753,28 @@ button {
 .sign-chart-target-wrong {
   color: var(--danger);
   box-shadow: inset 0 0 0 2px var(--danger);
+}
+
+/* "‖" (retour utilisateur : l'étirer sur toute la hauteur de sa case, jamais un glyphe
+   KaTeX de hauteur fixe liée à la police) : un double trait vertical CSS pur, positionné
+   en absolu (voir .sign-chart-cell/position:relative plus bas, seule ancre nécessaire) et
+   étiré du haut au bas de la case (un léger retrait de 6px, pour ne jamais toucher visuellement
+   le trait horizontal de bordure) plutôt que centré/dimensionné par le flux flex normal de
+   .sign-chart-target — seule une case FRONTIÈRE peut jamais valoir "undef" (jamais une
+   case intervalle), donc toujours simplement centrée horizontalement ici, sans avoir à
+   gérer le cas particulier des colonnes de BORD (-∞/+∞, jamais frontières elles-mêmes). */
+.sign-chart-target-undef {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 0;
+  min-height: 0;
+  width: 0.4em;
+  border-left: 2.5px solid currentColor;
+  border-right: 2.5px solid currentColor;
+  border-radius: 0;
 }
 
 /* Colonne intervalle de BORD (contient "-∞"/"+∞" en en-tête, voir EDGE_SIGN_FRACTION dans

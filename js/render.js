@@ -100,9 +100,10 @@
   // LaTeX rendu (via KaTeX, comme tout le reste de l'appli — voir le retour utilisateur
   // "comme on le fait dans les équations") pour chaque valeur de case du tableau de
   // signes (voir renderSignChartTable plus bas) — 'undef' (jamais "‖" en interne, voir
-  // signChartSetCell dans history.js) s'affiche "\Vert" (double barre, convention du
-  // tableau français, voir le plan).
-  var SIGN_CHART_CELL_LATEX = { '+': '+', '-': '-', '0': '0', undef: '\\Vert' };
+  // signChartSetCell dans history.js) n'y figure PLUS : rendu en CSS pur, jamais du KaTeX,
+  // voir .sign-chart-target-undef dans style.css (retour utilisateur : l'étirer sur toute
+  // la hauteur de sa case, ce qu'un glyphe KaTeX de hauteur fixe ne peut pas faire).
+  var SIGN_CHART_CELL_LATEX = { '+': '+', '-': '-', '0': '0' };
 
   // LaTeX de l'expression totale étudiée (retour utilisateur : remplacer le texte générique
   // "Expression totale" par l'expression mathématique elle-même, partout où elle apparaît —
@@ -137,6 +138,33 @@
   // porte sur l'expression entière plutôt que sur son dernier terme seul.
   function signChartFactorPowerLatex(f) {
     return '\\left(' + Expr.sideLatex(f.capturedSide) + '\\right)^{' + f.exponent + '}';
+  }
+
+  // LaTeX "S=..." (retour utilisateur : même principe que le résumé "S={...}" de "Produit
+  // nul"/"Df=..." de "Condition d'existence") à partir de `ranges`
+  // (Hist.signChartSolutionRanges(), déjà null tant que la rangée "Expression totale"
+  // n'est pas entièrement correcte — seul appelant légitime, voir renderSignChartTable).
+  // Une borne infinie n'est JAMAIS "incluse" ("from"/"to" valant ±Infinity ignorent alors
+  // fromIncluded/toIncluded, toujours ouverte côté infini) ; un intervalle dégénéré
+  // (from===to, les deux bornes incluses — un point isolé, voir signChartSolutionRanges)
+  // s'affiche comme un singleton "{r}" plutôt qu'un intervalle "[r;r]".
+  function signChartSolutionLatex(ranges) {
+    if (!ranges.length) return 'S=\\emptyset';
+    function numLabel(v) {
+      if (v === -Infinity) return '-\\infty';
+      if (v === Infinity) return '+\\infty';
+      return (v < 0 ? '-' : '') + Expr.formatNumberLatex(v);
+    }
+    var parts = ranges.map(function (r) {
+      if (r.from === r.to && r.fromIncluded && r.toIncluded) {
+        return '\\left\\{' + numLabel(r.from) + '\\right\\}';
+      }
+      var openLeft = r.from === -Infinity || !r.fromIncluded;
+      var openRight = r.to === Infinity || !r.toIncluded;
+      return (openLeft ? '\\left]' : '\\left[') + numLabel(r.from) + ';' + numLabel(r.to) +
+        (openRight ? '\\right[' : '\\right]');
+    });
+    return 'S=' + parts.join('\\cup');
   }
 
   // Popup compact (2 boutons pour une case, ou une liste verticale pour "+ Ajouter une
@@ -2291,7 +2319,10 @@
       // GAP, il faut EDGE_INTERVAL_W = EDGE_LABEL_GUTTER + Wb/2 + Wm (le signe de cette
       // colonne suit la même logique un cran plus loin, voir EDGE_SIGN_OFFSET plus bas).
       var BOUNDARY_W = 76;
-      var MIDDLE_INTERVAL_W = 150;
+      // Réduite (retour utilisateur : rapprocher les valeurs de x, et donc le contenu de
+      // la table juste en dessous, puisque ce sont les MÊMES colonnes de grille) — depuis
+      // 150 avant ce tour.
+      var MIDDLE_INTERVAL_W = 108;
       var GAP = BOUNDARY_W + MIDDLE_INTERVAL_W;
       // Valeur choisie pour laisser un TOUT PETIT espace visible entre "-∞"/"+∞" et le
       // bord de leur colonne (retour utilisateur, tour suivant : la version précédente —
@@ -2388,9 +2419,14 @@
           // l'appli plutôt qu'un vague clic "n'importe où dans la case".
           var target = document.createElement('span');
           var value = row.cells[colIndex];
-          target.className = 'sign-chart-target' + (value === null ? ' sign-chart-target-empty' : '');
+          target.className = 'sign-chart-target' + (value === null ? ' sign-chart-target-empty' : '') +
+            (value === 'undef' ? ' sign-chart-target-undef' : '');
           if (value !== null) {
-            window.katex.render(SIGN_CHART_CELL_LATEX[value] || '', target, { throwOnError: false });
+            // "‖" (retour utilisateur : l'étirer sur toute la hauteur de sa case) : jamais
+            // le glyphe KaTeX "\Vert" ici, de hauteur fixe liée à la police — un double
+            // trait CSS pur (voir .sign-chart-target-undef, position:absolute étirée en
+            // haut/bas) le remplace entièrement, SANS contenu texte/KaTeX du tout.
+            if (value !== 'undef') window.katex.render(SIGN_CHART_CELL_LATEX[value] || '', target, { throwOnError: false });
             // Rouge seulement une fois "Vérifier" cliqué (voir signChartVerify dans
             // history.js, retour utilisateur : "ne pas indiquer immédiatement qu'une
             // case est fausse") ET seulement si CETTE case précise n'a pas été retouchée
@@ -2493,6 +2529,19 @@
           : 'Ajoutez d\'abord la rangée "Expression totale"';
         verifyBtn.addEventListener('click', function () { engineRoot.signChartVerify(); });
         actionsRow.appendChild(verifyBtn);
+      }
+
+      // "S=..." (retour utilisateur : une fois "Vérifier" cliqué et tout correct, comme
+      // pour "Df=..." de "Condition d'existence") : recalculé à chaque rendu, jamais mis
+      // en cache (même principe que "Df="/le résumé de "Produit nul") — signChartSolutionRanges
+      // renvoie null tant que ce n'est pas encore le cas (verified/rangée totale
+      // incomplète/une case fausse), donc rien n'apparaît avant.
+      var solutionRanges = engineRoot.signChartSolutionRanges();
+      if (solutionRanges) {
+        var solutionEl = document.createElement('div');
+        solutionEl.className = 'solution-set sign-chart-solution-set';
+        window.katex.render(signChartSolutionLatex(solutionRanges), solutionEl, { throwOnError: false });
+        wrap.appendChild(solutionEl);
       }
       return wrap;
     }

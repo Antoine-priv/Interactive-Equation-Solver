@@ -2404,6 +2404,11 @@
       // dans toolbar.js) sert alors à retrouver le tableau/les facteurs plutôt qu'à en
       // recréer un second (signChartAction() est déjà lui-même un no-op dans ce cas).
       if (signChart) return true;
+      // Réservé aux INÉQUATIONS (retour utilisateur) : un "tableau de signes" n'a de sens
+      // que pour étudier le signe d'une expression comparée à 0 avec <, >, ≤ ou ≥ — jamais
+      // pour une simple égalité "=" (currentOperator alors null, voir init()/leaf plus
+      // haut), où "Produit nul" reste le bon outil.
+      if (!leaf.getCurrentOperator()) return false;
       var extracted = detectSignChartFactors(leaf.lastEquation());
       if (!extracted) return false;
       var denFactors = extracted.factors.filter(function (f) { return f.kind === 'den'; });
@@ -2660,6 +2665,66 @@
       });
       notify();
       return true;
+    }
+
+    // Vrai une fois "Vérifier" cliqué (signChart.verified), la rangée "Expression totale"
+    // ENTIÈREMENT remplie (aucune case à null : c'est elle qu'on lit pour la solution
+    // finale, voir signChartSolutionRanges plus bas) ET AUCUNE case du tableau entier —
+    // total ou facteur — n'est actuellement fausse (une rangée facteur peut, elle, rester
+    // partiellement/pas remplie sans empêcher ceci : seules ses cases éventuellement
+    // REMPLIES doivent être correctes). Seule condition d'affichage de "S=..." (retour
+    // utilisateur), jamais calculée/affichée avant.
+    function signChartFullyVerifiedCorrect() {
+      if (!signChart || !signChart.verified) return false;
+      var totalRow = signChart.tableRows.filter(function (r) { return r.rowKind === 'total'; })[0];
+      if (!totalRow || totalRow.cells.some(function (v) { return v === null; })) return false;
+      if (!getSignChartColumns()) return false;
+      return signChart.tableRows.every(function (row, ri) {
+        return row.cells.every(function (v, ci) { return v === null || signChartCellCorrect(ri, ci) === true; });
+      });
+    }
+
+    // Union d'intervalles solution de l'INÉQUATION D'ORIGINE (jamais la convention "> 0"
+    // interne à chaque mini-facteur, voir signChartAction plus haut — ici, le VRAI
+    // opérateur de CE noeud, leaf.getCurrentOperator(), déjà garanti non-null par
+    // canSignChart), lue directement dans la rangée "Expression totale" une fois
+    // entièrement correcte (signChartFullyVerifiedCorrect, seul appelant légitime — renvoie
+    // null sinon). Renvoie [{ from, fromIncluded, to, toIncluded }, ...] triés, `from`/`to`
+    // pouvant valoir -Infinity/+Infinity (jamais "inclus" dans ce cas — une borne infinie
+    // n'est jamais un point atteint) ; [] si aucune solution. Construit en balayant les
+    // colonnes une seule fois : une case intervalle compte si son signe correspond à celui
+    // demandé par l'opérateur, une case frontière compte comme un point ISOLÉ inclus
+    // seulement si l'opérateur admet l'égalité ET que sa valeur y vaut '0' (jamais 'undef',
+    // quel que soit l'opérateur — un point hors domaine n'est jamais solution) ; un point
+    // inclus adjacent à un intervalle inclus (des deux côtés à la fois, potentiellement)
+    // fusionne naturellement avec lui plutôt que de rester un singleton, simplement en
+    // laissant `current` ouvert d'une colonne à l'autre.
+    function signChartSolutionRanges() {
+      if (!signChartFullyVerifiedCorrect()) return null;
+      var totalRow = signChart.tableRows.filter(function (r) { return r.rowKind === 'total'; })[0];
+      var cols = getSignChartColumns();
+      var operator = leaf.getCurrentOperator() || '\\geq';
+      var wantSign = (operator === '>' || operator === '\\geq') ? '+' : '-';
+      var includeEquality = operator === '\\geq' || operator === '\\leq';
+      var ranges = [];
+      var current = null;
+      cols.forEach(function (col, i) {
+        var v = totalRow.cells[i];
+        if (col.type === 'interval') {
+          if (v === wantSign) {
+            if (!current) current = { from: col.from, fromIncluded: false, to: col.to, toIncluded: false };
+            else { current.to = col.to; current.toIncluded = false; }
+          } else if (current) { ranges.push(current); current = null; }
+        } else {
+          var pointIncluded = includeEquality && v === '0';
+          if (pointIncluded) {
+            if (current) { current.to = col.value; current.toIncluded = true; }
+            else current = { from: col.value, fromIncluded: true, to: col.value, toIncluded: true };
+          } else if (current) { ranges.push(current); current = null; }
+        }
+      });
+      if (current) ranges.push(current);
+      return ranges;
     }
 
     // Détecte si `eq` est de la forme (expr)² = c ou c = (expr)² (un carré parfait d'un
@@ -3039,6 +3104,8 @@
       signChartSetCell: signChartSetCell,
       signChartCellCorrect: signChartCellCorrect,
       signChartVerify: signChartVerify,
+      signChartFullyVerifiedCorrect: signChartFullyVerifiedCorrect,
+      signChartSolutionRanges: signChartSolutionRanges,
       canSquareRoot: canSquareRoot,
       squareRootStage: squareRootStage,
       squareRootAction: squareRootAction,
