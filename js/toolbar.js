@@ -656,9 +656,29 @@
   // .op-row.row-hidden) plutôt que de poser `hidden` d'un coup. Idempotent (comme l'ancien
   // `row.hidden = unusable`) : appelé à CHAQUE renderToolbar, donc ne doit rien redéclencher
   // si l'état visuel demandé est déjà celui en cours (y compris EN COURS de transition).
-  function setRowVisibility(row, unusable) {
-    if (prefersReducedMotion || isInitialToolbarRender) {
+  // Référence `pending` du contexte actif au dernier renderToolbar() (voir
+  // App.History.getPending(), déléguée à l'enfant focalisé quel que soit son niveau
+  // d'imbrication — chaque moteur porte son PROPRE objet `pending`, une référence stable
+  // tant que ce moteur reste vivant) : comparée par IDENTITÉ (jamais par contenu) à chaque
+  // rendu pour détecter un changement de CONTEXTE (ex. cliquer une équation à l'intérieur
+  // du tableau de signes pour y ouvrir sa propre fenêtre d'action) plutôt qu'un simple
+  // changement de sélection DANS le même contexte — voir son usage dans renderToolbar.
+  var lastToolbarContextPending = null;
+
+  // `skipAnimation` (retour utilisateur : les boutons qui disparaissent en changeant de
+  // contexte — ex. ouvrir la fenêtre d'action d'une équation du tableau de signes —
+  // n'ont pas à s'animer : cette réduction de hauteur a un sens pour signaler qu'UNE
+  // sélection vient de rendre CE bouton indisponible dans la MÊME fenêtre, pas pour une
+  // fenêtre qui appartenait de toute façon à une équation différente) : bascule
+  // instantanément, comme isInitialToolbarRender.
+  function setRowVisibility(row, unusable, skipAnimation) {
+    if (prefersReducedMotion || isInitialToolbarRender || skipAnimation) {
       row.hidden = unusable;
+      // Nettoie toute classe de transition laissée par un changement d'état précédent
+      // (improbable pile au moment d'un changement de contexte, mais un état incohérent
+      // resterait sinon bloqué puisqu'aucun `transitionend` ne se déclenchera ici pour le
+      // résoudre lui-même, contrairement au chemin animé ci-dessous).
+      row.classList.remove('row-hidden', 'row-appearing');
       return;
     }
     // `row.hidden` seul ne suffit pas : une rangée en cours de réduction a `row-hidden`
@@ -688,6 +708,13 @@
 
   function renderToolbar() {
     var pending = App.History.getPending();
+    // Contexte changé depuis le dernier rendu (voir lastToolbarContextPending plus haut,
+    // ex. cliquer une équation du tableau de signes pour ouvrir sa propre fenêtre
+    // d'action) : les boutons qui deviennent indisponibles CE rendu-ci le sont à cause de
+    // ce changement, jamais d'une sélection dans la fenêtre déjà affichée — retour
+    // utilisateur : pas d'animation de disparition dans ce cas précis.
+    var contextChanged = lastToolbarContextPending !== null && lastToolbarContextPending !== pending;
+    lastToolbarContextPending = pending;
     var info = computeSelectionInfo();
     bindMathKeypad(pending);
     var opButtons = document.getElementById('opButtons');
@@ -719,7 +746,7 @@
       // totalement statiques, seul le bouton cliqué passe en "active" ci-dessus). La
       // protection contre un clic sur un AUTRE bouton pendant qu'un mode est déjà engagé
       // se fait au niveau du gestionnaire de clic (voir initToolbar plus bas), pas ici.
-      setRowVisibility(btn.parentElement, unusable);
+      setRowVisibility(btn.parentElement, unusable, contextChanged);
 
       // Coche de validation à côté du bouton actif (mode 'expr'/'factor' seulement,
       // les seuls qui ont encore besoin d'une saisie à confirmer) : une seule et même
