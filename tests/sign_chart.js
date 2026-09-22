@@ -463,6 +463,25 @@ async function targetLatex(page, row, col) {
   ok('no wrong-target styling on the total row',
     (await page.$$('.sign-chart-target[data-sign-chart-row="' + totalRowIndex + '"].sign-chart-target-wrong')).length === 0);
 
+  // --- Retour utilisateur: the "‖" (undef) target stretches to fill its cell's full
+  // height, rendered as pure CSS (never a fixed-height KaTeX glyph) ---
+  const undefGeo = await page.evaluate(function (row) {
+    var target = document.querySelector('.sign-chart-target[data-sign-chart-row="' + row + '"][data-sign-chart-col="3"]');
+    var cellRect = target.closest('.sign-chart-cell').getBoundingClientRect();
+    var targetRect = target.getBoundingClientRect();
+    return {
+      hasUndefClass: target.classList.contains('sign-chart-target-undef'),
+      hasKatex: !!target.querySelector('annotation'),
+      cellHeight: cellRect.height,
+      targetHeight: targetRect.height
+    };
+  }, totalRowIndex);
+  console.log('undef ("‖") target geometry:', JSON.stringify(undefGeo));
+  ok('the "‖" target carries the dedicated CSS class', undefGeo.hasUndefClass);
+  ok('the "‖" target is NOT a KaTeX glyph (no annotation)', !undefGeo.hasKatex);
+  ok('the "‖" target stretches to fill nearly the full height of its cell',
+    undefGeo.targetHeight > undefGeo.cellHeight * 0.75);
+
   // --- Strict boundary validation: a 0/‖ in a FACTOR row at an x-value that is NOT that
   // factor's own root must be flagged wrong (retour utilisateur) -- row "factor:1" has
   // root x=-1 (column 1); columns 3 (x=1) and 5 (x=2) are boundaries belonging to the
@@ -666,8 +685,9 @@ async function targetLatex(page, row, col) {
   console.log('gaps between -\\infty, each real x-value, and +\\infty (glyph positions):', JSON.stringify(spacingCheck));
   // Tolerance of a couple pixels: the row-label column is auto-sized to its (KaTeX) content,
   // which can leave the grid's overall width a non-integer number of pixels, spreading a
-  // sub-pixel rounding remainder unevenly across tracks -- confirmed exact (226,226,226,226)
-  // by hand with a simpler 2-factor example; not a real alignment bug.
+  // sub-pixel rounding remainder unevenly across tracks -- confirmed exact (184,184,184,184
+  // as of this round's tighter MIDDLE_INTERVAL_W) by hand with a simpler 2-factor example;
+  // not a real alignment bug.
   ok('all 4 gaps between -infinity/x-values/+infinity are equal (within rounding)',
     spacingCheck.every(function (g) { return Math.abs(g - spacingCheck[0]) <= 2; }));
 
@@ -1293,6 +1313,97 @@ async function targetLatex(page, row, col) {
   ok('the rightmost factor column actually drew some arrow content (sanity check)', arrowClearance.arrowMaxRight !== null);
   ok('the domain group sits to the right of that arrow content, not just the column\'s own layout box',
     arrowClearance.domainLeft !== null && arrowClearance.domainLeft > arrowClearance.arrowMaxRight);
+
+  // --- Isolated scenario: "Tableau de signes" must be UNAVAILABLE for a plain equation
+  // ("=", no operator) -- retour utilisateur -- even though the exact same factored shape
+  // is eligible once compared with an inequality instead. ---
+  await page.evaluate(() => {
+    window.App.History.startNewEquation({
+      left: [{ sign: 1, factors: [
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 },
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 1 }
+      ] }],
+      right: [{ coeff: 0, pow: 0 }]
+    }); // no operator -> plain "="
+  });
+  await page.waitForTimeout(80);
+  ok('canSignChart() is false for a plain equation ("=")',
+    !(await page.evaluate(() => window.App.History.canSignChart())));
+  const scBtnHiddenForEquation = await page.evaluate(() => {
+    var b = document.querySelector('button[data-op="signchart"]');
+    if (!b) return true;
+    var row = b.closest('.op-row');
+    return !!row.hidden || row.classList.contains('row-hidden');
+  });
+  ok('the "Tableau de signes" button is hidden for a plain equation', scBtnHiddenForEquation);
+
+  // --- Isolated scenario: "S=..." appears once "Vérifier" is clicked and the WHOLE table
+  // is correct (retour utilisateur, same idea as "Df=..." for "Condition d'existence") --
+  // using the exact reported example (x-8)(x+5)>=0, S=]-inf;-5]∪[8;+inf[. Disappears again
+  // the moment a cell is wrong. ---
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.startNewEquation({
+      left: [{ sign: 1, factors: [
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: -8, pow: 0 }], exponent: 1 },
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: 5, pow: 0 }], exponent: 1 }
+      ] }],
+      right: [{ coeff: 0, pow: 0 }]
+    }, { operator: '\\geq' });
+    Hist.signChartAction();
+    Hist.setFocusedSignChartFactor(0);
+    Hist.selectOp('expr'); Hist.setExprChainText('+8'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.setFocusedSignChartFactor(1);
+    Hist.selectOp('expr'); Hist.setExprChainText('-5'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.focusMain();
+    Hist.signChartAddRow({ rowKind: 'total' });
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(150);
+  ok('no solution set before the total row is even filled in',
+    !(await page.evaluate(() => !!document.querySelector('.sign-chart-solution-set'))));
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    var sc = Hist.getSignChart();
+    var totalIdx = sc.tableRows.findIndex(function (r) { return r.rowKind === 'total'; });
+    // 2 roots (-5, 8) -> 5 columns: [-inf,-5], -5, ]-5,8[, 8, [8,+inf].
+    ['+', '0', '-', '0', '+'].forEach(function (v, i) { Hist.signChartSetCell(totalIdx, i, v); });
+  });
+  await page.waitForTimeout(80);
+  ok('still no solution set before "Vérifier" is clicked',
+    !(await page.evaluate(() => !!document.querySelector('.sign-chart-solution-set'))));
+  const solutionWrap = page.locator('.sign-chart-table-wrap');
+  await solutionWrap.hover();
+  await page.waitForTimeout(80);
+  await page.click('.sign-chart-verify-btn', { force: true });
+  await page.waitForTimeout(100);
+  const solutionLatex = await page.evaluate(() => {
+    var el = document.querySelector('.sign-chart-solution-set annotation');
+    return el ? el.textContent : null;
+  });
+  console.log('solution set after Verify (all correct):', solutionLatex);
+  ok('"S=]-\\infty;-5]\\cup[8;+\\infty[" is displayed once everything is correct',
+    solutionLatex === 'S=\\left]-\\infty;-5\\right]\\cup\\left[8;+\\infty\\right[');
+
+  // Introduce a wrong cell and re-verify: the solution set must disappear again.
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    var sc = Hist.getSignChart();
+    var totalIdx = sc.tableRows.findIndex(function (r) { return r.rowKind === 'total'; });
+    Hist.signChartSetCell(totalIdx, 0, '-'); // was '+' (correct)
+    Hist.signChartVerify();
+  });
+  await page.waitForTimeout(100);
+  ok('the solution set disappears once a cell is wrong, even after re-verifying',
+    !(await page.evaluate(() => !!document.querySelector('.sign-chart-solution-set'))));
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');

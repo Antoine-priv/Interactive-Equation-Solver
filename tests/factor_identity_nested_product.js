@@ -37,7 +37,7 @@ function ok(label, cond) {
         { terms: [{ coeff: 1, pow: 1 }, { coeff: 2, pow: 0 }], exponent: 1 }
       ] }],
       right: [{ coeff: 0, pow: 0 }]
-    });
+    }, { operator: '\\geq' }); // an inequality: sign chart is now inequality-only (retour utilisateur, later round)
     Hist.drillIntoProductBranch('left', 0, 0);
     Hist.toggleInnerSelection(0);
     Hist.toggleInnerSelection(1);
