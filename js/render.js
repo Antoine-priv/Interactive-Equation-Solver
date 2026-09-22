@@ -122,6 +122,16 @@
     return '\\frac{' + numLatex + '}{' + denFactors.map(factorLatex).join('') + '}';
   }
 
+  // LaTeX d'un facteur "tel quel" dans l'équation d'origine, puissance comprise (ex.
+  // "(x+2)^{3}") — n'a de sens qu'appelée pour un facteur dont l'exposant réel est > 1
+  // (voir ses deux appelants, tous deux déjà gardés en amont) : contrairement à la
+  // variante nue (Expr.sideLatex(f.capturedSide) seul, sans parenthèses ni exposant,
+  // utilisée pour la racine du facteur), TOUJOURS entre \left(\right) pour que l'exposant
+  // porte sur l'expression entière plutôt que sur son dernier terme seul.
+  function signChartFactorPowerLatex(f) {
+    return '\\left(' + Expr.sideLatex(f.capturedSide) + '\\right)^{' + f.exponent + '}';
+  }
+
   // Popup compact (2 boutons pour une case, ou une liste verticale pour "+ Ajouter une
   // rangée", voir renderSignChartTable) : élément UNIQUE recréé à chaque ouverture, jamais
   // conservé entre deux ouvertures. `position:fixed`, ancré sous `anchorEl` — vit dans
@@ -2315,7 +2325,10 @@
         if (row.rowKind === 'total') {
           window.katex.render(signChartTotalLatex(signChart), labelCell, { throwOnError: false });
         } else {
-          window.katex.render(Expr.sideLatex(signChart.factors[row.factorIndex].capturedSide), labelCell, { throwOnError: false });
+          var rowFactor = signChart.factors[row.factorIndex];
+          window.katex.render(
+            row.withPower ? signChartFactorPowerLatex(rowFactor) : Expr.sideLatex(rowFactor.capturedSide),
+            labelCell, { throwOnError: false });
         }
         table.appendChild(labelCell);
 
@@ -2346,8 +2359,11 @@
             window.katex.render(SIGN_CHART_CELL_LATEX[value] || '', target, { throwOnError: false });
             // Rouge seulement une fois "Vérifier" cliqué (voir signChartVerify dans
             // history.js, retour utilisateur : "ne pas indiquer immédiatement qu'une
-            // case est fausse") — signChartCellCorrect reste, lui, toujours calculable.
-            if (signChart.verified && engineRoot.signChartCellCorrect(rowIndex, colIndex) === false) {
+            // case est fausse") ET seulement si CETTE case précise n'a pas été retouchée
+            // depuis (row.dirty, retour utilisateur suivant : modifier une case ne doit
+            // décolorer QU'ELLE, jamais les autres, toujours signalées) —
+            // signChartCellCorrect reste, lui, toujours calculable.
+            if (signChart.verified && !row.dirty[colIndex] && engineRoot.signChartCellCorrect(rowIndex, colIndex) === false) {
               target.classList.add('sign-chart-target-wrong');
             }
           }
@@ -2374,18 +2390,32 @@
         });
       });
 
-      // "+ Ajouter une rangée" : liste chaque facteur pas encore ajouté, plus "Expression
-      // totale" si pas déjà présente — jamais affiché s'il n'y a plus rien à ajouter.
-      var usedFactors = {};
+      // "+ Ajouter une rangée" : liste chaque facteur pas encore ajouté (sous sa forme nue
+      // -- déjà pré-remplie automatiquement en pratique, voir signChartAutoFillRows dans
+      // history.js, ceci ne sert donc de filet que si elle manquait pour une raison ou une
+      // autre) ET, quand son exposant réel est > 1, sa variante "puissance comprise" pas
+      // encore ajoutée (retour utilisateur : "si l'équation contient (ax+b)^n, permettre
+      // de l'ajouter en entier" -- une rangée EN PLUS de la racine nue, jamais à sa
+      // place), plus "Expression totale" si pas déjà présente — jamais affiché s'il n'y a
+      // plus rien à ajouter.
+      var usedBareFactors = {}, usedPoweredFactors = {};
       var hasTotal = false;
       signChart.tableRows.forEach(function (r) {
         if (r.rowKind === 'total') hasTotal = true;
-        else usedFactors[r.factorIndex] = true;
+        else if (r.withPower) usedPoweredFactors[r.factorIndex] = true;
+        else usedBareFactors[r.factorIndex] = true;
       });
       var availableOptions = [];
       signChart.factors.forEach(function (f, idx) {
-        if (!usedFactors[idx]) {
+        if (!usedBareFactors[idx]) {
           availableOptions.push({ label: Expr.sideLatex(f.capturedSide), value: { rowKind: 'factor', factorIndex: idx }, latex: true });
+        }
+        if (f.exponent > 1 && !usedPoweredFactors[idx]) {
+          availableOptions.push({
+            label: signChartFactorPowerLatex(f),
+            value: { rowKind: 'factor', factorIndex: idx, withPower: true },
+            latex: true
+          });
         }
       });
       if (!hasTotal) availableOptions.push({ label: signChartTotalLatex(signChart), value: { rowKind: 'total' }, latex: true });

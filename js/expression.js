@@ -1281,19 +1281,27 @@
   // qui doit refléter par ex. le "-" de tête de "-(x+1)(x-2)/(1-x)".
   function extractSignChartFactors(side) {
     var constantSign = 1;
-    var factors = []; // [{ terms: Side, kind: 'num'|'den' }]
+    var factors = []; // [{ terms: Side, kind: 'num'|'den', exponent }]
 
     function isLinearSide(s) {
       return s.every(function (n) { return !isGroup(n) && n.pow <= 1; });
     }
 
-    function pushFactor(terms, kind) {
+    // `exponent` (défaut 1) : porté par les facteurs d'un ProductGroup (ex. "(x+2)³" dans
+    // "(x+2)³(x-1)"), jamais par les autres contextes d'appel (un Term/le "facteur" d'un
+    // FactorGroup n'ont pas de notion propre d'exposant distincte de leur `pow`, déjà
+    // exigé <=1 par isLinearSide) — conservé sur chaque facteur (voir signChart.factors
+    // dans history.js) pour permettre à l'élève d'ajouter la rangée du facteur "tel quel,
+    // puissance comprise" (retour utilisateur) en plus de sa racine nue, et pour que la
+    // rangée "Expression totale" tienne compte de la parité de cette puissance
+    // (signChartExpectedCell/factorPowerSignInInterval, history.js).
+    function pushFactor(terms, kind, exponent) {
       if (terms.length === 1 && !isGroup(terms[0]) && terms[0].pow === 0) {
-        constantSign *= terms[0].coeff < 0 ? -1 : 1;
+        constantSign *= Math.pow(terms[0].coeff < 0 ? -1 : 1, exponent || 1);
         return true;
       }
       if (!isLinearSide(terms)) return false;
-      factors.push({ terms: terms, kind: kind });
+      factors.push({ terms: terms, kind: kind, exponent: exponent || 1 });
       return true;
     }
 
@@ -1307,7 +1315,9 @@
       if (isSqrtGroup(node)) return false; // hors-cadre v1 : jamais étudiée comme facteur
       if (isProductGroup(node)) {
         if (node.sign < 0) constantSign *= -1;
-        return flattenProductFactors(node).every(function (terms) { return pushFactor(terms, kind); });
+        // Jamais Expr.flattenProductFactors ici (contrairement à detectProduitNul) : cette
+        // variante-là jette délibérément l'exposant, exactement ce qu'il faut préserver ici.
+        return node.factors.every(function (f) { return pushFactor(f.terms, kind, f.exponent); });
       }
       if (isFactorGroup(node)) {
         if (node.sign < 0) constantSign *= -1;

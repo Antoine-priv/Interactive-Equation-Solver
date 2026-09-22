@@ -2409,13 +2409,34 @@
       var factors = extracted.factors.map(function (f, i) {
         var eng = createBranchable();
         eng.init({ left: Expr.cloneSide(f.terms), right: [{ coeff: 0, pow: 0 }] }, { operator: '>' });
-        eng.subscribe(notify);
-        return { id: i, kind: f.kind, capturedSide: Expr.cloneSide(f.terms), engine: eng };
+        // Dès que CE facteur (et donc, potentiellement, le dernier restant) devient
+        // résolu, tente le pré-remplissage (voir signChartAutoFillRows plus bas) avant de
+        // notifier normalement — se déclenche naturellement une seule fois, exactement
+        // quand getSignChartColumns() passe de null à non-null pour la première fois.
+        eng.subscribe(function () { signChartAutoFillRows(); notify(); });
+        return { id: i, kind: f.kind, capturedSide: Expr.cloneSide(f.terms), exponent: f.exponent, engine: eng };
       });
       signChart = { factors: factors, constantSign: extracted.constantSign, tableRows: [], verified: false };
       focusedSignChartFactor = null;
       notify();
       return { spawned: true };
+    }
+
+    // Pré-remplit la colonne de gauche ("x") avec une rangée par facteur DISTINCT, sous sa
+    // forme NUE (sans sa puissance, retour utilisateur : "puisque l'élève doit de toute
+    // façon toutes les ajouter") dès que le tableau devient disponible (toutes les
+    // mini-inéquations résolues, voir getSignChartColumns) — jamais la rangée "Expression
+    // totale" (rangée optionnelle, un choix de l'élève, jamais automatique) ni la variante
+    // "avec puissance" d'un facteur (retour utilisateur : une rangée EN PLUS, disponible
+    // via "+ Ajouter une rangée" quand pertinente — voir signChartAddRow/exponent plus
+    // bas — jamais ajoutée à la place de la rangée nue). Ne fait rien si déjà rempli une
+    // fois (tableRows non vide) ou si le tableau n'est pas encore prêt : un simple GARDE
+    // suffit, ceci n'est appelé qu'à chaque résolution d'UN facteur (voir signChartAction
+    // ci-dessus), donc potentiellement plusieurs fois avant que le dernier ne le soit.
+    function signChartAutoFillRows() {
+      if (!signChart || signChart.tableRows.length > 0) return;
+      if (!getSignChartColumns()) return;
+      signChart.factors.forEach(function (f, i) { signChartAddRow({ rowKind: 'factor', factorIndex: i }); });
     }
 
     // Coefficient du terme degré 1 d'un facteur linéaire déjà extrait par
@@ -2437,6 +2458,18 @@
       var above = from >= root;
       var positiveWhenAbove = factorLeadingCoeff(terms) > 0;
       return above === positiveWhenAbove ? 1 : -1;
+    }
+
+    // Signe (+1/-1) d'un facteur ÉLEVÉ À SA PUISSANCE dans un intervalle — une puissance
+    // PAIRE reste toujours positive (jamais négative) de part et d'autre de sa racine,
+    // seule une puissance IMPAIRE préserve le signe du facteur nu (factorSignInInterval).
+    // Utilisée à la fois pour la rangée "Expression totale" (toujours la VRAIE puissance
+    // du facteur dans l'équation d'origine, voir signChart.factors[i].exponent) et pour la
+    // rangée "facteur, puissance comprise" qu'un élève peut choisir d'ajouter en plus de
+    // la racine nue (row.withPower, retour utilisateur — voir signChartAddRow plus bas).
+    function factorPowerSignInInterval(terms, root, from, exponent) {
+      if (exponent % 2 === 0) return 1;
+      return factorSignInInterval(terms, root, from);
     }
 
     // Dérive les colonnes du tableau de signes (2N+1, alternant intervalle/frontière — voir
@@ -2480,25 +2513,40 @@
         var f = signChart.factors[row.factorIndex];
         var root = Eq.solvedValue(f.engine.lastEquation());
         if (col.type === 'boundary') return col.value === root ? '0' : 'none';
-        return factorSignInInterval(f.capturedSide, root, col.from) > 0 ? '+' : '-';
+        // `row.withPower` (retour utilisateur) : la rangée du facteur "tel quel" dans
+        // l'équation, puissance comprise (ex. "(x+2)³"), plutôt que sa racine nue — voir
+        // factorPowerSignInInterval plus haut, jamais utilisée quand withPower est absent
+        // (l'exposant réel n'a alors aucun effet sur CETTE rangée-là, seulement sur
+        // "Expression totale" ci-dessous, toujours calculée avec la vraie puissance).
+        var sign = row.withPower
+          ? factorPowerSignInInterval(f.capturedSide, root, col.from, f.exponent)
+          : factorSignInInterval(f.capturedSide, root, col.from);
+        return sign > 0 ? '+' : '-';
       }
       var denRoots = signChart.factors.filter(function (f) { return f.kind === 'den'; })
         .map(function (f) { return Eq.solvedValue(f.engine.lastEquation()); });
       if (col.type === 'boundary') return denRoots.indexOf(col.value) !== -1 ? 'undef' : '0';
       var sign = signChart.constantSign;
       signChart.factors.forEach(function (f) {
-        sign *= factorSignInInterval(f.capturedSide, Eq.solvedValue(f.engine.lastEquation()), col.from);
+        sign *= factorPowerSignInInterval(f.capturedSide, Eq.solvedValue(f.engine.lastEquation()), col.from, f.exponent);
       });
       return sign > 0 ? '+' : '-';
     }
 
     // Ajoute une rangée au tableau (voir "cliquer pour ajouter une rangée, choisir un
-    // facteur" dans le plan) : une par facteur distinct au plus, plus au plus une rangée
-    // `rowKind:'total'` ("expression totale", voir signChartExpectedCell). `cells` démarre
-    // entièrement à null (rien n'est jamais pré-rempli pour l'élève, voir
-    // signChartSetCell). Retourne false sans rien faire si cette rangée existe déjà, ou si
-    // le tableau n'est pas encore prêt (tous les facteurs pas encore résolus, voir
-    // getSignChartColumns).
+    // facteur" dans le plan) : une par facteur distinct au plus (ou DEUX, voir
+    // `row.withPower` ci-dessous), plus au plus une rangée `rowKind:'total'` ("expression
+    // totale", voir signChartExpectedCell). `cells` démarre entièrement à null (rien n'est
+    // jamais pré-rempli pour l'élève au-delà de l'étiquette elle-même, voir
+    // signChartAutoFillRows plus haut/signChartSetCell). Retourne false sans rien faire si
+    // cette rangée existe déjà, ou si le tableau n'est pas encore prêt (tous les facteurs
+    // pas encore résolus, voir getSignChartColumns).
+    // `row.withPower` (retour utilisateur : "si l'équation contient un facteur avec une
+    // puissance, comme (ax+b)^n, permettre de l'ajouter en entier, puissance comprise") :
+    // rangée DISTINCTE de la racine nue du même `factorIndex` (jamais un remplacement —
+    // voir signChartAutoFillRows, qui n'ajoute lui que la variante nue), rejetée si le
+    // facteur visé n'a en réalité aucune puissance à afficher (exponent<=1, où les deux
+    // variantes seraient rigoureusement identiques).
     // JAMAIS délégué via activeChild() (contrairement à canSignChart/signChartAction, qui
     // ciblent l'équation ACTIVE) : le tableau rendu à l'écran est TOUJOURS celui de CE
     // noeud précis (voir Hist.getSignChart(), non délégué lui non plus, utilisé tel quel
@@ -2510,14 +2558,26 @@
       if (!signChart) return false;
       var cols = getSignChartColumns();
       if (!cols) return false;
+      if (row.rowKind === 'factor' && row.withPower) {
+        var targetFactor = signChart.factors[row.factorIndex];
+        if (!targetFactor || targetFactor.exponent <= 1) return false;
+      }
       var exists = row.rowKind === 'total'
         ? signChart.tableRows.some(function (r) { return r.rowKind === 'total'; })
-        : signChart.tableRows.some(function (r) { return r.rowKind === 'factor' && r.factorIndex === row.factorIndex; });
+        : signChart.tableRows.some(function (r) {
+          return r.rowKind === 'factor' && r.factorIndex === row.factorIndex && !!r.withPower === !!row.withPower;
+        });
       if (exists) return false;
       signChart.tableRows.push({
         rowKind: row.rowKind,
         factorIndex: row.rowKind === 'factor' ? row.factorIndex : undefined,
-        cells: cols.map(function () { return null; })
+        withPower: row.rowKind === 'factor' ? !!row.withPower : undefined,
+        cells: cols.map(function () { return null; }),
+        // Case par case (voir signChartSetCell/signChartVerify plus bas, retour
+        // utilisateur : modifier UNE case après "Vérifier" ne doit décolorer QUE celle-là,
+        // jamais tout le tableau) : `true` = modifiée depuis le dernier "Vérifier", donc
+        // jamais signalée fausse tant qu'on n'a pas re-cliqué "Vérifier".
+        dirty: cols.map(function () { return false; })
       });
       notify();
       return true;
@@ -2527,10 +2587,11 @@
     // une case "frontière" que 0/‖ — appliqué ici aussi, pas seulement côté UI, pour rester
     // cohérent si jamais appelé autrement qu'à travers le popup prévu). `value` peut être
     // null (efface la case).
-    // Toute modification repasse `verified` à faux (retour utilisateur : après "Vérifier",
-    // pouvoir corriger une case sans que sa nouvelle valeur soit jugée immédiatement — il
-    // faut re-cliquer "Vérifier" pour re-juger l'ensemble, voir signChartVerify plus bas).
-    // Jamais délégué non plus (voir signChartAddRow juste au-dessus pour la raison).
+    // Modifier CETTE case (et elle seule) la marque "dirty" (retour utilisateur : cliquer
+    // une case après "Vérifier" ne doit décolorer QUE cette case-là, jamais les autres,
+    // encore signalées fausses tant qu'on ne les a pas retouchées OU re-cliqué "Vérifier"
+    // — voir row.dirty/signChartVerify plus bas). Jamais délégué non plus (voir
+    // signChartAddRow juste au-dessus pour la raison).
     function signChartSetCell(rowIndex, colIndex, value) {
       if (!signChart) return false;
       var row = signChart.tableRows[rowIndex];
@@ -2539,7 +2600,7 @@
       var allowed = cols[colIndex].type === 'boundary' ? ['0', 'undef'] : ['+', '-'];
       if (value !== null && allowed.indexOf(value) === -1) return false;
       row.cells[colIndex] = value;
-      signChart.verified = false;
+      row.dirty[colIndex] = true;
       notify();
       return true;
     }
@@ -2561,18 +2622,21 @@
       return actual === signChartExpectedCell(row, cols[colIndex]);
     }
 
-    // Bouton "Vérifier" (voir render.js) : bascule signChart.verified à vrai — remis à
-    // faux par la moindre modification ensuite (voir signChartSetCell, retour
-    // utilisateur : re-cliquer "Vérifier" est nécessaire pour re-juger l'ensemble après
-    // une correction, jamais un jugement instantané case par case) — n'a d'effet QUE si
-    // une rangée "Expression totale" existe déjà (retour utilisateur), jamais délégué
-    // (même raison que signChartAddRow plus haut : toujours CE noeud précis, jamais un
-    // facteur focalisé).
+    // Bouton "Vérifier" (voir render.js) : bascule signChart.verified à vrai et efface le
+    // "dirty" de TOUTES les cases (une nouvelle passe de jugement repart de zéro pour
+    // chacune — voir row.dirty dans signChartAddRow/signChartSetCell : SEULE une case
+    // retouchée ENSUITE, individuellement, redevient dirty, retour utilisateur) — n'a
+    // d'effet QUE si une rangée "Expression totale" existe déjà (retour utilisateur),
+    // jamais délégué (même raison que signChartAddRow plus haut : toujours CE noeud
+    // précis, jamais un facteur focalisé).
     function signChartVerify() {
       if (!signChart) return false;
       var hasTotal = signChart.tableRows.some(function (r) { return r.rowKind === 'total'; });
       if (!hasTotal) return false;
       signChart.verified = true;
+      signChart.tableRows.forEach(function (row) {
+        row.dirty = row.dirty.map(function () { return false; });
+      });
       notify();
       return true;
     }
