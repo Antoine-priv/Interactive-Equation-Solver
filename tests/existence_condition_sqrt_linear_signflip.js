@@ -101,6 +101,7 @@ function ok(label, cond) {
     window.App.History.toggleTermSelection('left', 0);
     window.App.History.toggleTermSelection('left', 0);
   });
+  await page.waitForTimeout(80);
   await page.click('button[data-op="existence"]');
   await page.waitForTimeout(120);
   await page.locator('.domain-branch[data-domain-index="0"] .side[data-side="left"] .term[data-index="0"]').click();

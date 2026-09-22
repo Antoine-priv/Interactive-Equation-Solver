@@ -169,6 +169,20 @@
     });
 
     App.Canvas.init();
+    // Repart d'une toile "propre" (offset 0,0) à CHAQUE nouvelle équation (voir
+    // newEquationModal.js/submitManual, et la suite de tests qui appelle directement
+    // App.History.startNewEquation comme raccourci pour "l'utilisateur recommence à
+    // zéro") : sans ce reset, un panorama laissé par l'équation précédente (colonne
+    // "Condition d'existence" — voir panToDomainColumn dans render.js —, ou scission
+    // "Produit nul" en mise en page large) survit tel quel à la nouvelle équation, qui
+    // peut alors s'afficher hors du viewport (bug rapporté) — renderAll ne recentre
+    // JAMAIS l'axe horizontal en dehors d'une scission large (voir son bloc de recentrage
+    // final), donc rien d'autre ne le remet à 0 de lui-même.
+    var rawStartNewEquation = App.History.startNewEquation;
+    App.History.startNewEquation = function () {
+      App.Canvas.set(0, 0);
+      return rawStartNewEquation.apply(App.History, arguments);
+    };
     App.Zoom.init();
     App.Toolbar.init();
     App.MathKeypad.init();
