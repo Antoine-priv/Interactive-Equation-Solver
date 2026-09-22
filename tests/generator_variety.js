@@ -147,6 +147,64 @@ function ok(label, cond) {
   ok('100x each: every generated shape is recognized by its intended solving mechanism', targeted.length === 0);
   if (targeted.length) console.log(JSON.stringify(targeted.slice(0, 5), null, 2));
 
+  // generateSignChartInequality (retour utilisateur : des inéquations pour "Tableau de
+  // signes", mélangeant librement dénominateur/numérateur pas encore factorisé/terme en x
+  // des deux côtés) : jamais dans `generators` ci-dessus (son `operator` serait
+  // silencieusement ignoré -- startNewEquation(eq) seul ne lit QUE opts.operator, jamais
+  // eq.operator, voir init() dans history.js) -- rechargée ici avec {operator} à chaque
+  // fois, ET reclassée structurellement pour vérifier que canSignChart() colle EXACTEMENT
+  // à ce que chaque combinaison d'ingrédients devrait produire.
+  const signChartGen = await page.evaluate(() => {
+    var Expr = window.App.Expr;
+    function isBareZero(side) {
+      return side.length === 1 && !Expr.isGroup(side[0]) && side[0].pow === 0 && side[0].coeff === 0;
+    }
+    function numeratorSide(left) {
+      var divNode = left.filter(function (n) { return n.isDivision; })[0];
+      return divNode ? divNode.innerTerms : left;
+    }
+    function hasRawQuadratic(side) {
+      return side.some(function (n) { return !Expr.isGroup(n) && n.pow >= 2; });
+    }
+    var fails = [];
+    var seen = { hasDen: false, needsFactoring: false, xBothSides: false, immediatelyEligible: false };
+    for (var i = 0; i < 200; i++) {
+      var eq = window.App.Generator.generateSignChartInequality();
+      if (window.App.Ineq.OPERATORS.indexOf(eq.operator) === -1) {
+        fails.push({ i: i, reason: 'bad operator', eq: JSON.stringify(eq) });
+        continue;
+      }
+      try {
+        window.App.History.startNewEquation({ left: eq.left, right: eq.right }, { operator: eq.operator });
+      } catch (e) {
+        fails.push({ i: i, reason: 'load threw', error: e.message, eq: JSON.stringify(eq) });
+        continue;
+      }
+      var canSC = window.App.History.canSignChart();
+      var xBothSides = !isBareZero(eq.right);
+      var hasDen = eq.left.some(function (n) { return n.isDivision; });
+      var needsFactoring = hasRawQuadratic(numeratorSide(eq.left));
+      if (xBothSides) seen.xBothSides = true;
+      if (hasDen) seen.hasDen = true;
+      if (needsFactoring) seen.needsFactoring = true;
+      var expectedEligible = !xBothSides && !hasDen && !needsFactoring;
+      if (expectedEligible) seen.immediatelyEligible = true;
+      if (canSC !== expectedEligible) {
+        fails.push({
+          i: i, reason: 'canSignChart mismatch', expected: expectedEligible, actual: canSC,
+          xBothSides: xBothSides, hasDen: hasDen, needsFactoring: needsFactoring, eq: JSON.stringify(eq)
+        });
+      }
+    }
+    return { fails: fails, seen: seen };
+  });
+  ok('200x generateSignChartInequality: canSignChart() matches the expected eligibility for every ingredient combination',
+    signChartGen.fails.length === 0);
+  if (signChartGen.fails.length) console.log(JSON.stringify(signChartGen.fails.slice(0, 5), null, 2));
+  console.log('generateSignChartInequality ingredient coverage over 200 draws:', JSON.stringify(signChartGen.seen));
+  ok('...and every ingredient (denominator, needs-factoring, x-on-both-sides, immediately-eligible) actually showed up',
+    signChartGen.seen.hasDen && signChartGen.seen.needsFactoring && signChartGen.seen.xBothSides && signChartGen.seen.immediatelyEligible);
+
   // Round-trip via le VRAI bouton "Générer aléatoirement" (LaTeX -> pont MathLive -> AST),
   // plusieurs fois, pour attraper un problème de sérialisation (ex. un type de noeud non
   // géré par App.Expr.sideLatex, ou par le pont parseLatexEquation dans parser.js) qui ne
