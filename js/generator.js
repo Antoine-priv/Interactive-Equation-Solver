@@ -42,7 +42,14 @@
      avant que le bouton n'apparaisse), un numérateur pas encore factorisé (un trinôme
      identité, à factoriser via "Factoriser" avant que le bouton n'apparaisse), et un
      terme en x ajouté aux deux membres (l'équation ne compare pas encore à 0 telle
-     quelle — la isoler dessus est le tout premier pas), plutôt que des cas cloisonnés. */
+     quelle — la isoler dessus est le tout premier pas), plutôt que des cas cloisonnés ;
+   - "k/(x²±2bx+b²) = c" (generateFactorableDenominatorEquation) : un dénominateur-
+     expression (comme generateVariableDenominatorEquation) mais NON factorisé — un
+     trinôme identité, à factoriser via "Factoriser" (drillé dans le dénominateur) avant
+     ou après avoir posé sa "Condition d'existence".
+   Le tirage se fait en deux temps (EQUATION_GENERATORS vs INEQUALITY_GENERATORS
+   ci-dessous) : 50% de chances de tomber sur une inéquation, 50% sur une égalité,
+   PUIS probabilité strictement égale (1/N) entre les formes du bassin retenu. */
 (function (App) {
   'use strict';
 
@@ -301,6 +308,33 @@
     return { left: left, right: right };
   }
 
+  // "k/(x²±2bx+b²) = c" ou "k/(x²-b²) = c" : même principe que
+  // generateVariableDenominatorEquation, mais le dénominateur-expression (factorTerms) est
+  // un trinôme/binôme degré 2 NON factorisé (même construction que
+  // generateFactorableQuadratic) plutôt qu'un simple facteur linéaire — drillable comme
+  // n'importe quel dénominateur-expression (pending.drilled.part==='den', voir CLAUDE.md),
+  // il se factorise via "Factoriser" (identité remarquable 1, 2 ou 3) exactement comme un
+  // trinôme isolé, avant ou après avoir posé "Condition d'existence" (qui, pour un
+  // dénominateur, reste une équation NORMALE "=0" à résoudre — voir existenceConditionAction
+  // — donc elle-même résoluble via Factoriser + Produit nul si on ne l'a pas encore fait au
+  // moment du clic).
+  function generateFactorableDenominatorEquation() {
+    var b = nonZeroInt(1, 9);
+    var pattern = randInt(0, 2);
+    var denomTerms;
+    if (pattern === 0) {
+      denomTerms = [{ coeff: 1, pow: 2 }, { coeff: 2 * b, pow: 1 }, { coeff: b * b, pow: 0 }];
+    } else if (pattern === 1) {
+      denomTerms = [{ coeff: 1, pow: 2 }, { coeff: -2 * b, pow: 1 }, { coeff: b * b, pow: 0 }];
+    } else {
+      denomTerms = [{ coeff: 1, pow: 2 }, { coeff: -(b * b), pow: 0 }];
+    }
+    var k = nonZeroInt(-9, 9);
+    var left = [{ sign: 1, factorTerms: denomTerms, innerTerms: [{ coeff: k, pow: 0 }], isDivision: true }];
+    var right = [{ coeff: nonZeroInt(-9, 9), pow: 0 }];
+    return { left: left, right: right };
+  }
+
   // "√(x+a) = k" : une racine carrée dont le radicand est une expression EN x (pas
   // encore un nombre replié, contrairement à \sqrt{...} saisi manuellement — voir
   // foldSqrt dans parser.js) — construite directement comme un SqrtGroup{radicand:...}
@@ -504,13 +538,14 @@
     return { left: left, right: right, operator: operator };
   }
 
-  // Une entrée par forme possible, tirée avec une probabilité STRICTEMENT ÉGALE (1/N,
-  // voir randInt ci-dessous) plutôt que des seuils réglés à la main comme avant (certaines
-  // formes cumulaient jusqu'à 15%, d'autres 1% seulement) : chaque type d'équation a
-  // désormais exactement la même chance d'apparaître via "Générer aléatoirement".
-  var GENERATORS = [
+  // Deux bassins séparés — égalités vs inéquations (retour utilisateur : la moitié des
+  // équations générées doit être des inéquations) — plutôt qu'une seule liste plate : un
+  // tirage à 50/50 choisit d'abord le bassin, PUIS pioche à probabilité strictement égale
+  // (1/N, voir randInt ci-dessous) dedans, pour que chaque forme au sein d'un même bassin
+  // garde exactement la même chance d'apparaître qu'avant, sans que le nombre (très
+  // inégal) de formes de chaque bassin ne fausse le ratio global égalité/inéquation.
+  var EQUATION_GENERATORS = [
     generateLinearEquation,
-    generateLinearInequality,
     generateSimplifyFirstLinear,
     generateFactorableQuadratic,
     generateSquareRootEquation,
@@ -523,15 +558,21 @@
     generateSquaredLinearTimesLinear,
     generateFractionEquation,
     generateVariableDenominatorEquation,
+    generateFactorableDenominatorEquation,
     generateVariableRadicandEquation,
     generateVariableRadicandQuadraticEquation,
     generateIdentityPlusProduct,
-    generateTrinomialMinusSquareGroup,
+    generateTrinomialMinusSquareGroup
+  ];
+
+  var INEQUALITY_GENERATORS = [
+    generateLinearInequality,
     generateSignChartInequality
   ];
 
   function generateEquation() {
-    return GENERATORS[randInt(0, GENERATORS.length - 1)]();
+    var pool = Math.random() < 0.5 ? INEQUALITY_GENERATORS : EQUATION_GENERATORS;
+    return pool[randInt(0, pool.length - 1)]();
   }
 
   App.Generator = {
@@ -550,6 +591,7 @@
     generateDiffOfTwoSquaredExpr: generateDiffOfTwoSquaredExpr,
     generateFractionEquation: generateFractionEquation,
     generateVariableDenominatorEquation: generateVariableDenominatorEquation,
+    generateFactorableDenominatorEquation: generateFactorableDenominatorEquation,
     generateVariableRadicandEquation: generateVariableRadicandEquation,
     generateVariableRadicandQuadraticEquation: generateVariableRadicandQuadraticEquation,
     generateIdentityPlusProduct: generateIdentityPlusProduct,

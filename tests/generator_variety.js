@@ -25,7 +25,8 @@ function ok(label, cond) {
     'generateLinearEquation', 'generateSimplifyFirstLinear', 'generateFactorableQuadratic',
     'generateSquareRootEquation', 'generateProductEquation', 'generateGroupedCommonFactor',
     'generateSquareMinusConstant', 'generateDiffOfTwoSquaredExpr',
-    'generateFractionEquation', 'generateIdentityPlusProduct', 'generateTrinomialMinusSquareGroup'
+    'generateFractionEquation', 'generateIdentityPlusProduct', 'generateTrinomialMinusSquareGroup',
+    'generateFactorableDenominatorEquation'
   ];
 
   for (const name of generators) {
@@ -140,6 +141,33 @@ function ok(label, cond) {
       var shape8 = window.App.History.getFactorTargetShape();
       if (!shape8) {
         fails.push({ gen: 'trinomial-minus-square (trinomial not recognized as identity)', eq: JSON.stringify(eq8), shape: JSON.stringify(shape8) });
+      }
+
+      // "k/(x²±2bx+b²)=c" : le dénominateur-expression (drillé, part==='den') doit être
+      // reconnu comme une identité remarquable à factoriser (getFactorTargetShape), ET
+      // "Condition d'existence" doit devenir disponible une fois qu'on y est entré — voir
+      // generateFactorableDenominatorEquation.
+      var eq9 = window.App.Generator.generateFactorableDenominatorEquation();
+      window.App.History.startNewEquation(eq9);
+      // Double-clic simulé (deux appels rapprochés, voir consumeDoubleClick) ciblant
+      // précisément le dénominateur (isDenPart=true, 4e argument) plutôt que le
+      // numérateur, qui serait la cible par défaut d'un simple double-clic sur la
+      // fraction entière.
+      window.App.History.toggleTermSelection('left', 0, undefined, true);
+      window.App.History.toggleTermSelection('left', 0, undefined, true);
+      var pendingDen = window.App.History.getPending();
+      if (!pendingDen.drilled || pendingDen.drilled.part !== 'den') {
+        fails.push({ gen: 'factorable-denominator (drill into denominator failed)', eq: JSON.stringify(eq9), pending: JSON.stringify(pendingDen) });
+      } else {
+        var denTermCount = eq9.left[0].factorTerms.length;
+        for (var di = 0; di < denTermCount; di++) window.App.History.toggleInnerSelection(di);
+        var shape9 = window.App.History.getFactorTargetShape();
+        if (!shape9) {
+          fails.push({ gen: 'factorable-denominator (denominator not recognized as identity)', eq: JSON.stringify(eq9), shape: JSON.stringify(shape9) });
+        }
+        if (!window.App.Toolbar.computeSelectionInfo().canExistenceCondition) {
+          fails.push({ gen: 'factorable-denominator (canExistenceCondition false while drilled)', eq: JSON.stringify(eq9) });
+        }
       }
     }
     return fails;
