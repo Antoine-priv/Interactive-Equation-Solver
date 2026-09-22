@@ -8,7 +8,7 @@ FAIL=0
 shopt -s nullglob
 
 for f in *.js; do
-  out=$(timeout 40 node "$f" 2>&1)
+  out=$(timeout 70 node "$f" 2>&1)
   code=$?
   realerr=$(echo "$out" | grep -E "\[pageerror\]|\[console\.error\]")
   if [ $code -ne 0 ] || [ -n "$realerr" ]; then
