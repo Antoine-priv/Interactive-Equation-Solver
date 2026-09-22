@@ -256,6 +256,26 @@ async function targetLatex(page, row, col) {
   ok('table now rendered', !!table);
   ok('8 header cells (row-label + 2*3+1 columns)', (await page.$$('.sign-chart-header-cell')).length === 8);
 
+  // --- Retour utilisateur : the left column ("x") pre-fills automatically with one BARE
+  // row per distinct factor as soon as the table becomes available, instead of forcing the
+  // student to click "+ Ajouter une rangée" for each one ("since the user has to add them
+  // manually anyway"). Checked here while factor 2 is STILL focused (regression: this must
+  // fire regardless of focus state -- signChartAutoFillRows is deliberately never
+  // delegated via activeChild(), same reasoning as signChartAddRow just below it). ---
+  const autoFilledRowKinds = await page.evaluate(() => window.App.History.getSignChart().tableRows.map(function (r) {
+    return r.rowKind + (r.factorIndex !== undefined ? ':' + r.factorIndex : '');
+  }));
+  ok('the 3 factor rows are pre-filled automatically, bare, no "total" row yet',
+    JSON.stringify(autoFilledRowKinds) === JSON.stringify(['factor:0', 'factor:1', 'factor:2']));
+  const autoFilledLabels = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('.sign-chart-row-label')).map(function (c) {
+      var a = c.querySelector('annotation');
+      return a ? a.textContent : null;
+    }));
+  console.log('auto-filled row labels:', JSON.stringify(autoFilledLabels));
+  ok('pre-filled rows show the BARE factor, no power attached (retour utilisateur: "without their powers")',
+    autoFilledLabels.every(function (l) { return l.indexOf('^') === -1; }));
+
   // --- "+ Ajouter une rangée" only shows on hover ---
   const wrap = page.locator('.sign-chart-table-wrap');
   ok('add-row button hidden before hovering the table', !(await page.locator('.sign-chart-add-row-btn').isVisible()));
@@ -263,17 +283,26 @@ async function targetLatex(page, row, col) {
   await page.waitForTimeout(200);
   ok('add-row button visible once hovering the table', await page.locator('.sign-chart-add-row-btn').isVisible());
 
-  // --- THE reported bug: clicking a factor/total option while a factor is still focused
-  // must actually add the row (previously silently delegated into the focused factor's
-  // own, nonexistent, signChart and did nothing). ---
+  // --- "Vérifier" button only becomes available once the "total" row exists (retour
+  // utilisateur) -- checked here, before it has been added at all ---
+  const verifyBtnDisabledBeforeTotal = await page.evaluate(() => {
+    var b = document.querySelector('.sign-chart-verify-btn');
+    return b ? b.disabled : undefined;
+  });
+  ok('verify button exists and is disabled before the "total" row exists', verifyBtnDisabledBeforeTotal === true);
+  ok('signChartVerify() is a no-op before the "total" row exists',
+    !(await page.evaluate(() => window.App.History.signChartVerify())) &&
+    !(await page.evaluate(() => window.App.History.getSignChart().verified)));
+
+  // --- Only ONE option left to add: "Expression totale" -- all 3 factors are already
+  // pre-filled bare above, and none of them has a power in this equation. ---
   await page.click('.sign-chart-add-row-btn', { force: true });
   await page.waitForTimeout(80);
   const optCount = (await page.$$('.sign-chart-popup-btn')).length;
-  ok('4 options offered the first time (3 factors + total)', optCount === 4);
-  ok('the "total" option (last one) is real KaTeX, not the generic "Expression totale" text',
+  ok('only 1 option left: "Expression totale" (every factor already pre-filled, none has a power)', optCount === 1);
+  ok('that option is real KaTeX, not the generic "Expression totale" text',
     await page.evaluate(() => {
-      var btns = document.querySelectorAll('.sign-chart-popup-btn');
-      var last = btns[btns.length - 1];
+      var last = document.querySelector('.sign-chart-popup-btn');
       return !!last.querySelector('.katex') && last.textContent.indexOf('Expression totale') === -1;
     }));
 
@@ -304,40 +333,22 @@ async function targetLatex(page, row, col) {
   await page.evaluate((p) => window.App.Canvas.set(p.x, p.y), panBefore);
   await page.waitForTimeout(80);
 
+  // --- THE reported bug (originally about a FACTOR option; the only manual add left now
+  // that factors pre-fill automatically is "total", same underlying regression): clicking
+  // it while a factor is still focused must actually add the row (previously silently
+  // delegated into the focused factor's own, nonexistent, signChart and did nothing). ---
   await page.click('.sign-chart-popup-btn:first-child', { force: true });
   await page.waitForTimeout(100);
-  ok('clicking a FACTOR option while a factor is still focused actually adds a row',
-    (await page.evaluate(() => window.App.History.getSignChart().tableRows.length)) === 1);
+  ok('clicking "Expression totale" while a factor is still focused actually adds it',
+    (await page.evaluate(() => window.App.History.getSignChart().tableRows.length)) === 4);
 
-  // --- No "." placeholder in a freshly-added, still-empty row (retour utilisateur) ---
+  // --- No "." placeholder in a still-empty row (retour utilisateur) ---
   const emptyTargetText = await page.evaluate(() => {
     var t = document.querySelector('.sign-chart-target-empty');
     return t ? t.textContent : undefined;
   });
   ok('an empty target has no "." placeholder text', emptyTargetText === '');
 
-  // --- "Vérifier" button only becomes available once the "total" row exists (retour
-  // utilisateur) -- checked here while only "factor:0" has been added ---
-  await wrap.hover();
-  await page.waitForTimeout(60);
-  const verifyBtnDisabledBeforeTotal = await page.evaluate(() => {
-    var b = document.querySelector('.sign-chart-verify-btn');
-    return b ? b.disabled : undefined;
-  });
-  ok('verify button exists and is disabled before the "total" row exists', verifyBtnDisabledBeforeTotal === true);
-  ok('signChartVerify() is a no-op before the "total" row exists',
-    !(await page.evaluate(() => window.App.History.signChartVerify())) &&
-    !(await page.evaluate(() => window.App.History.getSignChart().verified)));
-
-  for (let i = 0; i < 3; i++) {
-    await wrap.hover();
-    await page.waitForTimeout(60);
-    await page.click('.sign-chart-add-row-btn', { force: true });
-    await page.waitForTimeout(60);
-    await page.click('.sign-chart-popup-btn:first-child', { force: true });
-    await page.waitForTimeout(60);
-  }
-  ok('all 4 rows added', (await page.evaluate(() => window.App.History.getSignChart().tableRows.length)) === 4);
   await wrap.hover();
   await page.waitForTimeout(60);
   ok('"+ Ajouter une rangée" now gone (nothing left to add)', (await page.$('.sign-chart-add-row-btn')) === null);
@@ -352,10 +363,7 @@ async function targetLatex(page, row, col) {
   const rowKinds = await page.evaluate(() => window.App.History.getSignChart().tableRows.map(function (r) {
     return r.rowKind + (r.factorIndex !== undefined ? ':' + r.factorIndex : '');
   }));
-  // Row-add popup lists each not-yet-added factor first (factor-array order), then
-  // "total" last (see availableOptions in render.js) -- clicking the first option each
-  // time therefore adds factor:0, factor:1, factor:2, then total, in that order.
-  ok('rows are factor:0 (den), factor:1 (num), factor:2 (num), total, in add order',
+  ok('rows are factor:0 (den), factor:1 (num), factor:2 (num), total, in extraction order',
     JSON.stringify(rowKinds) === JSON.stringify(['factor:0', 'factor:1', 'factor:2', 'total']));
   const totalRowIndex = rowKinds.indexOf('total');
 
@@ -474,17 +482,26 @@ async function targetLatex(page, row, col) {
   }, factor1Row);
   await page.waitForTimeout(60);
 
-  // Now set ONE wrong value: it must be flagged STRUCTURALLY and keep showing what was
-  // typed right away, but must NOT get the red "wrong" styling until "Vérifier" is
-  // clicked (retour utilisateur: "don't immediately indicate if a selection is wrong").
-  await page.evaluate((row) => window.App.History.signChartSetCell(row, 0, '+'), totalRowIndex);
+  // Now set TWO wrong values (col 0 and col 6, both part of the reference row filled in
+  // above): each must be flagged STRUCTURALLY and keep showing what was typed right away,
+  // but must NOT get the red "wrong" styling until "Vérifier" is clicked (retour
+  // utilisateur: "don't immediately indicate if a selection is wrong"). Two, not one, so
+  // the NEXT block can prove that fixing one leaves the other still flagged.
+  await page.evaluate((row) => {
+    window.App.History.signChartSetCell(row, 0, '+'); // was '-'
+    window.App.History.signChartSetCell(row, 6, '-'); // was '+'
+  }, totalRowIndex);
   await page.waitForTimeout(80);
-  ok('a wrong cell is flagged incorrect (structurally, independent of display)',
+  ok('cell 0 is flagged incorrect (structurally, independent of display)',
     (await page.evaluate((row) => window.App.History.signChartCellCorrect(row, 0), totalRowIndex)) === false);
+  ok('cell 6 is flagged incorrect (structurally, independent of display)',
+    (await page.evaluate((row) => window.App.History.signChartCellCorrect(row, 6), totalRowIndex)) === false);
   const wrongTarget = page.locator('.sign-chart-target[data-sign-chart-row="' + totalRowIndex + '"][data-sign-chart-col="0"]');
-  ok('the wrong target still shows what was typed', (await targetLatex(page, totalRowIndex, 0)) === '+');
+  const wrongTarget2 = page.locator('.sign-chart-target[data-sign-chart-row="' + totalRowIndex + '"][data-sign-chart-col="6"]');
+  ok('the wrong targets still show what was typed', (await targetLatex(page, totalRowIndex, 0)) === '+' && (await targetLatex(page, totalRowIndex, 6)) === '-');
   ok('NOT styled red yet: "Vérifier" has not been clicked',
-    (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') === -1);
+    (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') === -1 &&
+    (await wrongTarget2.getAttribute('class')).indexOf('sign-chart-target-wrong') === -1);
   ok('signChart.verified is still false', !(await page.evaluate(() => window.App.History.getSignChart().verified)));
 
   // --- Clicking "Vérifier" reveals wrong-cell styling for everything already filled in,
@@ -495,34 +512,46 @@ async function targetLatex(page, row, col) {
   await page.waitForTimeout(80);
   ok('signChart.verified becomes true after clicking "Vérifier"',
     await page.evaluate(() => window.App.History.getSignChart().verified));
-  ok('the wrong target NOW carries the red styling class', (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') !== -1);
-  ok('the wrong target still shows what was typed (not reverted)', (await targetLatex(page, totalRowIndex, 0)) === '+');
+  ok('BOTH wrong targets now carry the red styling class',
+    (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') !== -1 &&
+    (await wrongTarget2.getAttribute('class')).indexOf('sign-chart-target-wrong') !== -1);
+  ok('the wrong targets still show what was typed (not reverted)',
+    (await targetLatex(page, totalRowIndex, 0)) === '+' && (await targetLatex(page, totalRowIndex, 6)) === '-');
   ok('a correct cell is still not styled wrong after verifying',
     (await page.locator('.sign-chart-target[data-sign-chart-row="' + totalRowIndex + '"][data-sign-chart-col="1"]').getAttribute('class')).indexOf('sign-chart-target-wrong') === -1);
 
-  // --- Editing ANY cell after "Vérifier" was clicked hides ALL red styling again until
-  // "Vérifier" is clicked a second time (retour utilisateur: "allow the user to modify the
-  // signs... without instantly showing if the new choice is correct... must click Verify
-  // again"). Re-picking the SAME (still wrong) value is enough to demonstrate this: nothing
-  // about the value itself changed, only the fact that it was touched. ---
+  // --- Retour utilisateur, this round: "when the user clicks on a cell after verifying,
+  // do not remove the red outlines from the OTHER cells -- only the specific cell that was
+  // just modified." Edit ONLY cell 0 (re-pick the SAME, still-wrong, value -- nothing about
+  // the value itself changes, only the fact that it was touched): its own red styling must
+  // clear immediately, but cell 6 -- untouched, still wrong -- must stay flagged. Also,
+  // unlike an earlier round's table-wide gate, signChart.verified itself no longer resets
+  // on edit (only the touched cell's own "dirty" flag does, see history.js). ---
   await wrongTarget.click({ force: true });
   await page.waitForTimeout(60);
   await page.click('.sign-chart-popup-btn:first-child'); // '+' again (still wrong)
   await page.waitForTimeout(80);
-  ok('signChart.verified resets to false as soon as a cell is edited',
-    !(await page.evaluate(() => window.App.History.getSignChart().verified)));
-  ok('the red styling disappears immediately (no instant re-judgement)',
+  ok('signChart.verified stays TRUE (no table-wide reset on a single edit)',
+    await page.evaluate(() => window.App.History.getSignChart().verified));
+  ok('the EDITED cell (0) loses its red styling immediately (no instant re-judgement of it)',
     (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') === -1);
-  ok('the value itself is preserved (still shows "+")', (await targetLatex(page, totalRowIndex, 0)) === '+');
-  // Re-clicking "Vérifier" re-flags it, proving the gate isn't just permanently disabled.
+  ok('the OTHER wrong cell (6), untouched, KEEPS its red styling',
+    (await wrongTarget2.getAttribute('class')).indexOf('sign-chart-target-wrong') !== -1);
+  ok('the edited value itself is preserved (still shows "+")', (await targetLatex(page, totalRowIndex, 0)) === '+');
+  // Re-clicking "Vérifier" re-flags the edited cell too, proving the gate isn't just
+  // permanently disabled for it -- a fresh judgement pass re-covers everyone.
   await wrap.hover();
   await page.waitForTimeout(60);
   await page.click('.sign-chart-verify-btn', { force: true });
   await page.waitForTimeout(80);
-  ok('clicking "Vérifier" again re-flags the still-wrong cell',
+  ok('clicking "Vérifier" again re-flags the edited-but-still-wrong cell',
     (await wrongTarget.getAttribute('class')).indexOf('sign-chart-target-wrong') !== -1);
-  // Leave it correct again for the structural checks further down.
-  await page.evaluate((row) => window.App.History.signChartSetCell(row, 0, '-'), totalRowIndex);
+  ok('the never-touched wrong cell is still flagged too', (await wrongTarget2.getAttribute('class')).indexOf('sign-chart-target-wrong') !== -1);
+  // Leave both correct again for the structural checks further down.
+  await page.evaluate((row) => {
+    window.App.History.signChartSetCell(row, 0, '-');
+    window.App.History.signChartSetCell(row, 6, '+');
+  }, totalRowIndex);
   await page.waitForTimeout(60);
 
   // --- The double-rule marks exactly the excluded-domain boundary column (x=1) ---
@@ -789,6 +818,108 @@ async function targetLatex(page, row, col) {
   await page.waitForTimeout(100);
   ok('scenario B: popup opens on a single click right after a real click inside a factor column',
     await page.evaluate(() => !!document.querySelector('.sign-chart-popup')));
+
+  // --- Isolated scenario: a factor with a POWER in the original equation, e.g.
+  // "(x+2)²(x-1)≥0" (retour utilisateur: "if the equation includes a factor with a power
+  // like (ax+b)^n, allow the user to add this full factor, including the power, into the
+  // table"). The bare root row still auto-pre-fills (retour utilisateur: "without their
+  // powers") -- the POWERED variant is an extra, opt-in row, addable via "+ Ajouter une
+  // rangée", validated with the correct parity (an even power is never negative). ---
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.startNewEquation({
+      left: [{ sign: 1, factors: [
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: 2, pow: 0 }], exponent: 2 },
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: -1, pow: 0 }], exponent: 1 }
+      ] }],
+      right: [{ coeff: 0, pow: 0 }]
+    }, { operator: '\\geq' });
+    Hist.signChartAction();
+    Hist.setFocusedSignChartFactor(0);
+    Hist.selectOp('expr'); Hist.setExprChainText('-2'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.setFocusedSignChartFactor(1);
+    Hist.selectOp('expr'); Hist.setExprChainText('+1'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.focusMain();
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(150);
+
+  const poweredScFactors = await page.evaluate(() => window.App.History.getSignChart().factors.map(function (f) { return f.exponent; }));
+  ok('extraction preserves each factor\'s real exponent (2, then 1)', JSON.stringify(poweredScFactors) === JSON.stringify([2, 1]));
+
+  const poweredAutoRows = await page.evaluate(() => window.App.History.getSignChart().tableRows.map(function (r) {
+    return { factorIndex: r.factorIndex, withPower: r.withPower };
+  }));
+  ok('both factors pre-fill automatically, BARE (withPower false), even though factor 0 has a power',
+    JSON.stringify(poweredAutoRows) === JSON.stringify([{ factorIndex: 0, withPower: false }, { factorIndex: 1, withPower: false }]));
+  const poweredAutoLabel = await page.evaluate(() => {
+    var a = document.querySelectorAll('.sign-chart-row-label')[0].querySelector('annotation');
+    return a ? a.textContent : null;
+  });
+  ok('the pre-filled row for the squared factor shows the BARE form, no exponent', poweredAutoLabel === 'x + 2');
+
+  const poweredWrap = page.locator('.sign-chart-table-wrap');
+  await poweredWrap.hover();
+  await page.waitForTimeout(100);
+  await page.click('.sign-chart-add-row-btn', { force: true });
+  await page.waitForTimeout(80);
+  const poweredOptionTexts = await page.evaluate(() => Array.from(document.querySelectorAll('.sign-chart-popup-btn')).map(function (e) {
+    var a = e.querySelector('annotation'); return a ? a.textContent : e.textContent;
+  }));
+  console.log('add-row options for a squared factor:', JSON.stringify(poweredOptionTexts));
+  ok('add-row offers exactly 2 options: the powered factor (only exponent>1 gets one) and "total"',
+    poweredOptionTexts.length === 2);
+  ok('one option is the factor WITH its real power, "(x+2)^{2}"',
+    poweredOptionTexts.some(function (t) { return t === '\\left(x + 2\\right)^{2}'; }));
+  ok('no powered option is offered for the OTHER factor (exponent 1 -- would be identical to its bare row)',
+    !poweredOptionTexts.some(function (t) { return t.indexOf('x - 1') !== -1 && t.indexOf('^') !== -1; }));
+
+  await page.evaluate(() => window.App.History.signChartAddRow({ rowKind: 'factor', factorIndex: 0, withPower: true }));
+  await page.waitForTimeout(80);
+  const poweredRowIndex = await page.evaluate(() =>
+    window.App.History.getSignChart().tableRows.findIndex(function (r) { return r.withPower; }));
+  ok('signChartAddRow accepts the withPower row and adds it', poweredRowIndex !== -1);
+  ok('signChartAddRow rejects a withPower row for a factor whose real exponent is 1',
+    !(await page.evaluate(() => window.App.History.signChartAddRow({ rowKind: 'factor', factorIndex: 1, withPower: true }))));
+  const poweredRowLabel = await page.evaluate((idx) => {
+    var a = document.querySelectorAll('.sign-chart-row-label')[idx].querySelector('annotation');
+    return a ? a.textContent : null;
+  }, poweredRowIndex);
+  ok('the powered row\'s own label includes the exponent, "(x+2)^{2}"', poweredRowLabel === '\\left(x + 2\\right)^{2}');
+
+  // Columns: root -2 (factor 0, even power) and root 1 (factor 1) -> [interval(-inf,-2),
+  // boundary(-2), interval(-2,1), boundary(1), interval(1,inf)]. An EVEN power is never
+  // negative: '+' on BOTH sides of its own root, '0' only exactly at it.
+  await page.evaluate((row) => {
+    var Hist = window.App.History;
+    Hist.signChartSetCell(row, 0, '+'); // below -2 -- even power, still +
+    Hist.signChartSetCell(row, 1, '0'); // at its own root
+    Hist.signChartSetCell(row, 2, '+'); // between -2 and 1 -- still + (a NAIVE odd-power reading would say '-')
+    Hist.signChartSetCell(row, 4, '+'); // above 1
+  }, poweredRowIndex);
+  await page.waitForTimeout(80);
+  const poweredCorrectness = await page.evaluate((row) => {
+    var r = {};
+    [0, 1, 2, 4].forEach(function (i) { r[i] = window.App.History.signChartCellCorrect(row, i); });
+    return r;
+  }, poweredRowIndex);
+  console.log('squared-factor row correctness:', JSON.stringify(poweredCorrectness));
+  ok('every cell of the squared-factor row validates correctly (always +, 0 only at its root)',
+    Object.keys(poweredCorrectness).every(function (k) { return poweredCorrectness[k] === true; }));
+  // A naive (unpowered) reading would expect '-' between -2 and 1 (leading coeff > 0,
+  // below the root) -- confirm that reading is explicitly REJECTED for this row.
+  await page.evaluate((row) => window.App.History.signChartSetCell(row, 2, '-'), poweredRowIndex);
+  await page.waitForTimeout(60);
+  ok('a naive (non-parity-aware) "-" between -2 and 1 is flagged wrong for the squared factor',
+    (await page.evaluate((row) => window.App.History.signChartCellCorrect(row, 2), poweredRowIndex)) === false);
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
