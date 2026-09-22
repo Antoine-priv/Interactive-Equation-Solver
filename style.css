@@ -772,14 +772,6 @@ button {
   transform: translateX(-50%);
 }
 
-/* Repère visuel "valeur exclue du domaine" (voir isExcludedCol dans render.js) : un
-   double-trait vertical à droite de la colonne frontière concernée, sur TOUTE la hauteur
-   du tableau (posé sur chaque case de cette colonne, en-tête compris) — convention
-   classique du tableau de signes français (voir le plan/l'image de référence). */
-.sign-chart-col-excluded {
-  border-right: 4px double var(--text);
-}
-
 /* "+ Ajouter une rangée" et "Vérifier" (retour utilisateur : ce dernier À DROITE du
    premier) côte à côte, toutes deux révélées au survol du tableau (voir juste en dessous)
    — `visibility` (pas juste `opacity`) pour rester hors du flux de tabulation/clic tant

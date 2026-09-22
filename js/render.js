@@ -2156,9 +2156,26 @@
       // doit être mesurée séparément et ajoutée à `maxRight` pour que ce groupe, déjà
       // vertical au-dessus d'une partie de cette section, ne s'étende jamais moins loin à
       // droite qu'elle.
+      //
+      // ARROW_OVERFLOW_MARGIN (retour utilisateur suivant : léger chevauchement résiduel
+      // avec les flèches de la colonne de facteur la plus à droite) : les flèches de
+      // CHAQUE colonne "Tableau de signes" (renderBranchNode -> App.Arrows.drawAll) se
+      // dessinent dans un <svg class="arrows-overlay"> `overflow:visible` — leur étiquette
+      // d'opération peut donc peindre BIEN au-delà de la boîte de mise en page de sa
+      // propre colonne (mesuré : jusqu'à ~300px de plus que .sign-chart-factors-group
+      // lui-même), sans que cela agrandisse le moins du monde la rectangle CSS de cette
+      // colonne (`overflow:visible` ne participe jamais au calcul de layout des
+      // ancêtres). Impossible de mesurer ce dépassement ici avec précision : ces flèches
+      // se dessinent, elles, dans LEUR PROPRE requestAnimationFrame (voir renderBranchNode),
+      // TOUJOURS après cet appel-ci — délibérément SYNCHRONE, jamais lui-même différé à un
+      // rAF (voir le commentaire juste avant son appel, plus bas, pour la raison : la
+      // position "live" d'une colonne de domaine focalisée en dépend). Une marge fixe,
+      // généreuse (même esprit que GAP ci-dessous) est donc la seule option robuste tant
+      // que ces deux contraintes de timing coexistent.
+      var ARROW_OVERFLOW_MARGIN = 360;
       if (extraWideEls) {
         extraWideEls.forEach(function (el) {
-          if (el) maxRight = Math.max(maxRight, el.getBoundingClientRect().right);
+          if (el) maxRight = Math.max(maxRight, el.getBoundingClientRect().right + ARROW_OVERFLOW_MARGIN);
         });
       }
       // Assez large pour que la fenêtre d'action, une fois une colonne de domaine
@@ -2315,9 +2332,6 @@
       table.style.gridTemplateColumns = 'minmax(200px, auto) ' + colTemplate;
       wrap.appendChild(table);
 
-      var denRoots = signChart.factors.filter(function (f) { return f.kind === 'den'; })
-        .map(function (f) { return App.Equation.solvedValue(f.engine.lastEquation()); });
-      function isExcludedCol(col) { return col.type === 'boundary' && denRoots.indexOf(col.value) !== -1; }
       var lastRowIndex = signChart.tableRows.length - 1;
 
       var xHeader = document.createElement('div');
@@ -2328,7 +2342,7 @@
         var cell = document.createElement('div');
         var isEdge = col.type === 'interval' && (idx === 0 || idx === columns.length - 1);
         cell.className = 'sign-chart-cell sign-chart-header-cell' +
-          (isExcludedCol(col) ? ' sign-chart-col-excluded' : '') + (isEdge ? ' sign-chart-header-cell-edge' : '');
+          (isEdge ? ' sign-chart-header-cell-edge' : '');
         if (col.type === 'boundary') {
           window.katex.render(String(col.value), cell, { throwOnError: false });
         } else if (idx === 0 || idx === columns.length - 1) {
@@ -2357,8 +2371,7 @@
           var isEdgeInterval = col.type === 'interval' && (colIndex === 0 || colIndex === columns.length - 1);
           var cell = document.createElement('div');
           cell.className = 'sign-chart-cell sign-chart-data-cell' +
-            (isExcludedCol(col) ? ' sign-chart-col-excluded' : '') + (isLastRow ? ' sign-chart-row-last' : '') +
-            (isEdgeInterval ? ' sign-chart-cell-edge' : '');
+            (isLastRow ? ' sign-chart-row-last' : '') + (isEdgeInterval ? ' sign-chart-cell-edge' : '');
           // Identifie la CASE (position dans la grille) séparément de la cible cliquable
           // qu'elle contient (voir plus bas) : la case elle-même reste utile pour mesurer
           // l'alignement des colonnes, la cible pour l'interaction.
@@ -2369,7 +2382,7 @@
           // utilisateur) : une case pleine largeur, pour une colonne intervalle large,
           // rendait la zone cliquable visuellement asymétrique (ex. cliquable jusque
           // "sous -∞", qui n'est pourtant qu'un repère de texte dans le COIN de cette même
-          // colonne, voir isExcludedCol/l'en-tête plus haut) — une cible fixe et centrée
+          // colonne) — une cible fixe et centrée
           // reste symétrique quelle que soit la largeur réelle de la colonne, et se
           // rapproche du geste "cliquer un terme" déjà utilisé partout ailleurs dans
           // l'appli plutôt qu'un vague clic "n'importe où dans la case".
@@ -3104,9 +3117,34 @@
   function initBranchOutlineDismissal() {
     document.addEventListener('click', function (e) {
       if (!document.querySelector('.produit-nul-branch')) return;
-      var keep = !!(e.target.closest && e.target.closest(BRANCH_OUTLINE_KEEP_SELECTOR));
-      if (keep === branchOutlineVisible) return;
-      branchOutlineVisible = keep;
+      var inKeepZone = !!(e.target.closest && e.target.closest(BRANCH_OUTLINE_KEEP_SELECTOR));
+      if (branchOutlineVisible) {
+        // Déjà visible : seul un clic VRAIMENT en dehors de toute zone protégée le masque
+        // (comportement inchangé).
+        if (inKeepZone) return;
+        branchOutlineVisible = false;
+        renderAll();
+        return;
+      }
+      // Déjà masqué : ne se réaffiche QUE sur un clic dans une VRAIE colonne
+      // (.produit-nul-branch elle-même — jamais sur la seule appartenance, plus large, à
+      // BRANCH_OUTLINE_KEEP_SELECTOR ci-dessus, qui y ajoute aussi des zones comme
+      // #opButtons/.sign-chart-table-wrap simplement pour ne JAMAIS les compter comme "en
+      // dehors", pas pour re-déclencher ce retour). Un clic sur ces AUTRES zones garde
+      // gardées reste alors un pur no-op ici (retour utilisateur : cliquer "+ Ajouter une
+      // rangée"/"Vérifier" juste après qu'un clic "fantôme" de fin de panoramique ait
+      // masqué le liseré ailleurs ne doit JAMAIS re-render EN PHASE DE CAPTURE — ça
+      // détacherait la cible réelle de CE MÊME clic du DOM avant même que son propre
+      // gestionnaire, en phase de bulle plus tard dans ce même clic, n'ait pu s'exécuter :
+      // le popup de "+ Ajouter une rangée" apparaissait alors en haut à gauche de l'écran,
+      // son anchorEl capturé devenu orphelin entre-temps). Un clic dans une VRAIE colonne,
+      // lui, reste sûr à re-render synchroniquement ici : son propre gestionnaire — un
+      // simple setFocusedXxx(idx), voir renderSignChartFactors/renderDomainSplit/
+      // renderBranchNode plus bas — ne dépend jamais de la position/connexion DOM de
+      // l'élément cliqué, contrairement à openSignChartPopup(anchorEl, ...).
+      var inBranchColumn = !!(e.target.closest && e.target.closest('.produit-nul-branch'));
+      if (!inBranchColumn) return;
+      branchOutlineVisible = true;
       renderAll();
     }, true);
   }
