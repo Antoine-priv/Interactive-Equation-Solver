@@ -877,10 +877,12 @@ async function targetLatex(page, row, col) {
   console.log('add-row options for a squared factor:', JSON.stringify(poweredOptionTexts));
   ok('add-row offers exactly 2 options: the powered factor (only exponent>1 gets one) and "total"',
     poweredOptionTexts.length === 2);
-  ok('one option is the factor WITH its real power, "(x+2)^{2}"',
+  ok('one option is the factor WITH its real power, "(x+2)^{2}" -- proves no THIRD option for the other factor exists either',
     poweredOptionTexts.some(function (t) { return t === '\\left(x + 2\\right)^{2}'; }));
-  ok('no powered option is offered for the OTHER factor (exponent 1 -- would be identical to its bare row)',
-    !poweredOptionTexts.some(function (t) { return t.indexOf('x - 1') !== -1 && t.indexOf('^') !== -1; }));
+  // Retour utilisateur, this round: the "total" option/row must show the power too, e.g.
+  // "(x+1)²(x+4)" rather than "(x+1)(x+4)" -- checked here on "(x+2)²(x-1)".
+  ok('the "total" option ALSO carries the power on the squared factor: "(x+2)^{2}(x-1)"',
+    poweredOptionTexts.some(function (t) { return t === '\\left(x + 2\\right)^{2}\\left(x - 1\\right)'; }));
 
   await page.evaluate(() => window.App.History.signChartAddRow({ rowKind: 'factor', factorIndex: 0, withPower: true }));
   await page.waitForTimeout(80);
@@ -920,6 +922,204 @@ async function targetLatex(page, row, col) {
   await page.waitForTimeout(60);
   ok('a naive (non-parity-aware) "-" between -2 and 1 is flagged wrong for the squared factor',
     (await page.evaluate((row) => window.App.History.signChartCellCorrect(row, 2), poweredRowIndex)) === false);
+
+  // --- Isolated scenario: "Produit nul" must become UNAVAILABLE once a sign chart already
+  // exists on this equation (retour utilisateur: hovering it previously showed a
+  // mis-positioned preview, and clicking it made the sign chart disappear entirely --
+  // splitIntoBranches poses `branches`, which the renderer shows INSTEAD of the main
+  // chain/sign chart, without ever clearing `signChart` itself: its data survived, but
+  // nothing displayed it any more). ---
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.startNewEquation({
+      left: [{ sign: 1, factors: [
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 },
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 1 }
+      ] }],
+      right: [{ coeff: 0, pow: 0 }]
+    }, { operator: '\\geq' });
+    Hist.signChartAction();
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(120);
+  ok('canProduitNul() is false once a sign chart already exists on this node',
+    !(await page.evaluate(() => window.App.History.canProduitNul())));
+  const pnBtnHidden = await page.evaluate(() => {
+    var b = document.querySelector('button[data-op="produitnul"]');
+    if (!b) return true;
+    var row = b.closest('.op-row');
+    return !!row.hidden || row.classList.contains('row-hidden');
+  });
+  ok('the "Produit nul" button itself is hidden (no hoverable preview possible)', pnBtnHidden);
+  ok('confirmProduitNul() is a no-op (returns false, does not touch the sign chart)',
+    !(await page.evaluate(() => window.App.History.confirmProduitNul())));
+  ok('the sign chart is still present and the main chain is still what renders (no branches created)',
+    (await page.evaluate(() => !!window.App.History.getSignChart())) &&
+    (await page.evaluate(() => window.App.History.getBranches())) === null);
+
+  // --- Isolated scenario: "Tableau de signes" must NOT appear while focused inside an
+  // "Condition d'existence" column (retour utilisateur) -- that column's own equation,
+  // once solved down to e.g. "x - 1 = 0", is itself trivially "chartable" in isolation
+  // (Expr.extractSignChartFactors sees a single bare linear factor), the same trap
+  // focusedSignChartFactor already guards against for a factor's own mini-inequation. ---
+  await page.evaluate(() => {
+    window.App.History.startNewEquation({
+      left: [{
+        sign: -1, isDivision: true,
+        factorTerms: [{ coeff: -1, pow: 1 }, { coeff: 1, pow: 0 }],
+        innerTerms: [{ sign: 1, factors: [
+          { terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 },
+          { terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 1 }
+        ] }]
+      }],
+      right: [{ coeff: 0, pow: 0 }]
+    }, { operator: '\\geq' });
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(80);
+  const domDenSel = '.eq-row.current .side[data-side="left"] [data-fracpart="den"]';
+  await page.click(domDenSel, { force: true });
+  await page.click(domDenSel, { force: true });
+  await page.click('button[data-op="existence"]');
+  await page.waitForTimeout(120);
+  await page.evaluate(() => window.App.History.setFocusedDomain(0));
+  await page.waitForTimeout(100);
+  ok('canSignChart() is false while focused inside an existence-condition column',
+    !(await page.evaluate(() => window.App.History.canSignChart())));
+  const scBtnHiddenInDomain = await page.evaluate(() => {
+    var b = document.querySelector('button[data-op="signchart"]');
+    if (!b) return true;
+    var row = b.closest('.op-row');
+    return !!row.hidden || row.classList.contains('row-hidden');
+  });
+  ok('the "Tableau de signes" button is hidden while inside that column', scBtnHiddenInDomain);
+  await page.evaluate(() => window.App.History.focusMain());
+  await page.waitForTimeout(80);
+
+  // --- Isolated scenario: the "Condition d'existence" group must shift right of the sign
+  // chart's own equations once one is generated, never overlapping it (retour utilisateur)
+  // -- positionDomainGroup now also measures the sign-chart factors row/table, not just the
+  // main equation's own width. ---
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.startNewEquation({
+      left: [{
+        sign: -1, isDivision: true,
+        factorTerms: [{ coeff: -1, pow: 1 }, { coeff: 1, pow: 0 }],
+        innerTerms: [{ sign: 1, factors: [
+          { terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 },
+          { terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 1 }
+        ] }]
+      }],
+      right: [{ coeff: 0, pow: 0 }]
+    }, { operator: '\\geq' });
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(80);
+  await page.click(domDenSel, { force: true });
+  await page.click(domDenSel, { force: true });
+  await page.click('button[data-op="existence"]');
+  await page.waitForTimeout(120);
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.setFocusedDomain(0);
+    Hist.selectOp('expr'); Hist.setExprChainText('-1'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.selectOp('expr'); Hist.setExprChainText('\\div-1'); Hist.confirm();
+    Hist.focusMain();
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(150);
+  await page.evaluate(() => window.App.History.signChartAction());
+  await page.waitForTimeout(80);
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.setFocusedSignChartFactor(0);
+    Hist.selectOp('expr'); Hist.setExprChainText('-1'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.selectOp('expr'); Hist.setExprChainText('\\div-1'); Hist.confirm();
+    Hist.setFocusedSignChartFactor(1);
+    Hist.selectOp('expr'); Hist.setExprChainText('-1'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.setFocusedSignChartFactor(2);
+    Hist.selectOp('expr'); Hist.setExprChainText('+2'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.focusMain();
+    Hist.signChartAddRow({ rowKind: 'total' });
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(200);
+  const overlapRects = await page.evaluate(() => {
+    function r(sel) { var e = document.querySelector(sel); return e ? e.getBoundingClientRect() : null; }
+    return { domainGroup: r('.domain-group'), factorsGroup: r('.sign-chart-factors-group'), table: r('.sign-chart-table-wrap') };
+  });
+  console.log('domain-group vs sign-chart rects:', JSON.stringify(overlapRects));
+  function rectsOverlap(a, b) {
+    return !!a && !!b && a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  }
+  ok('the domain group does not overlap the sign chart factors row',
+    !rectsOverlap(overlapRects.domainGroup, overlapRects.factorsGroup));
+  ok('the domain group does not overlap the sign chart table',
+    !rectsOverlap(overlapRects.domainGroup, overlapRects.table));
+  ok('the domain group sits entirely to the RIGHT of both (never merely stacked/clipped)',
+    overlapRects.domainGroup.left >= overlapRects.factorsGroup.right &&
+    overlapRects.domainGroup.left >= overlapRects.table.right);
+
+  // --- Isolated scenario: switching context (clicking into a sign-chart factor's own
+  // equation) must NOT animate the main equation's now-irrelevant action-window buttons
+  // away (retour utilisateur: "remove this animation, as those old buttons were only
+  // meant for the main equation's action window anyway") -- while a genuine SELECTION
+  // change WITHIN the same context still animates normally, unaffected. ---
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.startNewEquation({
+      left: [{ sign: 1, factors: [
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: 1, pow: 0 }], exponent: 1 },
+        { terms: [{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }], exponent: 1 }
+      ] }],
+      right: [{ coeff: 0, pow: 0 }]
+    }, { operator: '\\geq' });
+    Hist.signChartAction();
+    Hist.setFocusedSignChartFactor(0);
+    Hist.selectOp('expr'); Hist.setExprChainText('-1'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.setFocusedSignChartFactor(1);
+    Hist.selectOp('expr'); Hist.setExprChainText('+2'); Hist.confirm();
+    Hist.toggleTermSelection('left', 1); Hist.toggleTermSelection('left', 2);
+    Hist.confirmSimplifySelection();
+    Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
+    Hist.confirmSimplifySelection();
+    Hist.focusMain();
+  });
+  await page.evaluate(() => window.App.Canvas.set(0, 0));
+  await page.waitForTimeout(150);
+  // Select a term on the main chain first, so switching context has something to hide.
+  await page.click('.eq-row.current .side[data-side="left"] .term[data-index="0"]', { force: true });
+  await page.waitForTimeout(100);
+  await page.click('.domain-branch[data-signchart-factor-index="0"] .side[data-side="left"] .term[data-index="0"]', { force: true });
+  await page.waitForTimeout(20); // checked immediately: a real animation would still be mid-transition here
+  const rowsRightAfterSwitch = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('#opButtons .op-row')).map(function (r) { return { hidden: r.hidden, cls: r.className }; }));
+  console.log('op-rows immediately after a context switch:', JSON.stringify(rowsRightAfterSwitch));
+  ok('no row is left mid-transition (row-hidden class present but not yet actually hidden) after a context switch',
+    !rowsRightAfterSwitch.some(function (r) { return r.cls.indexOf('row-hidden') !== -1 && !r.hidden; }));
+  ok('no row keeps the "row-appearing" pop class either after a context switch',
+    !rowsRightAfterSwitch.some(function (r) { return r.cls.indexOf('row-appearing') !== -1; }));
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
