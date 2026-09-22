@@ -114,7 +114,14 @@
   // side d'origine, qui restent la source de vérité pour la validation des cases (voir
   // signChartExpectedCell dans history.js).
   function signChartTotalLatex(signChart) {
-    function factorLatex(f) { return '\\left(' + Expr.sideLatex(f.capturedSide) + '\\right)'; }
+    // Puissance comprise (retour utilisateur : pour "(x+1)²(x+4)", la sélection de la
+    // rangée "Expression totale" doit afficher "(x+1)²(x+4)", pas "(x+1)(x+4)" — l'exposant
+    // RÉEL de chaque facteur dans l'équation d'origine, jamais réduit à sa racine nue ici,
+    // contrairement à la rangée "facteur" bare qui EST sa propre racine, voir
+    // signChartFactorPowerLatex plus bas).
+    function factorLatex(f) {
+      return f.exponent > 1 ? signChartFactorPowerLatex(f) : '\\left(' + Expr.sideLatex(f.capturedSide) + '\\right)';
+    }
     var numFactors = signChart.factors.filter(function (f) { return f.kind === 'num'; });
     var denFactors = signChart.factors.filter(function (f) { return f.kind === 'den'; });
     var numLatex = (signChart.constantSign < 0 ? '-' : '') + (numFactors.map(factorLatex).join('') || '1');
@@ -2126,7 +2133,7 @@
     // "naturelle" (avant de poser left/top) donne l'écart interne EXACT entre son propre
     // bord haut et sa première équation, à soustraire ensuite pour aligner celle-ci (et
     // non le groupe lui-même) sur mainFirstLine.
-    function positionDomainGroup(group, historyEl, mainRowsData, conditions) {
+    function positionDomainGroup(group, historyEl, mainRowsData, conditions, extraWideEls) {
       var mainFirstLine = mainRowsData && mainRowsData.length && mainRowsData[0].el.querySelector('.eq-line');
       var domainFirstLine = group.querySelector('.domain-branch .eq-line');
       if (!mainFirstLine || !domainFirstLine) { group.style.visibility = 'hidden'; return; }
@@ -2140,6 +2147,20 @@
         var lineEl = rd.el.querySelector('.eq-line');
         return lineEl ? lineEl.getBoundingClientRect().right : rd.el.getBoundingClientRect().left;
       }));
+      // "Tableau de signes" (retour utilisateur : ce groupe doit décaler encore plus à
+      // droite pour ne pas chevaucher les équations du tableau de signes) : rendu EN FLUX
+      // NORMAL sous la chaîne principale (voir renderSignChartFactors/renderSignChartTable
+      // plus haut), donc jamais compté dans mainRowsData ci-dessus — sa propre largeur (les
+      // N colonnes de facteurs côte à côte, ou la grille du tableau une fois tous résolus,
+      // l'une ou l'autre pouvant dépasser largement la largeur de l'équation elle-même)
+      // doit être mesurée séparément et ajoutée à `maxRight` pour que ce groupe, déjà
+      // vertical au-dessus d'une partie de cette section, ne s'étende jamais moins loin à
+      // droite qu'elle.
+      if (extraWideEls) {
+        extraWideEls.forEach(function (el) {
+          if (el) maxRight = Math.max(maxRight, el.getBoundingClientRect().right);
+        });
+      }
       // Assez large pour que la fenêtre d'action, une fois une colonne de domaine
       // focalisée, ne chevauche JAMAIS la chaîne principale : applyPanelPosition
       // (toolbar.js) la place entièrement à GAUCHE de l'équation focalisée, sur
@@ -2460,6 +2481,7 @@
         verifyBtn.addEventListener('click', function () { engineRoot.signChartVerify(); });
         actionsRow.appendChild(verifyBtn);
       }
+      return wrap;
     }
 
     if (!branches) {
@@ -2515,10 +2537,11 @@
       // résolus (getSignChartColumns non-null).
       var signChartData = Hist.getSignChart();
       var signChartFactorsResult = null;
+      var signChartTableWrap = null;
       if (signChartData) {
         signChartFactorsResult = renderSignChartFactors(Hist, history, signChartData, Hist.getFocusedSignChartFactor());
         var signChartColumns = Hist.getSignChartColumns();
-        if (signChartColumns) renderSignChartTable(Hist, history, signChartData, signChartColumns);
+        if (signChartColumns) signChartTableWrap = renderSignChartTable(Hist, history, signChartData, signChartColumns);
       }
 
       var domainFocusedRes = domainSplitResult && domainSplitResult.focusedRes;
@@ -2661,7 +2684,8 @@
       // automatiquement son parent une fois déplacé) — bug rapporté : le champ de saisie
       // apparaissait près de la chaîne principale plutôt qu'à côté de sa propre flèche.
       if (domainSplitResult) {
-        positionDomainGroup(domainSplitResult.group, history, res.rowsData, domainConditionsArr);
+        positionDomainGroup(domainSplitResult.group, history, res.rowsData, domainConditionsArr,
+          [signChartFactorsResult && signChartFactorsResult.group, signChartTableWrap]);
       }
     } else {
       // Scission en cours ("Produit nul" ou "Racine carrée") : la chaîne principale
