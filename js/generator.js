@@ -36,7 +36,13 @@
        carré d'expression déjà factorisé — Factoriser le trinôme (identité 1 ou 2) donne
        deux carrés de signes opposés, exactement l'entrée attendue par
        Expr.factorDifferenceOfTwoSquareGroups (3e identité, voir generateDiffOfTwoSquaredExpr
-       pour la variante où les deux carrés sont déjà groupés dès le départ). */
+       pour la variante où les deux carrés sont déjà groupés dès le départ) ;
+   - une inéquation pour "Tableau de signes" (generateSignChartInequality) : mélange
+     librement, à chaque tirage, un dénominateur EN x (impose "Condition d'existence"
+     avant que le bouton n'apparaisse), un numérateur pas encore factorisé (un trinôme
+     identité, à factoriser via "Factoriser" avant que le bouton n'apparaisse), et un
+     terme en x ajouté aux deux membres (l'équation ne compare pas encore à 0 telle
+     quelle — la isoler dessus est le tout premier pas), plutôt que des cas cloisonnés. */
 (function (App) {
   'use strict';
 
@@ -427,6 +433,77 @@
     return { left: trinomial.concat([squareTerm]), right: [{ coeff: 0, pow: 0 }] };
   }
 
+  // Inéquation pour "Tableau de signes" (retour utilisateur) : mélange librement PLUSIEURS
+  // ingrédients indépendants à chaque tirage — un dénominateur EN x (impose "Condition
+  // d'existence" avant que le bouton "Tableau de signes" n'apparaisse, voir
+  // signChartDomainReady dans history.js), un numérateur pas encore factorisé (un trinôme
+  // identité, même construction que generateFactorableQuadratic —
+  // Expr.extractSignChartFactors le rejette tel quel tant qu'il n'a pas été factorisé via
+  // "Factoriser"), et un terme en x ajouté aux DEUX membres (l'équation ne compare alors
+  // pas encore à 0, voir detectSignChartFactors dans history.js — la toute première étape
+  // doit le soustraire des deux côtés avant que "Tableau de signes" n'apparaisse) — plutôt
+  // que des générateurs séparés et figés par combinaison, pour que ces cas se recombinent
+  // vraiment entre eux au tirage plutôt que de rester cloisonnés.
+  function generateSignChartInequality() {
+    var operator = App.Ineq.OPERATORS[randInt(0, App.Ineq.OPERATORS.length - 1)];
+    var hasDenominator = Math.random() < 0.5;
+    var needsFactoring = Math.random() < 0.45;
+    var xOnBothSides = Math.random() < 0.5;
+
+    // Numérateur : soit un trinôme identité NON factorisé (2 "racines virtuelles" ∓b/b,b —
+    // voir generateFactorableQuadratic pour les 3 mêmes patterns), soit un produit DÉJÀ
+    // factorisé de 2 ou 3 facteurs linéaires distincts (voir generateProductEquation/
+    // generateTripleProductEquation) — `numerator` reste un Side valide dans les deux cas
+    // (un trinôme est déjà un Side de 3 Term ; un produit devient un Side d'UN seul
+    // ProductGroup), directement utilisable tel quel ou comme `innerTerms` d'un quotient.
+    var numerator, numRoots;
+    if (needsFactoring) {
+      var b = nonZeroInt(1, 9);
+      var pattern = randInt(0, 2);
+      if (pattern === 0) {
+        numerator = [{ coeff: 1, pow: 2 }, { coeff: 2 * b, pow: 1 }, { coeff: b * b, pow: 0 }];
+        numRoots = [-b];
+      } else if (pattern === 1) {
+        numerator = [{ coeff: 1, pow: 2 }, { coeff: -2 * b, pow: 1 }, { coeff: b * b, pow: 0 }];
+        numRoots = [b];
+      } else {
+        numerator = [{ coeff: 1, pow: 2 }, { coeff: -(b * b), pow: 0 }];
+        numRoots = [-b, b];
+      }
+    } else {
+      var rootCount = Math.random() < 0.35 ? 3 : 2;
+      var roots = [];
+      while (roots.length < rootCount) {
+        var r = nonZeroInt(-9, 9);
+        if (roots.indexOf(r) === -1) roots.push(r);
+      }
+      numRoots = roots;
+      var factors = roots.map(function (rt) {
+        return { terms: [{ coeff: 1, pow: 1 }, { coeff: -rt, pow: 0 }], exponent: 1 };
+      });
+      numerator = [{ sign: 1, factors: factors }];
+    }
+
+    var left;
+    if (hasDenominator) {
+      var rd;
+      do { rd = nonZeroInt(-9, 9); } while (numRoots.indexOf(rd) !== -1);
+      var denomTerms = [{ coeff: 1, pow: 1 }, { coeff: -rd, pow: 0 }];
+      left = [{ sign: 1, factorTerms: denomTerms, innerTerms: numerator, isDivision: true }];
+    } else {
+      left = numerator;
+    }
+
+    var right = [{ coeff: 0, pow: 0 }];
+    if (xOnBothSides) {
+      var t = nonZeroInt(-6, 6);
+      left = left.concat([{ coeff: t, pow: 1 }]);
+      right = [{ coeff: t, pow: 1 }];
+    }
+
+    return { left: left, right: right, operator: operator };
+  }
+
   // Une entrée par forme possible, tirée avec une probabilité STRICTEMENT ÉGALE (1/N,
   // voir randInt ci-dessous) plutôt que des seuils réglés à la main comme avant (certaines
   // formes cumulaient jusqu'à 15%, d'autres 1% seulement) : chaque type d'équation a
@@ -449,7 +526,8 @@
     generateVariableRadicandEquation,
     generateVariableRadicandQuadraticEquation,
     generateIdentityPlusProduct,
-    generateTrinomialMinusSquareGroup
+    generateTrinomialMinusSquareGroup,
+    generateSignChartInequality
   ];
 
   function generateEquation() {
@@ -475,6 +553,7 @@
     generateVariableRadicandEquation: generateVariableRadicandEquation,
     generateVariableRadicandQuadraticEquation: generateVariableRadicandQuadraticEquation,
     generateIdentityPlusProduct: generateIdentityPlusProduct,
-    generateTrinomialMinusSquareGroup: generateTrinomialMinusSquareGroup
+    generateTrinomialMinusSquareGroup: generateTrinomialMinusSquareGroup,
+    generateSignChartInequality: generateSignChartInequality
   };
 })(window.App = window.App || {});
