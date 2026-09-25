@@ -234,6 +234,9 @@
       currentOperator = (opts && opts.operator) || null;
       var firstStep = { equation: equation, opLeft: null, opRight: null };
       if (currentOperator) firstStep.operator = currentOperator;
+      // Inéquation vraie pour tout x, posée telle quelle (colonne "x²+1 > 0" d'un facteur
+      // de signe constant, voir signChartAction) : affichée d'emblée comme résolue.
+      if (opts && opts.alwaysTrue) firstStep.alwaysTrue = true;
       steps = [firstStep];
       pending = emptyPending();
       lastClickKey = null;
@@ -2585,6 +2588,7 @@
     // tout entier, rien à établir.
     function signChartDomainReady(factors) {
       return factors.every(function (f) {
+        if (f.constant) return true; // jamais nul, rien à exclure
         if (!f.sqrt && f.kind !== 'den') return true;
         return !!(domainConditions && domainConditions.some(function (cond) {
           if (cond.kind !== (f.sqrt ? 'sqrt' : 'den')) return false;
@@ -2660,13 +2664,19 @@
         // domaine — l'élève l'élève au carré ("(‥)²", les deux membres étant positifs, voir
         // canSquareBothSides) pour retrouver "radicand > 0". `capturedSide` reste le radicand.
         var studied = f.sqrt ? [{ sign: 1, radicand: Expr.cloneSide(f.terms) }] : Expr.cloneSide(f.terms);
-        eng.init({ left: studied, right: [{ coeff: 0, pow: 0 }] }, { operator: '>' });
+        // Facteur de signe constant (ex. "x²+1", voir Expr.constantSignOf) : "x²+1 > 0"
+        // (ou "< 0" s'il est toujours négatif) est vrai pour tout x, posé déjà résolu.
+        if (f.constant) {
+          eng.init({ left: studied, right: [{ coeff: 0, pow: 0 }] }, { operator: f.constant > 0 ? '>' : '<', alwaysTrue: true });
+        } else {
+          eng.init({ left: studied, right: [{ coeff: 0, pow: 0 }] }, { operator: '>' });
+        }
         // Dès que CE facteur (et donc, potentiellement, le dernier restant) devient
         // résolu, tente le pré-remplissage (voir signChartAutoFillRows plus bas) avant de
         // notifier normalement — se déclenche naturellement une seule fois, exactement
         // quand getSignChartColumns() passe de null à non-null pour la première fois.
         eng.subscribe(function () { signChartAutoFillRows(); notify(); });
-        return { id: i, kind: f.kind, sqrt: !!f.sqrt, capturedSide: Expr.cloneSide(f.terms), exponent: f.exponent, engine: eng };
+        return { id: i, kind: f.kind, sqrt: !!f.sqrt, constant: f.constant || 0, capturedSide: Expr.cloneSide(f.terms), exponent: f.exponent, engine: eng };
       });
       signChart = { factors: factors, constantSign: extracted.constantSign, tableRows: [], verified: false, gridHistory: [],
         atStep: leaf.getSteps().length, domainCount: domainConditions ? domainConditions.length : 0 };
@@ -2734,15 +2744,16 @@
     // distinction par rangée).
     function getSignChartColumns() {
       if (!signChart) return null;
-      var allSolved = signChart.factors.every(function (f) { return Eq.isSolved(f.engine.lastEquation()); });
+      var allSolved = signChart.factors.every(function (f) { return f.constant || Eq.isSolved(f.engine.lastEquation()); });
       if (!allSolved) return null;
       var distinctRoots = [];
       signChart.factors.forEach(function (f) {
+        if (f.constant) return; // aucune racine
         var r = Eq.solvedValue(f.engine.lastEquation());
         if (distinctRoots.indexOf(r) === -1) distinctRoots.push(r);
       });
       distinctRoots.sort(function (a, b) { return a - b; });
-      var cols = [{ type: 'interval', from: -Infinity, to: distinctRoots[0] }];
+      var cols = [{ type: 'interval', from: -Infinity, to: distinctRoots.length ? distinctRoots[0] : Infinity }];
       distinctRoots.forEach(function (r, i) {
         cols.push({ type: 'boundary', value: r });
         cols.push({ type: 'interval', from: r, to: i + 1 < distinctRoots.length ? distinctRoots[i + 1] : Infinity });
@@ -2777,6 +2788,11 @@
     function signChartExpectedCell(row, col) {
       if (row.rowKind === 'factor') {
         var f = signChart.factors[row.factorIndex];
+        if (f.constant) {
+          if (col.type === 'boundary') return 'none';
+          var cSign = row.withPower && f.exponent % 2 === 0 ? 1 : f.constant;
+          return cSign > 0 ? '+' : '-';
+        }
         var root = Eq.solvedValue(f.engine.lastEquation());
         if (f.sqrt) {
           if (sqrtUndefinedAt(f, col)) return 'undef';
@@ -2795,12 +2811,13 @@
         return sign > 0 ? '+' : '-';
       }
       if (signChart.factors.some(function (f) { return f.sqrt && sqrtUndefinedAt(f, col); })) return 'undef';
-      var denRoots = signChart.factors.filter(function (f) { return f.kind === 'den'; })
+      var denRoots = signChart.factors.filter(function (f) { return f.kind === 'den' && !f.constant; })
         .map(function (f) { return Eq.solvedValue(f.engine.lastEquation()); });
       if (col.type === 'boundary') return denRoots.indexOf(col.value) !== -1 ? 'undef' : '0';
       var sign = signChart.constantSign;
       signChart.factors.forEach(function (f) {
         if (f.sqrt) return; // positive partout où elle est définie (intervalle ouvert)
+        if (f.constant) { sign *= f.exponent % 2 === 0 ? 1 : f.constant; return; }
         sign *= factorPowerSignInInterval(f.capturedSide, Eq.solvedValue(f.engine.lastEquation()), col.from, f.exponent);
       });
       return sign > 0 ? '+' : '-';

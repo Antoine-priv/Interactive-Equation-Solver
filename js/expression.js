@@ -1542,6 +1542,19 @@
   // du tableau (il ne change jamais de signe) mais son signe est plié dans `constantSign`
   // (produit de tous ces signes) — nécessaire pour la ligne combinée "expression totale",
   // qui doit refléter par ex. le "-" de tête de "-(x+1)(x-2)/(1-x)".
+  // Signe (+1/-1) d'un trinôme ax²+bx+c SANS racine réelle (b²-4ac < 0, ex. "x²+1",
+  // "-2x²-3"), donc de signe constant, celui de a ; 0 pour toute autre expression.
+  function constantSignOf(terms) {
+    var a = 0, b = 0, c = 0;
+    for (var i = 0; i < terms.length; i++) {
+      var t = terms[i];
+      if (isGroup(t) || t.pow > 2) return 0;
+      if (t.pow === 2) a += t.coeff; else if (t.pow === 1) b += t.coeff; else c += t.coeff;
+    }
+    if (roundClean(a) === 0 || b * b - 4 * a * c >= 0) return 0;
+    return a > 0 ? 1 : -1;
+  }
+
   function extractSignChartFactors(side) {
     var constantSign = 1;
     var factors = []; // [{ terms: Side, kind: 'num'|'den', exponent }]
@@ -1577,6 +1590,14 @@
         constantSign *= Math.pow(terms[0].coeff < 0 ? -1 : 1, exponent || 1);
         return true;
       }
+      // Trinôme sans racine (ex. "x²+1") : une rangée à part, de signe constant, que
+      // l'élève remplit lui-même — sa colonne "x²+1 > 0" est posée déjà vraie (voir
+      // signChartAction dans history.js).
+      var cs = constantSignOf(terms);
+      if (cs) {
+        factors.push({ terms: terms, kind: kind, exponent: exponent || 1, constant: cs });
+        return true;
+      }
       if (!isLinearSide(terms)) return false;
       factors.push({ terms: terms, kind: kind, exponent: exponent || 1 });
       return true;
@@ -1584,7 +1605,7 @@
 
     function walkSide(s, kind) {
       if (s.length === 1) return walkNode(s[0], kind);
-      if (isLinearSide(s)) return pushFactor(s, kind);
+      if (isLinearSide(s) || constantSignOf(s)) return pushFactor(s, kind);
       return false;
     }
 

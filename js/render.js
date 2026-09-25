@@ -1821,7 +1821,7 @@
       var isLastConfirmed = (i === steps.length - 1);
       // Arrivée au bout : "x=r" (ou "x<r"...), mais aussi deux constantes ("3=5", "0=0")
       // — plus aucune opération n'a de sens, voir App.Ineq.solutionRanges.
-      var solved = isLastConfirmed && App.Ineq.solutionRanges(step.equation, step.operator || null) !== null;
+      var solved = isLastConfirmed && (!!step.alwaysTrue || App.Ineq.solutionRanges(step.equation, step.operator || null) !== null);
       // L'équation encadrée est celle qui vient d'être obtenue (le dernier résultat),
       // pas la ligne "pending" du dessous qui reste, elle, à construire.
       var current = isLastConfirmed && !solved;
