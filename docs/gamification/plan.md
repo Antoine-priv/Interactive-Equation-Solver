@@ -118,11 +118,13 @@
 
 ### La Grotte — Identités remarquables
 
-*Notion :* a² − b², (a ± b)². *S’ouvre après :* Montagne, 3e problème. *Récompense :* Fiche mémo.
+*Notion :* a² − b², (a ± b)² : développer, factoriser, puis résoudre. *S’ouvre après :* Montagne, 1er problème (développer) et 3e (factoriser). *Récompense :* Fiche mémo.
 
 | Id | Problème | Énoncé | Apprend | ★★★ en | Prérequis | Notes |
 |---|---|---|---|---|---|---|
-| g1 | Différence de carrés | `x² − 9 = 0` | a² − b² = (a − b)(a + b) | 4 | p3 |  |
+| gD | Développer A à G | `A = (5 + x)²` → `25 + 10x + x²`<br>`B = (x − 7)²` → `x² − 14x + 49`<br>`C = (5 + x)(5 − x)` → `25 − x²`<br>`D = (−x + 2)²` → `x² − 4x + 4`<br>`E = (−6 − x)²` → `36 + 12x + x²`<br>`F = −(−x − 4)(x − 4)` → `x² − 16`<br>`G = −(−x + 9)(−9 + x)` → `x² − 18x + 81` | Développer avec (a + b)², (a − b)² et (a − b)(a + b), y compris avec des signes piégés | 9 | p1 | Objectif : forme développée réduite · Découvre : Développer en choisissant une identité · Piège : F et G : faire rentrer le signe − dans la première parenthèse avant de reconnaître l'identité. · Source : Exercice 4 · **À développer :** Mode « expression seule » (A = …, sans relation) et Développer par identité remarquable (choix de l'identité, saisie de a et b). |
+| gF | Factoriser H à K | `H = x² + 8x + 16` → `(x + 4)²`<br>`I = x⁴ − 25` → `(x² − 5)(x² + 5)`<br>`J = 9 − (−x²) − 6x` → `(x − 3)²`<br>`K = −49 − x² + 14x` → `−(x − 7)²` | Reconnaître une identité dans une expression en désordre ou avec un signe devant | 5 | gD, p3 | Objectif : forme factorisée · Piège : J : simplifier −(−x²) d'abord. K : mettre −1 en facteur avant l'identité. · Source : Exercice 4 · **À développer :** Mode « expression seule », et identités dont le « a » n'est pas x (x⁴ = (x²)²), aujourd'hui limitées volontairement au degré 2. |
+| g1 | Différence de carrés | `x² − 9 = 0` | a² − b² = (a − b)(a + b) | 4 | gF |  |
 | g2 | Carré parfait | `x² + 6x + 9 = 0` | (a + b)², solution double | 3 | g1 |  |
 | g3 | Deux carrés | `(2x + 1)² − (x − 3)² = 0` | a² − b² avec des expressions | 6 | g2 | Épreuve |
 
@@ -203,12 +205,22 @@ est accepté tel quel par le tableau de signes (`Expr.extractSignChartFactors`).
 4. **Factoriser un trinôme sans racine évidente** (s5 : 2x² − 3x + 1). Proposition :
    l'élève saisit la forme factorisée suggérée par l'énoncé, et l'application vérifie
    l'égalité en développant.
-5. **Nouveaux types de niveau :**
+5. **Développer et factoriser une expression seule** (exercice 4, gD et gF) :
+   - Un mode « A = … » sans relation, réussi à la forme développée réduite (gD) ou
+     factorisée (gF), selon le type de niveau.
+   - « Développer » par identité remarquable : choix de l’identité et saisie de a et b,
+     symétrique du sélecteur de « Factoriser ». Aujourd’hui « Développer » distribue
+     seulement.
+   - Des identités dont le « a » n’est pas x (I = x⁴ − 25 = (x² − 5)(x² + 5)). Cela lève
+     une restriction jusqu’ici volontaire (identités limitées au degré 2), à confirmer.
+   - À vérifier : que K = −49 − x² + 14x se factorise bien en mettant −1 en facteur,
+     puis en appliquant l’identité à l’intérieur de la parenthèse.
+6. **Nouveaux types de niveau :**
    - Niveau « Df seul » (m1, m2) : réussi quand toutes ses colonnes
      « Condition d'existence » sont résolues.
    - Problème en plusieurs parties (o1 → o3) : un énoncé commun (f, g, h) partagé par
      plusieurs nœuds.
-6. **Validation qui exige le domaine :** m5 (`(x+3)(x+1)/(x+3)=0`) doit refuser
+7. **Validation qui exige le domaine :** m5 (`(x+3)(x+1)/(x+3)=0`) doit refuser
    S = {−3 ; −1}. La ligne S est déjà intersectée avec le domaine une fois les colonnes
    « Condition d'existence » résolues. Le niveau doit donc exiger ces colonnes avant de
    valider.

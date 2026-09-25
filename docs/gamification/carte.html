@@ -124,7 +124,7 @@ pre{background:var(--surface);border:1px solid var(--border);border-radius:14px;
   <header>
     <div class="eyebrow">Ébauche de gamification</div>
     <h1>La Carte des équations</h1>
-    <p class="lede">Un parcours de 52 problèmes répartis en 10 régions, plus un Sommet avec un défi du jour. Le Port sert de tutoriel et fait découvrir l'interface une fonctionnalité à la fois. Ensuite, la carte se sépare en branches, et trois jonctions obligent à croiser les notions. Le mode libre reste accessible dès le départ. Les problèmes marqués d'un point orange demandent d'abord une évolution de l'application. Cliquez sur un nœud pour voir le problème, ce qu'il enseigne et ce que le coach montre.</p>
+    <p class="lede">Un parcours de 54 problèmes répartis en 10 régions, plus un Sommet avec un défi du jour. Le Port sert de tutoriel et fait découvrir l'interface une fonctionnalité à la fois. Ensuite, la carte se sépare en branches, et trois jonctions obligent à croiser les notions. Le mode libre reste accessible dès le départ. Les problèmes marqués d'un point orange demandent d'abord une évolution de l'application. Cliquez sur un nœud pour voir le problème, ce qu'il enseigne et ce que le coach montre.</p>
   </header>
 
   <div class="mapcard">
@@ -246,6 +246,7 @@ pre{background:var(--surface);border:1px solid var(--border);border-radius:14px;
       <div class="card"><h3>Simplifier un quotient</h3><p>« Simplifier » ne supprime pas encore un facteur commun au numérateur et au dénominateur. Pour l'exercice 24, il faut passer de h à (x + 5)/(4 − x) en gardant x ≠ 2/3 visible, comme le « si (…) ≠ 0 » actuel.</p></div>
       <div class="card"><h3>Racine d'un quotient</h3><p>La condition d'existence ne traite que des radicandes linéaires. √(1/x) demande de chaîner deux conditions (x ≠ 0 et 1/x ≥ 0) pour le problème des jumeaux.</p></div>
       <div class="card"><h3>Problèmes « Df seul » et en plusieurs parties</h3><p>Un niveau « Df » est réussi quand toutes ses colonnes « Condition d'existence » sont résolues, sans équation à finir. Un problème en plusieurs parties partage l'énoncé f, g, h entre plusieurs nœuds.</p></div>
+      <div class="card"><h3>Développer et factoriser une expression seule</h3><p>Pour l'exercice 4, il faut un mode « A = … » sans relation, réussi à la forme développée réduite ou factorisée. « Développer » doit aussi proposer le choix d'une identité, comme « Factoriser ». Aujourd'hui il distribue seulement. Enfin, I = x⁴ − 25 demande des identités dont le « a » n'est pas x, alors qu'elles sont volontairement limitées au degré 2.</p></div>
       <div class="card"><h3>Factoriser un trinôme</h3><p>Pour 2x² − 3x + 1, l'élève saisit la forme factorisée proposée par l'énoncé (« Développer (2x − 1)(x − 1) ») et l'application vérifie l'égalité en développant.</p></div>
     </div>
   </section>
@@ -259,7 +260,7 @@ var Z = {
   foret:{name:'La Forêt', sub:'Fractions', fill:'--z-foret', x:390,y:66,w:300,h:174, notion:'\\frac, multiplier pour chasser les dénominateurs', after:'Plaine, 1er problème', reward:'Fiche mémo'},
   coll:{name:'Les Collines', sub:'Inéquations', lx:652, fill:'--z-coll', x:580,y:537,w:320,h:100, notion:'Sens de l\'inégalité, S en intervalles', after:'Plaine, 5e problème', reward:'Badge « Retourneur », fiche mémo'},
   mont:{name:'La Montagne', sub:'Degré 2', fill:'--z-mont', x:700,y:230,w:390,h:190, notion:'Produit nul, Factoriser, facteur commun', after:'Épreuve de la Plaine', reward:'Badge « Alpiniste », fiche mémo'},
-  grotte:{name:'La Grotte', sub:'Identités remarquables', fill:'--z-grotte', x:860,y:66,w:250,h:154, notion:'a² − b², (a ± b)²', after:'Montagne, 3e problème', reward:'Fiche mémo'},
+  grotte:{name:'La Grotte', sub:'Identités remarquables', fill:'--z-grotte', x:860,y:66,w:250,h:160, notion:'a² − b², (a ± b)² : développer, factoriser, puis résoudre', after:'Montagne, 1er problème (développer) et 3e (factoriser)', reward:'Fiche mémo'},
   source:{name:'La Source', sub:'Racine carrée', lp:'bl', fill:'--z-source', x:920,y:430,w:280,h:195, notion:'Racine carrée en deux temps, branches ±', after:'Montagne, 5e problème', reward:'Badge « Racine double », fiche mémo'},
   marais:{name:'Le Marais', sub:'Ensembles de définition', fill:'--z-marais', x:1120,y:66,w:285,h:314, notion:'Df d\'une fonction, valeurs interdites, √ d\'une expression, simplification piégée', after:'Forêt + Montagne', reward:'Badge « Chasseur d\'interdits », fiche mémo'},
   cit:{name:'La Citadelle', sub:'Tableau de signes', lp:'bl', fill:'--z-cit', x:1215,y:390,w:290,h:245, notion:'Produits et quotients comparés à 0, facteur de signe constant', after:'Collines + Montagne', reward:'Badge « Stratège », fiche mémo'},
@@ -300,9 +301,11 @@ var N = [
  {id:'p5',x:1000,y:350,z:'mont',req:['p4'],t:'Tout d\'un côté',eq:'x² = 5x',learn:'Ramener à 0 avant de factoriser',par:4,trap:'Diviser par x fait perdre la solution 0.'},
  {id:'pB',x:1060,y:280,z:'mont',req:['p5'],t:'Épreuve de la Montagne',eq:'x³ − 4x = 0',learn:'Degré 3 : factoriser deux fois',par:5,boss:1,badge:'Alpiniste'},
 
- {id:'g1',x:905,y:185,z:'grotte',req:['p3'],t:'Différence de carrés',eq:'x² − 9 = 0',learn:'a² − b² = (a − b)(a + b)',par:4},
- {id:'g2',x:990,y:150,z:'grotte',req:['g1'],t:'Carré parfait',eq:'x² + 6x + 9 = 0',learn:'(a + b)², solution double',par:3},
- {id:'g3',x:1070,y:170,z:'grotte',req:['g2'],t:'Deux carrés',eq:'(2x + 1)² − (x − 3)² = 0',learn:'a² − b² avec des expressions',par:6,boss:1},
+ {id:'gD',x:895,y:180,z:'grotte',req:['p1'],t:'Développer A à G',eq:'Série de 7 expressions',kind:'expand',learn:'Développer avec (a + b)², (a − b)² et (a − b)(a + b), y compris avec des signes piégés',feat:'Développer en choisissant une identité',par:9,src:'Exercice 4',app:'Mode « expression seule » (A = …, sans relation) et Développer par identité remarquable (choix de l\'identité, saisie de a et b).',items:[['A','(5 + x)²','25 + 10x + x²'],['B','(x − 7)²','x² − 14x + 49'],['C','(5 + x)(5 − x)','25 − x²'],['D','(−x + 2)²','x² − 4x + 4'],['E','(−6 − x)²','36 + 12x + x²'],['F','−(−x − 4)(x − 4)','x² − 16'],['G','−(−x + 9)(−9 + x)','x² − 18x + 81']],trap:'F et G : faire rentrer le signe − dans la première parenthèse avant de reconnaître l\'identité.'},
+ {id:'gF',x:960,y:140,z:'grotte',req:['gD','p3'],t:'Factoriser H à K',eq:'Série de 4 expressions',kind:'factor',learn:'Reconnaître une identité dans une expression en désordre ou avec un signe devant',par:5,src:'Exercice 4',app:'Mode « expression seule », et identités dont le « a » n\'est pas x (x⁴ = (x²)²), aujourd\'hui limitées volontairement au degré 2.',items:[['H','x² + 8x + 16','(x + 4)²'],['I','x⁴ − 25','(x² − 5)(x² + 5)'],['J','9 − (−x²) − 6x','(x − 3)²'],['K','−49 − x² + 14x','−(x − 7)²']],trap:'J : simplifier −(−x²) d\'abord. K : mettre −1 en facteur avant l\'identité.'},
+ {id:'g1',x:1020,y:190,z:'grotte',req:['gF'],t:'Différence de carrés',eq:'x² − 9 = 0',learn:'a² − b² = (a − b)(a + b)',par:4},
+ {id:'g2',x:1060,y:130,z:'grotte',req:['g1'],t:'Carré parfait',eq:'x² + 6x + 9 = 0',learn:'(a + b)², solution double',par:3},
+ {id:'g3',x:1085,y:195,z:'grotte',req:['g2'],t:'Deux carrés',eq:'(2x + 1)² − (x − 3)² = 0',learn:'a² − b² avec des expressions',par:6,boss:1},
 
  {id:'r1',x:965,y:480,z:'source',req:['p5'],t:'Racine carrée',eq:'x² = 16',learn:'√ des deux côtés puis ±',feat:'Touche √ du pavé, puis « Simplifier » côté par côté',par:2,badge:'Racine double'},
  {id:'r2',x:1040,y:520,z:'source',req:['r1'],t:'Carré d\'une expression',eq:'(x + 3)² = 9',learn:'Deux branches à résoudre',par:4},
@@ -416,14 +419,15 @@ function renderPanel(){
   var n = byId[selected], done = PROFILES[profile], st = state(n, done), z = Z[n.z];
   var chip = st==='done' ? '<span class="chip st-done">Résolu '+'★★★'.slice(0,done[n.id])+'</span>' : st==='open' ? '<span class="chip st-open">Disponible</span>' : '<span class="chip">Verrouillé</span>';
   var h = '<div class="col"><div class="pz">'+z.name+' · '+z.sub+'</div><h3 style="font-size:20px">'+n.t+'</h3>'+
-    '<div class="peq">'+fmtEq(n.eq)+'</div><div class="chips">'+chip+(n.boss?'<span class="chip st-boss">Épreuve</span>':'')+(n.badge?'<span class="chip">Badge : '+n.badge+'</span>':'')+(n.kind==='domain'?'<span class="chip">Objectif : Df</span>':'')+(n.src?'<span class="chip">'+n.src+'</span>':'')+'</div></div>'+
+    '<div class="peq">'+fmtEq(n.eq)+'</div><div class="chips">'+chip+(n.boss?'<span class="chip st-boss">Épreuve</span>':'')+(n.badge?'<span class="chip">Badge : '+n.badge+'</span>':'')+(n.kind==='domain'?'<span class="chip">Objectif : Df</span>':'')+(n.kind==='expand'?'<span class="chip">Objectif : forme développée réduite</span>':'')+(n.kind==='factor'?'<span class="chip">Objectif : forme factorisée</span>':'')+(n.src?'<span class="chip">'+n.src+'</span>':'')+'</div></div>'+
     '<dl class="kv"><dt>Apprend</dt><dd>'+n.learn+'</dd>'+
     (n.feat?'<dt>Découvre</dt><dd>'+n.feat+'</dd>':'')+
     (n.par?'<dt>★★★ en</dt><dd>'+n.par+' étape'+(n.par>1?'s':'')+' au plus</dd>':'')+
     (n.trap?'<dt>Piège</dt><dd>'+n.trap+'</dd>':'')+
     (n.app?'<dt style="color:var(--boss)">À développer</dt><dd>'+n.app+'</dd>':'')+
     '<dt>Prérequis</dt><dd>'+(n.req.length?n.req.map(function(r){return byId[r].t;}).join(' + '):'aucun')+(n.stars?' + '+n.stars+' ★':'')+'</dd></dl>';
-  h += n.coach ? '<div class="coach"><b style="color:var(--text);font-weight:500">Le coach dit</b><ol>'+n.coach.map(function(c){return '<li>'+c+'</li>';}).join('')+'</ol></div>'
+  if (n.items) h += '<div class="coach"><b style="color:var(--text);font-weight:500">Série</b><ol style="list-style:none;padding:0">'+n.items.map(function(it){return '<li><span class="eq">'+it[0]+' = '+it[1]+'</span> → <span class="eq">'+it[2]+'</span></li>';}).join('')+'</ol></div>';
+  else h += n.coach ? '<div class="coach"><b style="color:var(--text);font-weight:500">Le coach dit</b><ol>'+n.coach.map(function(c){return '<li>'+c+'</li>';}).join('')+'</ol></div>'
     : '<div class="coach"><b style="color:var(--text);font-weight:500">Indices</b><ol><li>La notion à utiliser.</li><li>L\'action précise (plafonne à ★).</li></ol></div>';
   document.getElementById('panel').innerHTML = h;
 }
