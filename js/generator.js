@@ -47,9 +47,10 @@
      expression (comme generateVariableDenominatorEquation) mais NON factorisé — un
      trinôme identité, à factoriser via "Factoriser" (drillé dans le dénominateur) avant
      ou après avoir posé sa "Condition d'existence".
-   Le tirage se fait en deux temps (EQUATION_GENERATORS vs INEQUALITY_GENERATORS
-   ci-dessous) : 50% de chances de tomber sur une inéquation, 50% sur une égalité,
-   PUIS probabilité strictement égale (1/N) entre les formes du bassin retenu. */
+   Le tirage se fait en deux temps (voir FORMS/generateEquation ci-dessous) : 50% de
+   chances de tomber sur une inéquation, 50% sur une égalité, PUIS probabilité strictement
+   égale (1/N) entre les formes du bassin retenu — parmi les seules formes compatibles avec
+   les options de génération (engrenage du bouton "Générer aléatoirement"). */
 (function (App) {
   'use strict';
 
@@ -478,10 +479,22 @@
   // doit le soustraire des deux côtés avant que "Tableau de signes" n'apparaisse) — plutôt
   // que des générateurs séparés et figés par combinaison, pour que ces cas se recombinent
   // vraiment entre eux au tirage plutôt que de rester cloisonnés.
-  function generateSignChartInequality() {
+  //
+  // `opts` (optionnel, voir generateEquation plus bas) restreint ces ingrédients aux
+  // options de génération : pas de dénominateur en x sans "fractions" ET "domaine de
+  // définition", pas de trinôme à factoriser sans "identités remarquables", et un nombre
+  // de facteurs (donc un degré, 2 ou 3) compris dans l'intervalle de degrés autorisé.
+  function generateSignChartInequality(opts) {
+    var allow = (opts && opts.allow) || {};
+    var minDeg = opts ? opts.minDegree : 1;
+    var maxDeg = opts ? opts.maxDegree : 3;
+    var canDenominator = !opts || (allow.fraction && allow.domain);
+    var canFactoring = (!opts || allow.identities) && minDeg <= 2 && maxDeg >= 2;
+    var canTwoRoots = minDeg <= 2 && maxDeg >= 2;
+    var canThreeRoots = minDeg <= 3 && maxDeg >= 3;
     var operator = App.Ineq.OPERATORS[randInt(0, App.Ineq.OPERATORS.length - 1)];
-    var hasDenominator = Math.random() < 0.5;
-    var needsFactoring = Math.random() < 0.45;
+    var hasDenominator = canDenominator && Math.random() < 0.5;
+    var needsFactoring = canFactoring && Math.random() < 0.45;
     var xOnBothSides = Math.random() < 0.5;
 
     // Numérateur : soit un trinôme identité NON factorisé (2 "racines virtuelles" ∓b/b,b —
@@ -505,7 +518,7 @@
         numRoots = [-b, b];
       }
     } else {
-      var rootCount = Math.random() < 0.35 ? 3 : 2;
+      var rootCount = !canTwoRoots ? 3 : !canThreeRoots ? 2 : (Math.random() < 0.35 ? 3 : 2);
       var roots = [];
       while (roots.length < rootCount) {
         var r = nonZeroInt(-9, 9);
@@ -538,45 +551,75 @@
     return { left: left, right: right, operator: operator };
   }
 
+  // Catalogue des formes, chacune avec les options de génération qu'elle EXIGE (`tags`,
+  // voir TAGS ci-dessous — la forme n'est tirée que si toutes sont activées) et son degré
+  // (`deg` = [min, max] : degré du polynôme à résoudre une fois développé, numérateur seul
+  // pour une fraction ; un intervalle quand la forme varie d'un tirage à l'autre, voir
+  // generateSignChartInequality). "inequality" range la forme dans le bassin des
+  // inéquations plutôt que celui des égalités (voir generateEquation).
+  var FORMS = [
+    { gen: generateLinearEquation, tags: [], deg: [1, 1] },
+    { gen: generateSimplifyFirstLinear, tags: [], deg: [1, 1] },
+    { gen: generateFactorableQuadratic, tags: ['identities', 'produitNul'], deg: [2, 2] },
+    { gen: generateSquareRootEquation, tags: ['sqrt'], deg: [2, 2] },
+    { gen: generateProductEquation, tags: ['produitNul'], deg: [2, 2] },
+    { gen: generateGroupedCommonFactor, tags: ['factoring'], deg: [1, 1] },
+    { gen: generateSquareMinusConstant, tags: ['identities', 'produitNul'], deg: [2, 2] },
+    { gen: generateDiffOfTwoSquaredExpr, tags: ['identities', 'produitNul'], deg: [2, 2] },
+    { gen: generateTripleProductEquation, tags: ['produitNul'], deg: [3, 3] },
+    { gen: generateUnfactoredQuadraticProduct, tags: ['identities', 'produitNul'], deg: [3, 3] },
+    { gen: generateSquaredLinearTimesLinear, tags: ['produitNul'], deg: [3, 3] },
+    { gen: generateFractionEquation, tags: ['fraction'], deg: [1, 1] },
+    { gen: generateVariableDenominatorEquation, tags: ['fraction', 'domain'], deg: [1, 1] },
+    { gen: generateFactorableDenominatorEquation, tags: ['fraction', 'domain', 'identities', 'produitNul'], deg: [2, 2] },
+    { gen: generateVariableRadicandEquation, tags: ['sqrt', 'domain'], deg: [1, 1] },
+    { gen: generateVariableRadicandQuadraticEquation, tags: ['sqrt'], deg: [2, 2] },
+    { gen: generateIdentityPlusProduct, tags: ['identities', 'produitNul'], deg: [2, 2] },
+    { gen: generateTrinomialMinusSquareGroup, tags: ['identities', 'produitNul'], deg: [2, 2] },
+    { gen: generateLinearInequality, tags: ['inequality'], deg: [1, 1] },
+    { gen: generateSignChartInequality, tags: ['inequality', 'signChart'], deg: [2, 3] }
+  ];
+
+  // Options de génération reconnues (voir App.Settings.generatorOptions dans settings.js).
+  var TAGS = ['inequality', 'fraction', 'sqrt', 'factoring', 'identities', 'produitNul', 'domain', 'signChart'];
+  var MIN_DEGREE = 1;
+  var MAX_DEGREE = 3;
+
+  // `opts` = { allow: { <tag>: bool }, minDegree, maxDegree } ; absent = aucune restriction.
+  function eligibleForms(opts) {
+    if (!opts) return FORMS.slice();
+    return FORMS.filter(function (f) {
+      if (f.deg[1] < opts.minDegree || f.deg[0] > opts.maxDegree) return false;
+      return f.tags.every(function (t) { return !!opts.allow[t]; });
+    });
+  }
+
+  function hasEligibleForms(opts) {
+    return eligibleForms(opts).length > 0;
+  }
+
   // Deux bassins séparés — égalités vs inéquations (retour utilisateur : la moitié des
   // équations générées doit être des inéquations) — plutôt qu'une seule liste plate : un
-  // tirage à 50/50 choisit d'abord le bassin, PUIS pioche à probabilité strictement égale
-  // (1/N, voir randInt ci-dessous) dedans, pour que chaque forme au sein d'un même bassin
-  // garde exactement la même chance d'apparaître qu'avant, sans que le nombre (très
-  // inégal) de formes de chaque bassin ne fausse le ratio global égalité/inéquation.
-  var EQUATION_GENERATORS = [
-    generateLinearEquation,
-    generateSimplifyFirstLinear,
-    generateFactorableQuadratic,
-    generateSquareRootEquation,
-    generateProductEquation,
-    generateGroupedCommonFactor,
-    generateSquareMinusConstant,
-    generateDiffOfTwoSquaredExpr,
-    generateTripleProductEquation,
-    generateUnfactoredQuadraticProduct,
-    generateSquaredLinearTimesLinear,
-    generateFractionEquation,
-    generateVariableDenominatorEquation,
-    generateFactorableDenominatorEquation,
-    generateVariableRadicandEquation,
-    generateVariableRadicandQuadraticEquation,
-    generateIdentityPlusProduct,
-    generateTrinomialMinusSquareGroup
-  ];
-
-  var INEQUALITY_GENERATORS = [
-    generateLinearInequality,
-    generateSignChartInequality
-  ];
-
-  function generateEquation() {
-    var pool = Math.random() < 0.5 ? INEQUALITY_GENERATORS : EQUATION_GENERATORS;
-    return pool[randInt(0, pool.length - 1)]();
+  // tirage à 50/50 choisit d'abord le bassin (quand les deux sont non vides), PUIS pioche
+  // à probabilité strictement égale (1/N) dedans, pour que le nombre (très inégal) de
+  // formes de chaque bassin ne fausse pas le ratio global égalité/inéquation.
+  // Renvoie null si aucune forme ne correspond aux options (voir hasEligibleForms).
+  function generateEquation(opts) {
+    var forms = eligibleForms(opts);
+    var ineqPool = forms.filter(function (f) { return f.tags.indexOf('inequality') !== -1; });
+    var eqPool = forms.filter(function (f) { return f.tags.indexOf('inequality') === -1; });
+    var pool = !ineqPool.length ? eqPool : !eqPool.length ? ineqPool
+      : (Math.random() < 0.5 ? ineqPool : eqPool);
+    if (!pool.length) return null;
+    return pool[randInt(0, pool.length - 1)].gen(opts);
   }
 
   App.Generator = {
+    TAGS: TAGS,
+    MIN_DEGREE: MIN_DEGREE,
+    MAX_DEGREE: MAX_DEGREE,
     generateEquation: generateEquation,
+    hasEligibleForms: hasEligibleForms,
     generateLinearEquation: generateLinearEquation,
     generateLinearInequality: generateLinearInequality,
     generateSimplifyFirstLinear: generateSimplifyFirstLinear,

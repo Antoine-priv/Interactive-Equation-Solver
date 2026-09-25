@@ -80,9 +80,89 @@
       <div id="manualError" class="panel-error"></div>
     </div>
     <div class="modal-section">
-      <button id="randomGenerate" type="button">Générer aléatoirement</button>
+      <button id="randomGenerate" type="button">Générer aléatoirement<span class="gen-options-gear" title="Options de génération"></span></button>
       <button id="manualSubmit" type="button">Valider</button>
     </div>
+  </div>
+</div>
+
+<div id="generatorOverlay" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <button id="generatorClose" type="button" class="modal-close" title="Fermer">✕</button>
+    <h2>Options de génération</h2>
+    <div class="settings-group-title">Expressions</div>
+    <div class="settings-list">
+      <label class="settings-row">
+        <span class="settings-label">Inéquations</span>
+        <span class="ios-switch">
+          <input type="checkbox" role="switch" data-setting="gen_inequality" />
+          <span class="ios-switch-track"></span>
+        </span>
+      </label>
+      <label class="settings-row">
+        <span class="settings-label">Fractions</span>
+        <span class="ios-switch">
+          <input type="checkbox" role="switch" data-setting="gen_fraction" />
+          <span class="ios-switch-track"></span>
+        </span>
+      </label>
+      <label class="settings-row">
+        <span class="settings-label">Racines carrées</span>
+        <span class="ios-switch">
+          <input type="checkbox" role="switch" data-setting="gen_sqrt" />
+          <span class="ios-switch-track"></span>
+        </span>
+      </label>
+    </div>
+    <div class="settings-group-title">Méthodes de résolution</div>
+    <div class="settings-list">
+      <label class="settings-row">
+        <span class="settings-label">Factorisation par un facteur commun</span>
+        <span class="ios-switch">
+          <input type="checkbox" role="switch" data-setting="gen_factoring" />
+          <span class="ios-switch-track"></span>
+        </span>
+      </label>
+      <label class="settings-row">
+        <span class="settings-label">Identités remarquables</span>
+        <span class="ios-switch">
+          <input type="checkbox" role="switch" data-setting="gen_identities" />
+          <span class="ios-switch-track"></span>
+        </span>
+      </label>
+      <label class="settings-row">
+        <span class="settings-label">Produit nul</span>
+        <span class="ios-switch">
+          <input type="checkbox" role="switch" data-setting="gen_produitNul" />
+          <span class="ios-switch-track"></span>
+        </span>
+      </label>
+      <label class="settings-row">
+        <span class="settings-label">Domaine de définition</span>
+        <span class="ios-switch">
+          <input type="checkbox" role="switch" data-setting="gen_domain" data-requires="gen_fraction gen_sqrt" />
+          <span class="ios-switch-track"></span>
+        </span>
+      </label>
+      <label class="settings-row">
+        <span class="settings-label">Tableau de signes</span>
+        <span class="ios-switch">
+          <input type="checkbox" role="switch" data-setting="gen_signChart" data-requires="gen_inequality" />
+          <span class="ios-switch-track"></span>
+        </span>
+      </label>
+    </div>
+    <div class="settings-group-title">Degré de l'équation</div>
+    <div class="degree-range-block">
+      <div class="degree-range-value"></div>
+      <div class="degree-range">
+        <div class="degree-range-track"><div class="degree-range-fill"></div></div>
+        <input type="range" data-degree="min" aria-label="Degré minimal" />
+        <input type="range" data-degree="max" aria-label="Degré maximal" />
+      </div>
+      <div class="degree-range-ticks"><span>1</span><span>2</span><span>3</span></div>
+    </div>
+    <div id="generatorEmpty" class="panel-error"></div>
   </div>
 </div>
 

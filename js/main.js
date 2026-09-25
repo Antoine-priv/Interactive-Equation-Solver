@@ -194,7 +194,9 @@
     initDrillDismissal();
     initCanvasPan();
 
-    var startEq = App.Generator.generateEquation();
+    // Options de génération (voir settings.js) respectées dès le chargement ; sans aucune
+    // forme compatible, retombe sur un tirage libre plutôt que de démarrer à vide.
+    var startEq = App.Generator.generateEquation(App.Settings.generatorOptions()) || App.Generator.generateEquation();
     App.History.init(startEq, startEq.operator ? { operator: startEq.operator } : undefined);
 
     window.addEventListener('resize', function () {

@@ -202,6 +202,16 @@ operation, no visible "Simplifier" step. It also makes "Racine carrée" step 1 c
 non-negative constant side directly (`wrapBothInSqrt` in `history.js`: `(x+3)²=9` →
 `√((x+3)²)=3`).
 
+The same file also drives the "Options de génération" window (`#generatorOverlay`, opened
+from the gear shown on hover inside the "Générer aléatoirement" button of the new-equation
+modal): `gen_<tag>` switches (tags in `App.Generator.TAGS`; `data-requires` greys a switch
+out while none of the listed keys is on) plus a min/max degree double slider
+(`genMinDegree`/`genMaxDegree`, 1–3). `App.Settings.generatorOptions()` feeds
+`App.Generator.generateEquation(opts)`, which only draws from the `FORMS` catalog entries
+(`generator.js`) whose `tags` are all enabled and whose `deg` range intersects the slider,
+and returns `null` when none match. A new generator form must be added to `FORMS` with
+its tags and degree.
+
 ## Constraints to preserve
 
 - **Desktop only.** Mobile/responsive support was explicitly removed — don't reintroduce it.

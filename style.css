@@ -2154,6 +2154,120 @@ button {
   .ios-switch-track, .ios-switch-track::after { transition: none; }
 }
 
+/* ---- Fenêtre "Options de génération" (voir initGeneratorOptions dans js/settings.js) :
+   même langage que "Réglages" ci-dessus, en groupes titrés, plus un double curseur de
+   degré. Ouverte PAR-DESSUS la modale "Nouvelle équation" et son clavier ancré (.math-
+   keypad-panel, z-index 60), d'où un z-index plus élevé que les autres .modal-overlay. ---- */
+#generatorOverlay { z-index: 70; }
+.settings-group-title {
+  margin-top: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.settings-group-title + .settings-list { margin-top: 4px; }
+.settings-row-disabled { opacity: 0.45; cursor: default; }
+.settings-row-disabled .ios-switch input { cursor: default; }
+
+.degree-range-block { margin-top: 10px; }
+.degree-range-value { font-size: 0.95rem; margin-bottom: 10px; }
+.degree-range {
+  position: relative;
+  height: 24px;
+}
+.degree-range-track {
+  position: absolute;
+  left: 11px;
+  right: 11px;
+  top: 50%;
+  height: 4px;
+  margin-top: -2px;
+  border-radius: 999px;
+  background: var(--border);
+}
+.degree-range-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: var(--accent);
+}
+/* Deux curseurs natifs superposés : seules leurs poignées captent la souris (piste
+   transparente et `pointer-events: none`), pour que chacune reste attrapable. */
+.degree-range input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  background: none;
+  pointer-events: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.degree-range input[type="range"].degree-thumb-top { z-index: 1; }
+.degree-range input[type="range"]::-webkit-slider-runnable-track { background: none; height: 24px; }
+.degree-range input[type="range"]::-moz-range-track { background: none; }
+.degree-range input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1.5px var(--accent), 0 2px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.degree-range input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 1.5px var(--accent), 0 2px 4px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.degree-range input[type="range"]:focus-visible { outline: none; }
+.degree-range input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-soft-border); }
+.degree-range-ticks {
+  display: flex;
+  justify-content: space-between;
+  padding: 0 7px;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Engrenage "Options de génération" DANS le bouton "Générer aléatoirement", à droite,
+   visible au survol seulement (voir newEquationModal.js pour l'aiguillage du clic). */
+#randomGenerate { position: relative; }
+.gen-options-gear {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  margin-top: -15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.3s ease;
+}
+.gen-options-gear svg { width: 18px; height: 18px; }
+#randomGenerate:hover .gen-options-gear,
+#randomGenerate:focus-visible .gen-options-gear { opacity: 1; }
+.gen-options-gear:hover { background: rgba(255, 255, 255, 0.2); transform: rotate(45deg); }
+@media (prefers-reduced-motion: reduce) {
+  .gen-options-gear { transition: none; }
+  .gen-options-gear:hover { transform: none; }
+}
+
 /* ---- Clavier mathématique unifié (js/mathKeypad.js) ---- */
 .math-keypad-panel {
   position: fixed;

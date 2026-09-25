@@ -132,10 +132,25 @@
     // generateVariableRadicandQuadraticEquation) passent tous deux par
     // stripHtmlWrappers/foldSqrt dans parser.js — plus besoin de filtrer/retirer
     // aucune forme au hasard ici.
-    randomBtn.addEventListener('click', function () {
+    //
+    // Engrenage à droite DANS le bouton (visible au survol, voir .gen-options-gear dans
+    // style.css) : un <span> plutôt qu'un <button> imbriqué (HTML invalide), aiguillé ici
+    // d'après la cible du clic — ouvre "Options de génération" (settings.js) au lieu de
+    // générer.
+    var gear = randomBtn.querySelector('.gen-options-gear');
+    if (gear) gear.innerHTML = App.Settings.GEAR_SVG;
+    randomBtn.addEventListener('click', function (e) {
+      if (e.target.closest('.gen-options-gear')) {
+        App.Settings.openGeneratorOptions();
+        return;
+      }
       // Remplit juste le champ (sans appliquer ni fermer) : l'élève peut relire/modifier
       // avant de valider lui-même, exactement comme une saisie manuelle.
-      var gen = App.Generator.generateEquation();
+      var gen = App.Generator.generateEquation(App.Settings.generatorOptions());
+      if (!gen) {
+        manualError.textContent = 'Aucune équation ne correspond aux options de génération.';
+        return;
+      }
       App.MathKeypad.setLatex(equationToLatex(gen, gen.operator));
       manualError.textContent = '';
     });
