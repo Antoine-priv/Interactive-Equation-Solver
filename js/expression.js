@@ -620,6 +620,11 @@
   // ProductGroup imbriqué dans un autre — voir operandFactors ci-dessus, appliqué aux DEUX
   // côtés (le membre courant ET le multiplicateur) de façon symétrique.
   function wrapSideInProduct(side, multiplierTerms) {
+    // 0 multiplié par une expression vaut 0 (ex. "(x+5)/(4-x) = 0" multiplié par (4-x)) :
+    // jamais de produit "0(4-x)" qu'aucune simplification ne ramènerait ensuite à 0.
+    if (side.length === 1 && !isGroup(side[0]) && side[0].pow === 0 && roundClean(side[0].coeff) === 0) {
+      return [{ coeff: 0, pow: 0 }];
+    }
     // Annule une division PAR CETTE MÊME expression plutôt que de multiplier dessus (ex.
     // "÷(x+5)" puis "×(x+5)" redonne exactement le membre de départ) — voir
     // wrapSideInQuotient, dont ceci est le symétrique. Un ProductGroup/FactorGroup
