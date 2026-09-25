@@ -165,13 +165,17 @@
   // null tant qu'au moins une n'est pas encore résolue. Un dénominateur (kind 'den',
   // équation "=" affichée "≠") EXCLUT ses solutions ; un radicand (kind 'sqrt', moteur en
   // mode inégalité) donne directement son ensemble.
+  // Une colonne scindée (ex. "Racine carrée" sur "x²=9") a une feuille par branche :
+  // l'ensemble de la colonne est la réunion de leurs ensembles.
   function domainRanges(conditions) {
     var Ineq = App.Ineq;
     var result = Ineq.ALL_REALS.slice();
     for (var i = 0; conditions && i < conditions.length; i++) {
-      var eng = conditions[i].engine;
-      var set = Ineq.solutionRanges(eng.lastEquation(), eng.getCurrentOperator());
-      if (!set) return null;
+      var leafSets = leafChainEngines(conditions[i].engine).map(function (le) {
+        return Ineq.solutionRanges(le.lastEquation(), le.getCurrentOperator());
+      });
+      if (leafSets.some(function (ls) { return ls === null; })) return null;
+      var set = Ineq.unionRanges([].concat.apply([], leafSets));
       if (conditions[i].kind === 'den') {
         if (set.length === 1 && set[0].from === -Infinity && set[0].to === Infinity) set = [];
         else set = Ineq.complementOfPoints(set.map(function (r) { return r.from; }));
@@ -179,6 +183,14 @@
       result = Ineq.intersectRanges(result, set);
     }
     return result;
+  }
+
+  // Chaînes PROPRES (jamais déléguées) de toutes les feuilles de l'arbre de scissions de
+  // `engine`, à n'importe quelle profondeur.
+  function leafChainEngines(engine) {
+    var br = engine.getBranches();
+    if (!br) return [engine.getLeaf()];
+    return [].concat.apply([], br.map(leafChainEngines));
   }
 
   // Ligne "S=..." finale (même habillage que le résumé de "Produit nul"/"Df=...").
@@ -2179,7 +2191,7 @@
       ownSteps.forEach(function (step) {
         // Jamais "current" (encadré bleu) : une fois ce noeud scindé, ce n'est plus la
         // ligne active — ce sont ses enfants ci-dessous, chacun avec son propre cadre.
-        var row = createRow(step.equation, { pending: false, solved: false, current: false });
+        var row = createRow(step.equation, { pending: false, solved: false, current: false, eqGlyph: step.operator || opts.eqGlyph });
         container.appendChild(row);
         autoFitRowFont(row);
         ownRowsData.push({
@@ -2248,7 +2260,10 @@
             if (opts.notifyFocus) opts.notifyFocus();
             engine.setFocusedBranch(idx);
           },
-          focused: childFocused
+          focused: childFocused,
+          // "≠" d'une colonne "Condition d'existence" scindée (ex. par "Racine carrée") :
+          // vaut pour chacune de ses sous-branches.
+          eqGlyph: opts.eqGlyph
         });
         if (idx === focusedIdx) {
           focusedChildRes = childRes;
@@ -2301,10 +2316,19 @@
     // "Condition d'existence") donne directement "x<op>r", une demi-droite (voir
     // App.Ineq.halfLineLatex).
     function conditionSetLatex(cond) {
+      if (cond.kind === 'den') {
+        // Toutes les feuilles (colonne éventuellement scindée, voir leafChainEngines).
+        var leafEqs = leafChainEngines(cond.engine).map(function (le) { return le.lastEquation(); });
+        if (!leafEqs.every(App.Equation.isSolved)) return null;
+        var excluded = [];
+        leafEqs.map(App.Equation.solvedValue).sort(function (a, b) { return a - b; }).forEach(function (v) {
+          if (excluded.indexOf(v) === -1) excluded.push(v);
+        });
+        return '\\mathbb{R}\\setminus\\left\\{' + excluded.join('\\,;\\,') + '\\right\\}';
+      }
       var eq = cond.engine.lastEquation();
       if (!App.Equation.isSolved(eq)) return null;
       var r = App.Equation.solvedValue(eq);
-      if (cond.kind === 'den') return '\\mathbb{R}\\setminus\\left\\{' + r + '\\right\\}';
       var steps = cond.engine.getSteps();
       var operator = steps[steps.length - 1].operator || '\\geq';
       return App.Ineq.halfLineLatex(r, operator);
