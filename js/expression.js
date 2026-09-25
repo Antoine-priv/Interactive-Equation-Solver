@@ -1024,7 +1024,11 @@
   // sélection ne correspond pas exactement au motif attendu : l'élève a choisi cette
   // identité en connaissance de cause, une explication concrète est plus utile qu'un
   // simple échec muet.
-  function factorRemarkableIdentityChoice(side, indices, identityType, xCoeff, constVal, aIsX) {
+  // `xPow` (défaut 1) : puissance de x portée par le terme saisi (ex. a = x² pour
+  // x⁴-25 = (x²-5)(x²+5)) — la sélection doit alors contenir un terme en x^(2·xPow) (et un
+  // en x^xPow pour les identités 1/2) au lieu de x²/x.
+  function factorRemarkableIdentityChoice(side, indices, identityType, xCoeff, constVal, aIsX, xPow) {
+    xPow = xPow || 1;
     var idxSet = indices.slice().sort(function (x, y) { return x - y; });
     var selectedNodes = idxSet.map(function (i) { return side[i]; });
     if (selectedNodes.some(isGroup)) {
@@ -1037,15 +1041,16 @@
 
     var x2 = null, x1 = null, x0 = null;
     selectedNodes.forEach(function (t) {
-      if (t.pow === 2 && x2 === null) x2 = t;
-      else if (t.pow === 1 && x1 === null) x1 = t;
+      if (t.pow === 2 * xPow && x2 === null) x2 = t;
+      else if (t.pow === xPow && x1 === null) x1 = t;
       else if (t.pow === 0 && x0 === null) x0 = t;
     });
+    var sqName = xPow === 1 ? 'x²' : 'x^' + (2 * xPow), linName = xPow === 1 ? 'x' : 'x^' + xPow;
 
     // Termes correspondant à ce que l'élève a tapé dans CHAQUE champ, dans L'ORDRE où il
     // les a tapés (a puis b) — plutôt que toujours "le x d'abord" : reproduit fidèlement
     // "a=2,b=x" -> aTerm=2 (constante), bTerm=x, dans cet ordre.
-    var xTerm = { coeff: xCoeff, pow: 1 };
+    var xTerm = { coeff: xCoeff, pow: xPow };
     var constTerm = { coeff: constVal, pow: 0 };
     var aTerm = aIsX ? xTerm : constTerm;
     var bTerm = aIsX ? constTerm : xTerm;
@@ -1054,7 +1059,7 @@
     var group;
     if (identityType === 3) {
       if (idxSet.length !== 2 || !x2 || x1 || !x0) {
-        throw new Error('a²-b² nécessite exactement un terme en x² et un terme constant (sans terme en x).');
+        throw new Error('a²-b² nécessite exactement un terme en ' + sqName + ' et un terme constant (sans terme en ' + linName + ').');
       }
       if (roundClean(x2.coeff) !== roundClean(xCoeff * xCoeff) || roundClean(x0.coeff) !== roundClean(-(constVal * constVal))) {
         throw new Error('La sélection ne correspond pas à a²-b² avec ces valeurs de a et b.');
@@ -1073,7 +1078,7 @@
       };
     } else {
       if (idxSet.length !== 3 || !x2 || !x1 || !x0) {
-        throw new Error('Cette identité nécessite exactement un terme en x², un terme en x et un terme constant.');
+        throw new Error('Cette identité nécessite exactement un terme en ' + sqName + ', un terme en ' + linName + ' et un terme constant.');
       }
       var expectedX1 = identityType === 1 ? 2 * xCoeff * constVal : -2 * xCoeff * constVal;
       if (roundClean(x2.coeff) !== roundClean(xCoeff * xCoeff) || roundClean(x1.coeff) !== roundClean(expectedX1) ||

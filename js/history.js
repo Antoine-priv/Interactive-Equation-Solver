@@ -1081,18 +1081,19 @@
         return { groupBase: pending.idGroupBase, b: bG.coeff };
       }
       // Cas normal : chacun des deux doit être un simple nombre OU un coefficient de x
-      // (jamais x², jamais une somme) — exactement l'un des deux doit être le terme en x,
-      // l'autre une constante.
+      // ou une puissance de x ("x²", pour x⁴-25) (jamais une somme) — exactement l'un des
+      // deux doit être le terme en x, l'autre une constante.
       var termA = singleFlatTerm(pending.idALatex);
       var termB = singleFlatTerm(pending.idBLatex);
-      if (!termA || !termB || termA.pow > 1 || termB.pow > 1) return null;
-      var aIsX = termA.pow === 1, bIsX = termB.pow === 1;
+      if (!termA || !termB) return null;
+      var aIsX = termA.pow > 0, bIsX = termB.pow > 0;
       if (aIsX === bIsX) return null; // ni l'un ni l'autre (ou les deux) porte le x
       return {
         a: termA.coeff,
         b: termB.coeff,
         aIsX: aIsX,
         xCoeff: aIsX ? termA.coeff : termB.coeff,
+        xPow: aIsX ? termA.pow : termB.pow,
         constVal: aIsX ? termB.coeff : termA.coeff
       };
     }
@@ -1242,7 +1243,7 @@
             } else if (bEmptyNow) {
               pending.error = 'Saisissez "b".';
             } else {
-              pending.error = 'L\'un des deux doit être un simple nombre, l\'autre un coefficient de x.';
+              pending.error = 'L\'un des deux doit être un simple nombre, l\'autre un terme en x.';
             }
             notify();
             return false;
@@ -1253,7 +1254,7 @@
             } else if (ab.groupBase) {
               newEqF = target.apply(Expr.factorDifferenceOfSquaresFromGroup(target.array, target.indices, ab.b));
             } else {
-              newEqF = target.apply(Expr.factorRemarkableIdentityChoice(target.array, target.indices, pending.factorMode, ab.xCoeff, ab.constVal, ab.aIsX));
+              newEqF = target.apply(Expr.factorRemarkableIdentityChoice(target.array, target.indices, pending.factorMode, ab.xCoeff, ab.constVal, ab.aIsX, ab.xPow));
             }
           } catch (e3b) {
             pending.error = e3b.message;
@@ -1265,7 +1266,7 @@
           } else if (ab.groupBase) {
             stepDesc = { type: 'factorIdentity', side: target.side, identityType: pending.factorMode, aExpr: ab.groupBase, b: ab.b };
           } else {
-            stepDesc = { type: 'factorIdentity', side: target.side, identityType: pending.factorMode, a: ab.a, b: ab.b, aIsX: ab.aIsX };
+            stepDesc = { type: 'factorIdentity', side: target.side, identityType: pending.factorMode, a: ab.a, b: ab.b, aIsX: ab.aIsX, xPow: ab.xPow };
           }
         }
         var stepF = { equation: newEqF, opLeft: null, opRight: null };
@@ -1422,7 +1423,13 @@
         count: nodes.length,
         hasX2: nodes.some(function (n) { return n.pow === 2; }),
         hasX1: nodes.some(function (n) { return n.pow === 1; }),
-        hasX0: nodes.some(function (n) { return n.pow === 0; })
+        hasX0: nodes.some(function (n) { return n.pow === 0; }),
+        // Degrés (> 0) présents, triés et sans doublon : les identités ne se limitent pas
+        // au degré 2 — "a" peut être k·x^p (ex. x⁴-25 = (x²-5)(x²+5), a = x²), il faut
+        // alors un terme en x^(2p) (et un en x^p pour les identités 1/2).
+        varPows: nodes.map(function (n) { return n.pow; })
+          .filter(function (pw, i, all) { return pw > 0 && all.indexOf(pw) === i; })
+          .sort(function (x, y) { return x - y; })
       };
     }
 
@@ -1435,9 +1442,11 @@
       if (!shape) return false;
       if (mode === 3) {
         if (shape.groupBaseA && shape.groupBaseB) return shape.count === 2;
-        return shape.count === 2 && shape.hasX0 && (shape.groupBase || (shape.hasX2 && !shape.hasX1));
+        if (shape.groupBase) return shape.count === 2 && shape.hasX0;
+        return shape.count === 2 && shape.hasX0 && shape.varPows.length === 1 && shape.varPows[0] % 2 === 0;
       }
-      return shape.count === 3 && shape.hasX2 && shape.hasX1 && shape.hasX0;
+      return shape.count === 3 && shape.hasX0 && shape.varPows.length === 2 &&
+        shape.varPows[1] === 2 * shape.varPows[0];
     }
 
     // Étape 1 -> étape 2 du sélecteur "Factoriser" : mode 'common' (facteur commun,
@@ -1849,8 +1858,8 @@
               previewEqF = pTarget.apply(Expr.factorDifferenceOfSquaresFromGroup(pTarget.array, pTarget.indices, abPrev.b));
               previewDesc = { type: 'factorIdentity', identityType: p.factorMode, aExpr: abPrev.groupBase, b: abPrev.b };
             } else if (abPrev) {
-              previewEqF = pTarget.apply(Expr.factorRemarkableIdentityChoice(pTarget.array, pTarget.indices, p.factorMode, abPrev.xCoeff, abPrev.constVal, abPrev.aIsX));
-              previewDesc = { type: 'factorIdentity', identityType: p.factorMode, a: abPrev.a, b: abPrev.b, aIsX: abPrev.aIsX };
+              previewEqF = pTarget.apply(Expr.factorRemarkableIdentityChoice(pTarget.array, pTarget.indices, p.factorMode, abPrev.xCoeff, abPrev.constVal, abPrev.aIsX, abPrev.xPow));
+              previewDesc = { type: 'factorIdentity', identityType: p.factorMode, a: abPrev.a, b: abPrev.b, aIsX: abPrev.aIsX, xPow: abPrev.xPow };
             } else {
               previewEqF = pTarget.apply(Expr.factorNodesRaw(pTarget.array, pTarget.indices));
             }

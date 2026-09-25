@@ -446,9 +446,11 @@
       // l'AUTRE reste un simple nombre, quel que soit lequel des deux c'est.
       var idForms = { 1: '(a+b)^2', 2: '(a-b)^2', 3: '(a-b)(a+b)' };
       var idForm = idForms[desc.identityType] || '';
+      // desc.xPow (défaut 1) : puissance du terme en x saisi (ex. "x^2" pour x⁴-25).
       function idValLatex(val, isX) {
         if (!isX) return Expr.formatNumberLatex(val);
-        return Expr.roundClean(val) === 1 ? 'x' : Expr.formatNumberLatex(val) + 'x';
+        var xLatex = desc.xPow > 1 ? 'x^{' + desc.xPow + '}' : 'x';
+        return Expr.roundClean(val) === 1 ? xLatex : Expr.formatNumberLatex(val) + xLatex;
       }
       // Cas "(expr)²-constante" (ex. (x+8)²-4, voir factorDifferenceOfSquaresFromGroup et
       // pending.idGroupBase dans history.js) : "a" est une expression déjà factorisée
