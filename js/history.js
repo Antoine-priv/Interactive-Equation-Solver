@@ -2183,10 +2183,24 @@
 
     // Toujours possible dès qu'il y a quoi que ce soit à annuler : soit une étape dans
     // l'enfant focalisé (à N'IMPORTE quelle profondeur, via la récursion sur canUndo
-    // elle-même), soit — à défaut — la scission de CE noeud (voir undo ci-dessous).
+    // elle-même), soit — à défaut — la scission/colonne de CE noeud (voir undo ci-dessous).
     function canUndo() {
       if (branches) return true;
-      return leaf.getSteps().length > 1;
+      // Colonne "Condition d'existence"/facteur du "Tableau de signes" focalisé : à défaut
+      // d'étape propre, retour supprime la colonne elle-même (toujours possible).
+      if (activeChild()) return true;
+      return leaf.getSteps().length > 1 || !!domainConditions || !!signChart;
+    }
+
+    function removeSignChart() {
+      signChart = null;
+      focusedSignChartFactor = null;
+    }
+
+    function removeDomainCondition(index) {
+      domainConditions = domainConditions.filter(function (c, i) { return i !== index; });
+      if (domainConditions.length === 0) domainConditions = null;
+      focusedDomain = null;
     }
 
     // Annule la dernière étape du noeud ACTIF (celui atteint en suivant la chaîne des
@@ -2197,12 +2211,51 @@
     // équation), donc rien d'autre à restaurer. Peu importe l'avancement des AUTRES
     // enfants à ce moment : annuler la scission les annule tous ensemble, symétriquement
     // à la façon dont elle les a tous créés ensemble.
+    // Même principe pour les colonnes qui COEXISTENT avec `leaf` : une colonne "Condition
+    // d'existence" focalisée et épuisée est supprimée seule ; un facteur du "Tableau de
+    // signes" épuisé supprime le tableau entier (ses facteurs sont nés ensemble). Focus
+    // sur la chaîne principale : ordre chronologique — une colonne/un tableau créé APRÈS
+    // la dernière étape de `leaf` (atStep, voir existenceConditionAction/signChartAction)
+    // est retiré avant de toucher à cette étape, dont il dépend.
     function undo() {
       if (branches) {
         if (focusedChild().canUndo()) return focusedChild().undo();
         branches = null;
         focusedBranch = 0;
         branchSplitLabel = '';
+        notify();
+        return true;
+      }
+      if (domainConditions && focusedDomain !== null) {
+        // Tableau de signes construit APRÈS ce domaine (il en exigeait la résolution, voir
+        // signChartDomainReady) : retiré d'abord, avant de défaire quoi que ce soit ici.
+        if (signChart && focusedDomain < signChart.domainCount) {
+          removeSignChart();
+          notify();
+          return true;
+        }
+        var dEng = domainConditions[focusedDomain].engine;
+        if (dEng.canUndo()) return dEng.undo();
+        removeDomainCondition(focusedDomain);
+        notify();
+        return true;
+      }
+      if (signChart && focusedSignChartFactor !== null) {
+        var sEng = signChart.factors[focusedSignChartFactor].engine;
+        if (sEng.canUndo()) return sEng.undo();
+        removeSignChart();
+        notify();
+        return true;
+      }
+      var stepCount = leaf.getSteps().length;
+      if (signChart && signChart.atStep >= stepCount) {
+        removeSignChart();
+        notify();
+        return true;
+      }
+      var lastDomain = domainConditions ? domainConditions.length - 1 : -1;
+      if (lastDomain >= 0 && domainConditions[lastDomain].atStep >= stepCount) {
+        removeDomainCondition(lastDomain);
         notify();
         return true;
       }
@@ -2350,7 +2403,8 @@
         operator: conditionOperator,
         engine: eng,
         solved: false,
-        solvedSetLatex: null
+        solvedSetLatex: null,
+        atStep: leaf.getSteps().length
       }]);
       // Ressort du drill, comme n'importe quelle autre action qui "confirme" (Simplifier,
       // Factoriser...) — sans ça, l'élève reste bloqué dans CE dénominateur/radicand
@@ -2511,7 +2565,8 @@
         eng.subscribe(function () { signChartAutoFillRows(); notify(); });
         return { id: i, kind: f.kind, capturedSide: Expr.cloneSide(f.terms), exponent: f.exponent, engine: eng };
       });
-      signChart = { factors: factors, constantSign: extracted.constantSign, tableRows: [], verified: false };
+      signChart = { factors: factors, constantSign: extracted.constantSign, tableRows: [], verified: false,
+        atStep: leaf.getSteps().length, domainCount: domainConditions ? domainConditions.length : 0 };
       focusedSignChartFactor = null;
       notify();
       return { spawned: true };
