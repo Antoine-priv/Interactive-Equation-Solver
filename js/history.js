@@ -140,6 +140,13 @@
   // ce qui empêche 'click'/'dblclick' natifs de se déclencher de façon fiable dessus.
   var DOUBLE_CLICK_MS = 400;
 
+  // Un facteur de produit réduit à une seule racine carrée (ex. "√(x+2)" dans
+  // "(x-1)√(x+2)") : "entrable" malgré son unique élément, pour pouvoir y poser sa
+  // "Condition d'existence" (voir existenceConditionsFor plus bas).
+  function isLoneSqrt(terms) {
+    return terms.length === 1 && Expr.isSqrtGroup(terms[0]);
+  }
+
   function createEngine() {
     var steps = [];
     var pending = null;
@@ -369,7 +376,7 @@
         if (node && Expr.isProductGroup(node) && typeof branchHint === 'number') {
           var isSq = Expr.isSquareFactorGroup(node);
           var targetArr = isSq ? node.factors[0].terms : node.factors[branchHint].terms;
-          if (targetArr && targetArr.length >= 2) {
+          if (targetArr && (targetArr.length >= 2 || isLoneSqrt(targetArr))) {
             drillIntoProductBranch(side, index, isSq ? 0 : branchHint);
             return;
           }
@@ -611,7 +618,7 @@
       var innerNode = currentNode && Expr.drilledWorkingArray(currentNode, pending.drilled)[innerIndex];
       if (!innerNode || !Expr.isProductGroup(innerNode)) return;
       var branchArr = innerNode.factors[branch] && innerNode.factors[branch].terms;
-      if (!branchArr || branchArr.length < 2) return;
+      if (!branchArr || (branchArr.length < 2 && !isLoneSqrt(branchArr))) return;
       pending.drilled = { side: pending.drilled.side, path: pending.drilled.path.concat([innerIndex]), branch: branch };
       pending.selectedInner = [];
       pending.error = null;
@@ -2366,58 +2373,109 @@
       return radicand.every(function (n) { return !Expr.isGroup(n) && n.pow <= 1; });
     }
 
+    // Conditions d'existence portées par le membre drillé (voir pending.drilled) :
+    // [{ arr, kind:'den'|'sqrt', operator }] — `arr` l'expression étudiée (dénominateur
+    // "≠ 0" ou radicand), `operator` celui de sa colonne. Un dénominateur qui contient une
+    // racine carrée comme facteur (ex. "(x-6)√(x+2)") se décompose facteur par facteur :
+    // "x-6 ≠ 0" et "x+2 > 0" (strict : une racine nulle au dénominateur est interdite) —
+    // sans racine, le dénominateur reste étudié en bloc comme avant. Un radicand drillé
+    // directement, une branche de produit réduite à une racine, ou un membre (numérateur)
+    // dont le produit contient des racines donnent chacun "radicand ≥ 0". Seuls les
+    // radicands linéaires sont retenus (voir isLinearRadicand).
+    function existenceConditionsFor(groupNode, d) {
+      var out = [];
+      function sqrtCondition(node, operator) {
+        if (!isLinearRadicand(node.radicand) || !Expr.sideHasVariable(node.radicand)) return false;
+        out.push({ arr: node.radicand, kind: 'sqrt', operator: operator });
+        return true;
+      }
+      function productSqrtNodes(arr) {
+        if (arr.length === 1 && Expr.isSqrtGroup(arr[0])) return [arr[0]];
+        if (arr.length !== 1 || !Expr.isProductGroup(arr[0])) return [];
+        return arr[0].factors.filter(function (f) { return isLoneSqrt(f.terms); })
+          .map(function (f) { return f.terms[0]; });
+      }
+      if (d.part === 'den') {
+        if (!Expr.isExpressionQuotient(groupNode)) return out;
+        var den = groupNode.factorTerms;
+        if (!productSqrtNodes(den).length) {
+          out.push({ arr: den, kind: 'den', operator: '\\neq' });
+          return out;
+        }
+        var denFactors = Expr.isProductGroup(den[0]) ? den[0].factors.map(function (f) { return f.terms; }) : [den];
+        var ok = denFactors.every(function (terms) {
+          if (isLoneSqrt(terms)) return sqrtCondition(terms[0], '>');
+          if (!Expr.sideHasVariable(terms)) return true;
+          out.push({ arr: terms, kind: 'den', operator: '\\neq' });
+          return true;
+        });
+        return ok ? out : [];
+      }
+      if (d.part === 'sqrt') {
+        if (Expr.isSqrtGroup(groupNode)) sqrtCondition(groupNode, '\\geq');
+        return out;
+      }
+      productSqrtNodes(Expr.drilledWorkingArray(groupNode, d)).forEach(function (n) { sqrtCondition(n, '\\geq'); });
+      return out;
+    }
+
+    function drilledExistenceConditions() {
+      var d = leaf.getPending().drilled;
+      if (!d) return [];
+      var groupNode = Expr.nodeAtPath(leaf.lastEquation()[d.side], d.path);
+      if (!groupNode) return [];
+      return existenceConditionsFor(groupNode, d);
+    }
+
     function canExistenceCondition() {
       if (activeChild()) return activeChild().canExistenceCondition();
-      var d = leaf.getPending().drilled;
-      if (!d) return false;
-      var groupNode = Expr.nodeAtPath(leaf.lastEquation()[d.side], d.path);
-      if (!groupNode) return false;
-      if (d.part === 'den') return Expr.isExpressionQuotient(groupNode);
-      if (d.part === 'sqrt') return Expr.isSqrtGroup(groupNode) && isLinearRadicand(groupNode.radicand);
-      return false;
+      return drilledExistenceConditions().length > 0;
     }
 
     // Clic sur "Condition d'existence" : crée une nouvelle colonne "domaine de
-    // définition" à partir du dénominateur/radicand actuellement drillé (dénominateur ≠
-    // 0, radicand ≥ 0), OU — si un domaine STRUCTURELLEMENT identique (voir
-    // Expr.sidesEquivalent) a déjà été créé par un clic précédent — signale juste son
-    // index pour que l'appelant (toolbar.js) recentre la vue dessus au lieu d'en créer un
-    // second (voir App.Render.panToDomainColumn). `capturedArray` fige une COPIE du
-    // dénominateur/radicand au moment du clic : la colonne créée est ensuite totalement
-    // indépendante de l'équation principale, exactement comme une branche Produit nul.
+    // définition" par condition portée par le membre actuellement drillé (voir
+    // existenceConditionsFor : dénominateur ≠ 0, radicand ≥ 0 ou > 0), OU — si toutes
+    // existent déjà (même expression, même nature, même opérateur, voir
+    // Expr.sidesEquivalent) — signale juste l'index de la première pour que l'appelant
+    // (toolbar.js) recentre la vue dessus au lieu d'en créer une seconde (voir
+    // App.Render.panToDomainColumn). `capturedArray` fige une COPIE de l'expression au
+    // moment du clic : la colonne créée est ensuite totalement indépendante de l'équation
+    // principale, exactement comme une branche Produit nul.
+    function findDomainCondition(c) {
+      for (var i = 0; domainConditions && i < domainConditions.length; i++) {
+        var cond = domainConditions[i];
+        if (cond.kind === c.kind && cond.operator === c.operator && Expr.sidesEquivalent(cond.capturedArray, c.arr)) return i;
+      }
+      return -1;
+    }
+
     function existenceConditionAction() {
       if (activeChild()) return activeChild().existenceConditionAction();
-      if (!canExistenceCondition()) return { spawned: false, pan: false };
-      var d = leaf.getPending().drilled;
-      var groupNode = Expr.nodeAtPath(leaf.lastEquation()[d.side], d.path);
-      var arr = Expr.drilledWorkingArray(groupNode, d);
-      var existingIdx = -1;
-      if (domainConditions) {
-        for (var i = 0; i < domainConditions.length; i++) {
-          if (Expr.sidesEquivalent(domainConditions[i].capturedArray, arr)) { existingIdx = i; break; }
-        }
-      }
-      if (existingIdx >= 0) return { spawned: false, pan: true, index: existingIdx };
-      var conditionOperator = d.part === 'den' ? '\\neq' : '\\geq';
-      var eng = createBranchable();
-      // Le dénominateur (part==='den') reste une équation NORMALE ("=0" à résoudre, sa
-      // colonne relabellise juste la ligne finale en "≠", voir renderDomainSplit dans
-      // render.js) — seul le radicand (part==='sqrt') passe réellement en mode inégalité
-      // (opts.operator, voir init() dans createEngine), sens inversé par tout ×/÷ négatif
-      // le long de sa propre résolution (voir confirm() en mode 'expr').
-      eng.init({ left: Expr.cloneSide(arr), right: [{ coeff: 0, pow: 0 }] },
-        d.part === 'sqrt' ? { operator: conditionOperator } : undefined);
-      eng.subscribe(notify);
-      domainConditions = (domainConditions || []).concat([{
-        id: domainConditions ? domainConditions.length : 0,
-        kind: d.part,
-        capturedArray: Expr.cloneSide(arr),
-        operator: conditionOperator,
-        engine: eng,
-        solved: false,
-        solvedSetLatex: null,
-        atStep: leaf.getSteps().length
-      }]);
+      var conds = drilledExistenceConditions();
+      if (!conds.length) return { spawned: false, pan: false };
+      var fresh = conds.filter(function (c) { return findDomainCondition(c) === -1; });
+      if (!fresh.length) return { spawned: false, pan: true, index: findDomainCondition(conds[0]) };
+      fresh.forEach(function (c) {
+        var eng = createBranchable();
+        // Le dénominateur (kind 'den') reste une équation NORMALE ("=0" à résoudre, sa
+        // colonne relabellise juste la ligne finale en "≠", voir renderDomainSplit dans
+        // render.js) — seul le radicand (kind 'sqrt') passe réellement en mode inégalité
+        // (opts.operator, voir init() dans createEngine), sens inversé par tout ×/÷ négatif
+        // le long de sa propre résolution (voir confirm() en mode 'expr').
+        eng.init({ left: Expr.cloneSide(c.arr), right: [{ coeff: 0, pow: 0 }] },
+          c.kind === 'sqrt' ? { operator: c.operator } : undefined);
+        eng.subscribe(notify);
+        domainConditions = (domainConditions || []).concat([{
+          id: domainConditions ? domainConditions.length : 0,
+          kind: c.kind,
+          capturedArray: Expr.cloneSide(c.arr),
+          operator: c.operator,
+          engine: eng,
+          solved: false,
+          solvedSetLatex: null,
+          atStep: leaf.getSteps().length
+        }]);
+      });
       // Ressort du drill, comme n'importe quelle autre action qui "confirme" (Simplifier,
       // Factoriser...) — sans ça, l'élève reste bloqué dans CE dénominateur/radicand
       // (pending.drilled.side toujours posé empêche tout nouveau clic sur l'AUTRE membre,
@@ -2425,7 +2483,7 @@
       // dénominateur/radicand du même côté sans d'abord ressortir manuellement (Échap).
       // exitDrill() notifie déjà lui-même : pas besoin d'un second notify() ici.
       leaf.exitDrill();
-      return { spawned: true, pan: false, index: domainConditions.length - 1 };
+      return { spawned: true, pan: false, index: domainConditions.length - fresh.length };
     }
 
     function canProduitNul() {
@@ -2493,15 +2551,19 @@
       return trySide('left', 'right') || trySide('right', 'left');
     }
 
-    // Vrai si CHAQUE facteur `kind:'den'` de `denFactors` a une colonne "Condition
-    // d'existence" correspondante (même dénominateur, voir Expr.sidesEquivalent) ET déjà
-    // résolue (App.Equation.isSolved, opérateur-agnostique comme partout ailleurs — pas
-    // besoin de la latex "Df=..." de renderDomainSplit, juste ce même test). Un
-    // `denFactors` vide (aucun dénominateur du tout) est trivialement prêt : le domaine
-    // est alors R tout entier, rien à établir.
-    function signChartDomainReady(denFactors) {
-      return denFactors.every(function (f) {
+    // Vrai si CHAQUE facteur `kind:'den'` et chaque racine carrée (`sqrt`) de `factors` a
+    // une colonne "Condition d'existence" correspondante (même expression, voir
+    // Expr.sidesEquivalent — le radicand pour une racine, en "> 0" strict si elle est au
+    // dénominateur) ET déjà résolue (App.Equation.isSolved, opérateur-agnostique comme
+    // partout ailleurs — pas besoin de la latex "Df=..." de renderDomainSplit, juste ce
+    // même test). Sans dénominateur ni racine, trivialement prêt : le domaine est alors R
+    // tout entier, rien à établir.
+    function signChartDomainReady(factors) {
+      return factors.every(function (f) {
+        if (!f.sqrt && f.kind !== 'den') return true;
         return !!(domainConditions && domainConditions.some(function (cond) {
+          if (cond.kind !== (f.sqrt ? 'sqrt' : 'den')) return false;
+          if (f.sqrt && f.kind === 'den' && cond.operator !== '>') return false;
           return Expr.sidesEquivalent(cond.capturedArray, f.terms) && Eq.isSolved(cond.engine.lastEquation());
         }));
       });
@@ -2546,8 +2608,7 @@
       if (!leaf.getCurrentOperator()) return false;
       var extracted = detectSignChartFactors(leaf.lastEquation());
       if (!extracted) return false;
-      var denFactors = extracted.factors.filter(function (f) { return f.kind === 'den'; });
-      return signChartDomainReady(denFactors);
+      return signChartDomainReady(extracted.factors);
     }
 
     // Clic sur "Tableau de signes" : crée UNE colonne par facteur distinct détecté par
@@ -2575,7 +2636,7 @@
         // notifier normalement — se déclenche naturellement une seule fois, exactement
         // quand getSignChartColumns() passe de null à non-null pour la première fois.
         eng.subscribe(function () { signChartAutoFillRows(); notify(); });
-        return { id: i, kind: f.kind, capturedSide: Expr.cloneSide(f.terms), exponent: f.exponent, engine: eng };
+        return { id: i, kind: f.kind, sqrt: !!f.sqrt, capturedSide: Expr.cloneSide(f.terms), exponent: f.exponent, engine: eng };
       });
       signChart = { factors: factors, constantSign: extracted.constantSign, tableRows: [], verified: false, gridHistory: [],
         atStep: leaf.getSteps().length, domainCount: domainConditions ? domainConditions.length : 0 };
@@ -2670,10 +2731,28 @@
     // toute façon jamais "indéfini" nulle part, seule sa PROPRE racine y vaut "0" ; laisser
     // la case VIDE, elle, reste toujours accepté, voir signChartCellCorrect : seul un
     // ACTUAL non-null est comparé à 'none').
+    // Une racine carrée (`f.sqrt`, `capturedSide` = son radicand) : "0" en la racine du
+    // radicand, "+" là où il est positif, "non définie" ('undef', intervalle hachuré ou
+    // frontière "‖") là où il est négatif — ce qui rend aussi l'expression totale non
+    // définie à ces endroits.
+    function sqrtUndefinedAt(f, col) {
+      var root = Eq.solvedValue(f.engine.lastEquation());
+      if (col.type === 'boundary') {
+        if (col.value === root) return false;
+        return factorSignInInterval(f.capturedSide, root, col.value) < 0;
+      }
+      return factorSignInInterval(f.capturedSide, root, col.from) < 0;
+    }
+
     function signChartExpectedCell(row, col) {
       if (row.rowKind === 'factor') {
         var f = signChart.factors[row.factorIndex];
         var root = Eq.solvedValue(f.engine.lastEquation());
+        if (f.sqrt) {
+          if (sqrtUndefinedAt(f, col)) return 'undef';
+          if (col.type === 'boundary') return col.value === root ? '0' : 'none';
+          return '+';
+        }
         if (col.type === 'boundary') return col.value === root ? '0' : 'none';
         // `row.withPower` (retour utilisateur) : la rangée du facteur "tel quel" dans
         // l'équation, puissance comprise (ex. "(x+2)³"), plutôt que sa racine nue — voir
@@ -2685,11 +2764,13 @@
           : factorSignInInterval(f.capturedSide, root, col.from);
         return sign > 0 ? '+' : '-';
       }
+      if (signChart.factors.some(function (f) { return f.sqrt && sqrtUndefinedAt(f, col); })) return 'undef';
       var denRoots = signChart.factors.filter(function (f) { return f.kind === 'den'; })
         .map(function (f) { return Eq.solvedValue(f.engine.lastEquation()); });
       if (col.type === 'boundary') return denRoots.indexOf(col.value) !== -1 ? 'undef' : '0';
       var sign = signChart.constantSign;
       signChart.factors.forEach(function (f) {
+        if (f.sqrt) return; // positive partout où elle est définie (intervalle ouvert)
         sign *= factorPowerSignInInterval(f.capturedSide, Eq.solvedValue(f.engine.lastEquation()), col.from, f.exponent);
       });
       return sign > 0 ? '+' : '-';
@@ -2783,7 +2864,10 @@
       var row = signChart.tableRows[rowIndex];
       var cols = getSignChartColumns();
       if (!row || !cols || !cols[colIndex]) return false;
-      var allowed = cols[colIndex].type === 'boundary' ? ['0', 'undef'] : ['+', '-'];
+      // Une case intervalle peut aussi être "non définie" dès qu'une racine carrée figure
+      // parmi les facteurs (hors de son domaine, voir sqrtUndefinedAt).
+      var hasSqrt = signChart.factors.some(function (f) { return f.sqrt; });
+      var allowed = cols[colIndex].type === 'boundary' ? ['0', 'undef'] : (hasSqrt ? ['+', '-', 'undef'] : ['+', '-']);
       if (value !== null && allowed.indexOf(value) === -1) return false;
       // Même valeur ET déjà retouchée depuis le dernier "Vérifier" : rien ne change, pas
       // d'étape de retour vide (sinon, reposer la même valeur la décolore, voir dirty).

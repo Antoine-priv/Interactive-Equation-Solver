@@ -126,7 +126,7 @@
     // generateVariableDenominatorEquation dans generator.js) et un radicand-expression au
     // premier niveau (isSqrtGroup, voir generateVariableRadicandEquation/
     // generateVariableRadicandQuadraticEquation) passent tous deux par
-    // stripHtmlWrappers/parseWholeSqrtSide dans parser.js — plus besoin de filtrer/retirer
+    // stripHtmlWrappers/foldSqrt dans parser.js — plus besoin de filtrer/retirer
     // aucune forme au hasard ici.
     randomBtn.addEventListener('click', function () {
       // Remplit juste le champ (sans appliquer ni fermer) : l'élève peut relire/modifier

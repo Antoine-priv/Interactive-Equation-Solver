@@ -4,6 +4,7 @@
   --bg: #f6f7fb;
   --surface: #ffffff;
   --border: #e9eaf0;
+  --hatch: #b8bccb;
   --text: #16181d;
   --text-muted: #6b7280;
   --text-faint: #9aa0ac;
@@ -53,6 +54,7 @@
     --bg: #15161f;
     --surface: #1e2029;
     --border: #2d2f3b;
+    --hatch: #5a5f73;
     --text: #eceef3;
     --text-muted: #9aa0b0;
     --text-faint: #6b7280;
@@ -72,6 +74,7 @@
   --bg: #15161f;
   --surface: #1e2029;
   --border: #2d2f3b;
+  --hatch: #5a5f73;
   --text: #eceef3;
   --text-muted: #9aa0b0;
   --text-faint: #6b7280;
@@ -763,6 +766,12 @@ button {
    .sign-chart-target — seule une case FRONTIÈRE peut jamais valoir "undef" (jamais une
    case intervalle), donc toujours simplement centrée horizontalement ici, sans avoir à
    gérer le cas particulier des colonnes de BORD (-∞/+∞, jamais frontières elles-mêmes). */
+/* "Non défini" sur tout un intervalle (hors du domaine d'une racine carrée, voir
+   renderSignChartTable) : la case entière hachurée, zone interdite habituelle d'un
+   tableau de signes. */
+.sign-chart-cell-hatched {
+  background: repeating-linear-gradient(45deg, var(--hatch) 0 2px, transparent 2px 10px);
+}
 .sign-chart-target-undef {
   position: absolute;
   top: 6px;

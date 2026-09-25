@@ -121,7 +121,8 @@
     // contrairement à la rangée "facteur" bare qui EST sa propre racine, voir
     // signChartFactorPowerLatex plus bas).
     function factorLatex(f) {
-      return f.exponent > 1 ? signChartFactorPowerLatex(f) : '\\left(' + Expr.sideLatex(f.capturedSide) + '\\right)';
+      if (f.exponent > 1) return signChartFactorPowerLatex(f);
+      return f.sqrt ? signChartFactorLatex(f) : '\\left(' + signChartFactorLatex(f) + '\\right)';
     }
     var numFactors = signChart.factors.filter(function (f) { return f.kind === 'num'; });
     var denFactors = signChart.factors.filter(function (f) { return f.kind === 'den'; });
@@ -137,7 +138,14 @@
   // utilisée pour la racine du facteur), TOUJOURS entre \left(\right) pour que l'exposant
   // porte sur l'expression entière plutôt que sur son dernier terme seul.
   function signChartFactorPowerLatex(f) {
-    return '\\left(' + Expr.sideLatex(f.capturedSide) + '\\right)^{' + f.exponent + '}';
+    return '\\left(' + signChartFactorLatex(f) + '\\right)^{' + f.exponent + '}';
+  }
+
+  // LaTeX nu d'un facteur du tableau : son expression, ou "√(radicand)" pour une racine
+  // carrée (`capturedSide` est alors le radicand, voir Expr.extractSignChartFactors).
+  function signChartFactorLatex(f) {
+    var body = Expr.sideLatex(f.capturedSide);
+    return f.sqrt ? '\\sqrt{' + body + '}' : body;
   }
 
   // LaTeX "S=..." (retour utilisateur : même principe que le résumé "S={...}" de "Produit
@@ -2456,6 +2464,9 @@
       var wrap = document.createElement('div');
       wrap.className = 'sign-chart-table-wrap';
       historyEl.appendChild(wrap);
+      // Une racine carrée parmi les facteurs : une case intervalle peut alors valoir "non
+      // défini" (hors de son domaine), une 3e option offerte en plus de +/−.
+      var chartHasSqrt = signChart.factors.some(function (f) { return f.sqrt; });
 
       // Largeurs FIXES (jamais `auto`/`1fr`) dérivées pour que la rangée "x" (-∞, chaque
       // frontière, +∞) tombe à intervalles ÉGAUX (Wb = largeur d'une colonne frontière,
@@ -2545,7 +2556,7 @@
         } else {
           var rowFactor = signChart.factors[row.factorIndex];
           window.katex.render(
-            row.withPower ? signChartFactorPowerLatex(rowFactor) : Expr.sideLatex(rowFactor.capturedSide),
+            row.withPower ? signChartFactorPowerLatex(rowFactor) : signChartFactorLatex(rowFactor),
             labelCell, { throwOnError: false });
         }
         table.appendChild(labelCell);
@@ -2571,8 +2582,13 @@
           // l'appli plutôt qu'un vague clic "n'importe où dans la case".
           var target = document.createElement('span');
           var value = row.cells[colIndex];
+          // "Non défini" sur tout un INTERVALLE (hors du domaine d'une racine carrée, voir
+          // signChartExpectedCell dans history.js) : case entière hachurée, la cible
+          // restant cliquable à sa taille normale — jamais le double trait d'une frontière.
+          var hatched = value === 'undef' && col.type === 'interval';
+          if (hatched) cell.classList.add('sign-chart-cell-hatched');
           target.className = 'sign-chart-target' + (value === null ? ' sign-chart-target-empty' : '') +
-            (value === 'undef' ? ' sign-chart-target-undef' : '');
+            (value === 'undef' && !hatched ? ' sign-chart-target-undef' : '');
           if (value !== null) {
             // "‖" (retour utilisateur : l'étirer sur toute la hauteur de sa case) : jamais
             // le glyphe KaTeX "\Vert" ici, de hauteur fixe liée à la police — un double
@@ -2602,6 +2618,7 @@
             var options = (col.type === 'boundary'
               ? [{ label: '0', value: '0' }, { label: '‖', value: 'undef' }]
               : [{ label: '+', value: '+' }, { label: '−', value: '-' }]
+                .concat(chartHasSqrt ? [{ label: 'Non défini', value: 'undef' }] : [])
             ).concat([{ label: '✕', value: null }]);
             openSignChartPopup(target, options, function (v) {
               engineRoot.signChartSetCell(rowIndex, colIndex, v);
@@ -2630,7 +2647,7 @@
       var availableOptions = [];
       signChart.factors.forEach(function (f, idx) {
         if (!usedBareFactors[idx]) {
-          availableOptions.push({ label: Expr.sideLatex(f.capturedSide), value: { rowKind: 'factor', factorIndex: idx }, latex: true });
+          availableOptions.push({ label: signChartFactorLatex(f), value: { rowKind: 'factor', factorIndex: idx }, latex: true });
         }
         if (f.exponent > 1 && !usedPoweredFactors[idx]) {
           availableOptions.push({

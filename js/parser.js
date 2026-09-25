@@ -31,14 +31,14 @@
   // Coefficient explicite devant une parenthèse ouvrante, ex. "2(" dans "2(5x-7)" : permet
   // de taper directement un FactorGroup déjà factorisé (voir plus bas dans parseSide),
   // plutôt que de ne reconnaître QUE l'équation développée.
-  var FACTOR_COEFF_RE = new RegExp('^(' + NUM + ')\\(');
+  var FACTOR_COEFF_RE = new RegExp('^(' + NUM + ')(?=\\(|\\\\sqrt\\{)');
   // "x(" devant une parenthèse ouvrante, ex. "x(x-5)" dans "x(x-5)=0" : même idée que
   // FACTOR_COEFF_RE ci-dessus mais avec x lui-même (coeff 1, pow 1) comme facteur plutôt
   // qu'une constante — un FactorGroup.factor n'est pas forcément une constante (voir
   // expression.js et detectProduitNul dans history.js, qui traite déjà ce cas produit par
   // "Factoriser par x"). Seulement "x(", jamais "2x(" : ambigu avec un produit de deux
   // facteurs distincts "2x" et "(...)", non pris en charge par cette notation manuelle.
-  var VAR_FACTOR_RE = /^x\(/;
+  var VAR_FACTOR_RE = /^x(?=\(|\\sqrt\{)/;
 
   // Notation "/" (ex. "1/2", "-3/4", "x/2") -> "\frac{...}{...}" LaTeX, appliquée avant
   // toute analyse : la saisie reste "1/2x+3=58-6x" plutôt que d'exiger "\frac{1}{2}x...".
@@ -156,6 +156,29 @@
     return { terms: terms, exponent: suf.exponent, nextPos: suf.nextPos };
   }
 
+  // Un facteur d'une chaîne multiplicative commence-t-il en `pos` : une parenthèse "(...)"
+  // OU une racine carrée "\sqrt{...}" à radicand en x (un radicand purement numérique a
+  // déjà été replié en nombre par foldSqrt, voir parseLatexSide) — ex. le dénominateur
+  // "(x-6)\sqrt{x+2}" de "\frac{(x+8)(x-4)}{(x-6)\sqrt{x+2}}".
+  function isSqrtAt(s, pos) {
+    return s.slice(pos, pos + 6) === '\\sqrt{';
+  }
+  function isChainFactorStart(s, pos) {
+    return s[pos] === '(' || isSqrtAt(s, pos);
+  }
+
+  // Comme readParenFactor, mais accepte aussi "\sqrt{...}" : le facteur est alors un
+  // SqrtGroup SEUL dans ses `terms` (exposant 1), rendu sans parenthèses superflues par
+  // Expr.groupSlotLatex.
+  function readChainFactor(s, pos) {
+    if (!isSqrtAt(s, pos)) return readParenFactor(s, pos);
+    var close = findMatchingBrace(s, pos + 5);
+    if (close === -1) throw new Error('Accolade non fermée près de "' + s.slice(pos) + '".');
+    var radicandStr = s.slice(pos + 6, close);
+    if (!radicandStr) throw new Error('Racine carrée vide.');
+    return { terms: [{ sign: 1, radicand: parseSide(radicandStr) }], exponent: 1, nextPos: close + 1 };
+  }
+
   // Retire, si présent, le suffixe de puissance final de `body` (déjà débarrassé de son
   // signe) : renvoie { body: reste, pow: 0|1|2 }.
   var TRAILING_POW_RE = /x\^([0-9]+)$/;
@@ -193,8 +216,8 @@
       if (coeffMatch) {
         var openIdxF = afterSign + coeffMatch[1].length;
         var coeffVal = parseFloat(coeffMatch[1].replace(',', '.'));
-        var firstParenF = readParenFactor(s, openIdxF);
-        if (firstParenF.exponent === 1 && s[firstParenF.nextPos] !== '(') {
+        var firstParenF = readChainFactor(s, openIdxF);
+        if (firstParenF.exponent === 1 && !isSqrtAt(s, openIdxF) && !isChainFactorStart(s, firstParenF.nextPos)) {
           nodes.push({
             sign: sign,
             factor: { coeff: coeffVal, pow: 0 },
@@ -208,8 +231,8 @@
           { terms: firstParenF.terms, exponent: firstParenF.exponent }
         ];
         var curPosF = firstParenF.nextPos;
-        while (s[curPosF] === '(') {
-          var nfF = readParenFactor(s, curPosF);
+        while (isChainFactorStart(s, curPosF)) {
+          var nfF = readChainFactor(s, curPosF);
           factorsF.push({ terms: nfF.terms, exponent: nfF.exponent });
           curPosF = nfF.nextPos;
         }
@@ -220,8 +243,8 @@
 
       if (VAR_FACTOR_RE.test(s.slice(afterSign))) {
         var openIdxV = afterSign + 1; // longueur de "x"
-        var firstParenV = readParenFactor(s, openIdxV);
-        if (firstParenV.exponent === 1 && s[firstParenV.nextPos] !== '(') {
+        var firstParenV = readChainFactor(s, openIdxV);
+        if (firstParenV.exponent === 1 && !isSqrtAt(s, openIdxV) && !isChainFactorStart(s, firstParenV.nextPos)) {
           nodes.push({
             sign: sign,
             factor: { coeff: 1, pow: 1 },
@@ -235,8 +258,8 @@
           { terms: firstParenV.terms, exponent: firstParenV.exponent }
         ];
         var curPosV = firstParenV.nextPos;
-        while (s[curPosV] === '(') {
-          var nfV = readParenFactor(s, curPosV);
+        while (isChainFactorStart(s, curPosV)) {
+          var nfV = readChainFactor(s, curPosV);
           factorsV.push({ terms: nfV.terms, exponent: nfV.exponent });
           curPosV = nfV.nextPos;
         }
@@ -302,17 +325,28 @@
         }
       }
 
-      if (s[afterSign] === '(') {
+      if (isChainFactorStart(s, afterSign)) {
         // Chaîne d'un ou plusieurs facteurs parenthésés ("(x+2)(x+3)", "(x+3)^2",
         // "(x+2)(x+3)(x+4)^2"...) — jamais un simple terme, boucle dédiée plutôt que
         // TOKEN_RE (qui ne connaît que des termes plats). Au moins 2 facteurs, OU un seul
         // d'exposant >= 2 (ex. "(x+3)^2" seul) : sinon rien ne justifie le ProductGroup.
         var factorsB = [];
         var curPosB = afterSign;
-        while (s[curPosB] === '(') {
-          var nfB = readParenFactor(s, curPosB);
+        while (isChainFactorStart(s, curPosB)) {
+          var nfB = readChainFactor(s, curPosB);
           factorsB.push({ terms: nfB.terms, exponent: nfB.exponent });
           curPosB = nfB.nextPos;
+        }
+        // Une racine carrée seule ("\sqrt{x+2}", ex. tout un numérateur/dénominateur de
+        // fraction) : le SqrtGroup lui-même, signe compris, jamais un ProductGroup à un
+        // seul facteur.
+        if (factorsB.length === 1 && factorsB[0].terms.length === 1 && App.Expr.isSqrtGroup(factorsB[0].terms[0]) &&
+            factorsB[0].exponent === 1) {
+          var loneSqrt = factorsB[0].terms[0];
+          loneSqrt.sign = sign;
+          nodes.push(loneSqrt);
+          pos = curPosB;
+          continue;
         }
         if (factorsB.length < 2 && factorsB[0].exponent < 2) {
           throw new Error('Un groupe entre parenthèses doit être suivi d\'un second facteur "(...)" ou d\'un carré "^2".');
@@ -414,24 +448,29 @@
   }
 
   var SQRT_NUM_RE = new RegExp('^-?' + NUM + '$');
-  // "\sqrt{25}" -> "+5", "\sqrt5" -> "+2.23606797749979" : la racine carrée n'a pas
-  // d'équivalent dans le modèle de données (pas de noeud dédié, voir CLAUDE.md), donc on
-  // l'évalue immédiatement en nombre décimal — un Term({coeff, pow:0}) l'exprime très bien —
-  // sauf si le radicande n'est pas un simple nombre, auquel cas c'est un message clair
-  // plutôt que l'erreur générique de parseSide.
+  // "\sqrt{25}" -> "+5", "\sqrt5" -> "+2.23606797749979" : une racine d'un simple nombre
+  // est évaluée immédiatement en nombre décimal — un Term({coeff, pow:0}) l'exprime très
+  // bien. Un radicand en x (ex. "\sqrt{x+2}") est, lui, laissé en place (accolades
+  // systématiques) pour devenir un vrai SqrtGroup, voir readChainFactor/parseSide.
   function foldSqrt(s) {
     var idx;
+    var from = 0;
     var guard = 0;
-    while ((idx = s.indexOf('\\sqrt')) !== -1) {
+    while ((idx = s.indexOf('\\sqrt', from)) !== -1) {
       var arg = readLatexArg(s, idx + 5);
+      if (++guard > 50) throw new Error('Expression trop complexe.');
       if (!SQRT_NUM_RE.test(arg.text)) {
-        throw new Error('La racine carrée n\'est prise en charge que sur un nombre.');
+        if (!arg.text) throw new Error('Racine carrée vide.');
+        var braced = '\\sqrt{' + arg.text + '}';
+        s = s.slice(0, idx) + braced + s.slice(arg.next);
+        from = idx + 6; // continue DANS le radicand (racine imbriquée "\sqrt{\sqrt{4}+x}")
+        continue;
       }
       var radicand = parseFloat(arg.text.replace(',', '.'));
       if (radicand < 0) throw new Error('Racine carrée d\'un nombre négatif impossible.');
       var value = Math.sqrt(radicand);
       s = s.slice(0, idx) + (value < 0 ? '-' : '+') + Math.abs(value) + s.slice(arg.next);
-      if (++guard > 20) throw new Error('Expression trop complexe.');
+      from = idx;
     }
     return s;
   }
@@ -476,6 +515,7 @@
   // clair plutôt que l'erreur générique de parseSide.
   function foldTimesDiv(s) {
     var guard = 0;
+    s = s.replace(/\\cdot/g, '\\times');
     while (TIMES_DIV_RE.test(s)) {
       s = s.replace(TIMES_DIV_RE, function (m, aStr, op, bStr) {
         var a = parseFlatAtom(aStr);
@@ -500,33 +540,13 @@
       } while (s !== prevS);
       if (++guard > 50) throw new Error('Expression trop complexe.');
     }
+    // "×" juste devant un facteur de chaîne ("(x-6)\\times\\sqrt{x+2}", "2\\cdot(x+1)") : simple
+    // juxtaposition, la notation déjà acceptée par parseSide (voir readChainFactor).
+    s = s.replace(/\\times(?=\(|\\sqrt\{)/g, '');
     if (/\\times|\\div/.test(s)) {
       throw new Error('Multiplication ou division non prise en charge à cet endroit : utilisez la notation "N(...)" pour multiplier par une parenthèse.');
     }
     return s;
-  }
-
-  // "\sqrt{...}" couvrant la TOTALITÉ d'un membre (rien avant, rien après, à part un signe
-  // optionnel), radicand PAS purement numérique (ex. "\sqrt{x+3}", émis par
-  // App.Expr.sideLatex pour un SqrtGroup — voir generateVariableRadicandEquation/
-  // generateVariableRadicandQuadraticEquation dans generator.js et equationToLatex dans
-  // newEquationModal.js, seule source réelle de cette forme) : reconstruit un vrai
-  // SqrtGroup (voir Expr.isSqrtGroup) plutôt que de tenter — et échouer — à le replier en
-  // nombre comme foldSqrt ci-dessous. Cohérent avec l'invariant "toujours seul noeud de son
-  // Side" du modèle de données (voir l'en-tête de expression.js) : dès qu'autre chose
-  // entoure ce \sqrt, on retombe sur foldSqrt (qui continue d'exiger un radicand numérique,
-  // comportement de saisie manuelle inchangé). Un radicand purement numérique (ex.
-  // "\sqrt{25}") est volontairement laissé de côté ici (SQRT_NUM_RE) pour continuer de se
-  // replier en simple nombre, exactement comme avant.
-  function parseWholeSqrtSide(s) {
-    var sign = 1, rest = s;
-    if (rest.charAt(0) === '+') rest = rest.slice(1);
-    else if (rest.charAt(0) === '-') { sign = -1; rest = rest.slice(1); }
-    if (rest.slice(0, 5) !== '\\sqrt') return null;
-    var arg = readLatexArg(rest, 5);
-    if (arg.next !== rest.length) return null;
-    if (SQRT_NUM_RE.test(arg.text)) return null;
-    return [{ sign: sign, radicand: parseSide(arg.text) }];
   }
 
   // Point d'entrée pour le champ <math-field> unifié : convertit son contenu LaTeX en la
@@ -539,8 +559,6 @@
     var s = String(latex).replace(/\{,\}/g, ',').replace(/\\left|\\right/g, '')
       .replace(/\^\{([0-9]+)\}/g, '^$1').replace(/\s+/g, '');
     if (!s) throw new Error('Un membre de l\'équation est vide.');
-    var wholeSqrt = parseWholeSqrtSide(s);
-    if (wholeSqrt) return wholeSqrt;
     s = foldSqrt(s);
     s = foldTimesDiv(s);
     s = normalizeFracBraces(s);

@@ -1354,7 +1354,21 @@
     // puissance comprise" (retour utilisateur) en plus de sa racine nue, et pour que la
     // rangée "Expression totale" tienne compte de la parité de cette puissance
     // (signChartExpectedCell/factorPowerSignInInterval, history.js).
+    // Une racine carrée "√(radicand)" (SqrtGroup, seule dans son facteur de produit ou
+    // numérateur/dénominateur entier) devient une rangée à part (`sqrt:true`) : `terms`
+    // est alors son RADICAND linéaire (c'est lui que résout sa mini-inéquation "> 0", voir
+    // signChartAction dans history.js), la racine étant positive là où elle est définie,
+    // nulle en la racine du radicand, non définie en dessous (signChartExpectedCell).
+    function pushSqrt(node, kind, exponent) {
+      if (!isLinearSide(node.radicand)) return false;
+      if (node.sign < 0) constantSign *= Math.pow(-1, exponent || 1);
+      if (!sideHasVariable(node.radicand)) return true;
+      factors.push({ terms: node.radicand, kind: kind, exponent: exponent || 1, sqrt: true });
+      return true;
+    }
+
     function pushFactor(terms, kind, exponent) {
+      if (terms.length === 1 && isSqrtGroup(terms[0])) return pushSqrt(terms[0], kind, exponent);
       if (terms.length === 1 && !isGroup(terms[0]) && terms[0].pow === 0) {
         constantSign *= Math.pow(terms[0].coeff < 0 ? -1 : 1, exponent || 1);
         return true;
@@ -1371,7 +1385,7 @@
     }
 
     function walkNode(node, kind) {
-      if (isSqrtGroup(node)) return false; // hors-cadre v1 : jamais étudiée comme facteur
+      if (isSqrtGroup(node)) return pushSqrt(node, kind);
       if (isProductGroup(node)) {
         if (node.sign < 0) constantSign *= -1;
         // Jamais Expr.flattenProductFactors ici (contrairement à detectProduitNul) : cette
@@ -1396,7 +1410,7 @@
     if (!factors.length) return null;
     var distinct = [];
     factors.forEach(function (f) {
-      if (!distinct.some(function (d) { return d.kind === f.kind && sidesEquivalent(d.terms, f.terms); })) distinct.push(f);
+      if (!distinct.some(function (d) { return d.kind === f.kind && !!d.sqrt === !!f.sqrt && sidesEquivalent(d.terms, f.terms); })) distinct.push(f);
     });
     return { factors: distinct, constantSign: constantSign };
   }

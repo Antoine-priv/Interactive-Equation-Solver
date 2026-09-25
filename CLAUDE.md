@@ -58,9 +58,16 @@ Equations are `{ left: Side, right: Side }`. A `Side` is `Array<Node>`. A `Node`
   represents a product of N factors, e.g. `(x+2)(x+3)` is 2 factors of exponent 1 each;
   `(x+3)²` is a SINGLE factor of exponent 2.
 - `SqrtGroup = { sign: 1|-1, radicand: Node[] }` — represents `√(radicand)`/`-√(radicand)`.
-  Produced only by "Racine carrée" wrapping an ENTIRE side at once (`Expr.wrapSideInSqrt`,
-  always `sign:1`), never by manual `\sqrt{...}` input (which still folds to a plain number,
-  see `foldSqrt`/parser.js, unchanged). "Racine carrée" is two steps with two different
+  Produced by "Racine carrée" wrapping an ENTIRE side at once (`Expr.wrapSideInSqrt`,
+  always `sign:1`), and by manual `\sqrt{...}` input whose radicand contains x (a numeric
+  radicand still folds to a plain number, see `foldSqrt`/parser.js): alone on a side, as a
+  whole numerator/denominator, or as a ProductGroup factor whose `terms` is that single
+  SqrtGroup (`(x-6)\sqrt{x+2}`, see `readChainFactor`). Such a √ factor gets its own
+  "Condition d'existence" (radicand `≥ 0`, or `> 0` in a denominator — a denominator
+  containing a √ is split into one column per factor, see `existenceConditionsFor`) and
+  its own "Tableau de signes" row (`sqrt:true`, `capturedSide` = radicand: `0` at its root,
+  `+` above, `'undef'` below — hatched interval cells, see `sqrtUndefinedAt`), linear
+  radicands only. "Racine carrée" is two steps with two different
   triggers: step 1 (the √ key in the Opération pad, armed then validated) wraps both full
   sides in `√(...)` as a normal chain step, no branching yet (see
   `detectSquareRootUnwrapped`/`confirmSquareRoot` in `history.js`). Step 2 is the regular
