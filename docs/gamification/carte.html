@@ -1,0 +1,438 @@
+<title>La Carte des équations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Lexend:wght@300;400;500;600&family=STIX+Two+Text:ital,wght@1,500&display=swap">
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --border:#e3e5ef; --text:#16181d; --muted:#5f6675; --faint:#9aa0ac;
+  --accent:#4f46e5; --accent-soft:#eef0fe; --accent-line:#c9cdfa;
+  --done:#0f9d58; --done-soft:#dcf6e6; --boss:#b45309; --boss-soft:#fef3c7; --star:#f59e0b;
+  --lock:#c4c8d4; --lock-fill:#eceef4; --path:#b9bdd0;
+  --z-port:#e7f0ff; --z-plaine:#eaf7ee; --z-foret:#e6f4ec; --z-coll:#fdf2e3; --z-mont:#eeebfb; --z-grotte:#ece6f8; --z-source:#e3f3f8; --z-marais:#eef3e2; --z-cit:#fbe9ea; --z-obs:#e8ecf7; --z-som:#fff6d6;
+  --z-label:#4a5063;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#15161f; --surface:#1e2029; --border:#2d2f3b; --text:#eceef3; --muted:#a2a8b8; --faint:#6b7280;
+  --accent:#8b85ff; --accent-soft:#25264a; --accent-line:#3d3f7a;
+  --done:#34c77b; --done-soft:#153826; --boss:#f0a347; --boss-soft:#3a2a12; --star:#fbbf24;
+  --lock:#4a4e5e; --lock-fill:#262833; --path:#4b4f63;
+  --z-port:#1b2436; --z-plaine:#1a2a22; --z-foret:#18291f; --z-coll:#2e2619; --z-mont:#23213a; --z-grotte:#261f36; --z-source:#172a31; --z-marais:#232a1b; --z-cit:#321d20; --z-obs:#1d2231; --z-som:#2f2a16;
+  --z-label:#b7bccb; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#15161f; --surface:#1e2029; --border:#2d2f3b; --text:#eceef3; --muted:#a2a8b8; --faint:#6b7280;
+  --accent:#8b85ff; --accent-soft:#25264a; --accent-line:#3d3f7a;
+  --done:#34c77b; --done-soft:#153826; --boss:#f0a347; --boss-soft:#3a2a12; --star:#fbbf24;
+  --lock:#4a4e5e; --lock-fill:#262833; --path:#4b4f63;
+  --z-port:#1b2436; --z-plaine:#1a2a22; --z-foret:#18291f; --z-coll:#2e2619; --z-mont:#23213a; --z-grotte:#261f36; --z-source:#172a31; --z-marais:#232a1b; --z-cit:#321d20; --z-obs:#1d2231; --z-som:#2f2a16;
+  --z-label:#b7bccb; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:400 15px/1.6 Lexend,system-ui,sans-serif;padding-inline:20px;padding-block:28px 64px}
+.wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:44px}
+h1,h2,h3{font-family:Fredoka,Lexend,system-ui,sans-serif;font-weight:600;text-wrap:balance;margin:0;line-height:1.2}
+h1{font-size:clamp(28px,4vw,40px)}
+h2{font-size:24px}
+h3{font-size:17px}
+p{margin:0}
+.eq{font-family:"STIX Two Text",Georgia,serif;font-style:italic;font-weight:500;font-size:1.12em;white-space:nowrap}
+.lede{color:var(--muted);max-width:68ch;margin-top:10px}
+header{display:flex;flex-direction:column;gap:6px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600}
+
+/* Map */
+.mapcard{background:var(--surface);border:1px solid var(--border);border-radius:18px;overflow:hidden;display:grid;grid-template-columns:1fr}
+.maptools{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.seg{display:inline-flex;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:3px}
+.seg button{font:500 13px Lexend,sans-serif;border:0;background:none;color:var(--muted);padding:6px 14px;border-radius:999px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.seg button:focus-visible,.node:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.hud{display:flex;gap:16px;font-size:13px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+.hud b{color:var(--text);font-weight:600}
+.mapscroll{overflow-x:auto;border-bottom:1px solid var(--border)}
+svg.map{display:block;width:100%;min-width:1250px;height:auto}
+.zone rect{stroke:none}
+.zone text{font:600 13px Fredoka,sans-serif;fill:var(--z-label);letter-spacing:.02em}
+.zone .zsub{font:400 11px Lexend,sans-serif;fill:var(--faint)}
+.edge{fill:none;stroke:var(--path);stroke-width:3;stroke-dasharray:2 7;stroke-linecap:round}
+.edge.open{stroke:var(--accent-line);stroke-dasharray:none}
+.edge.walked{stroke:var(--done);stroke-dasharray:none;opacity:.55}
+.node{cursor:pointer}
+.node circle.body{stroke-width:3}
+.node.locked circle.body{fill:var(--lock-fill);stroke:var(--lock)}
+.node.open circle.body{fill:var(--surface);stroke:var(--accent)}
+.node.done circle.body{fill:var(--done-soft);stroke:var(--done)}
+.node.boss.open circle.body{stroke:var(--boss);fill:var(--boss-soft)}
+.node .lbl{font:600 12px Fredoka,sans-serif;text-anchor:middle;dominant-baseline:central;fill:var(--text)}
+.node.locked .lbl{fill:var(--faint)}
+.node .stars{font-size:11px;text-anchor:middle;fill:var(--star);letter-spacing:1px}
+.node .halo{fill:none;stroke:var(--accent);stroke-width:2;opacity:0}
+.node.current .halo{animation:pulse 1.8s ease-out infinite}
+.node.sel circle.body{stroke-width:5}
+@keyframes pulse{0%{opacity:.7;r:18}100%{opacity:0;r:32}}
+@media (prefers-reduced-motion:reduce){.node.current .halo{animation:none;opacity:.5}}
+
+.panel{padding:20px 22px;display:grid;grid-template-columns:minmax(240px,1fr) minmax(260px,1.3fr) minmax(240px,1.2fr);gap:14px 28px;align-items:start;background:var(--surface)}
+.panel .col{display:flex;flex-direction:column;gap:12px}
+.panel .pz{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;font-weight:600}
+.panel .peq{background:var(--accent-soft);border-radius:12px;padding:14px;text-align:center;font-size:20px;overflow-x:auto}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;padding:3px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+.chip.st-done{background:var(--done-soft);color:var(--done);border-color:transparent}
+.chip.st-open{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.chip.st-boss{background:var(--boss-soft);color:var(--boss);border-color:transparent}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:13.5px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+.coach{border-left:3px solid var(--accent);padding:4px 0 4px 12px;font-size:13.5px;color:var(--muted)}
+.coach ol{margin:4px 0 0;padding-left:18px}
+
+.legend{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:13px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.dot{width:14px;height:14px;border-radius:50%;border:2.5px solid}
+
+/* Sections */
+section{display:flex;flex-direction:column;gap:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px 18px;display:flex;flex-direction:column;gap:8px}
+.card p,.card li{font-size:14px;color:var(--muted)}
+.card ul{margin:0;padding-left:18px}
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--border);border-radius:14px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:14px}
+th,td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+tr:last-child td{border-bottom:0}
+td .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:1px;border:1px solid var(--border)}
+.starsbig{color:var(--star);letter-spacing:2px}
+code,pre{font-family:ui-monospace,"JetBrains Mono",Menlo,monospace;font-size:12.5px}
+pre{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;overflow-x:auto;margin:0;line-height:1.5}
+.timeline{display:flex;flex-direction:column;gap:0;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:6px 18px}
+.tl{display:grid;grid-template-columns:150px 1fr;gap:14px;padding:12px 0;border-bottom:1px solid var(--border);font-size:14px}
+.tl:last-child{border-bottom:0}
+.tl b{font-family:Fredoka,sans-serif;font-weight:600}
+.tl span{color:var(--muted)}
+.q li{margin-bottom:6px}
+
+@media (max-width:860px){
+  .panel{grid-template-columns:1fr}
+  .hud{margin-left:0}
+  .tl{grid-template-columns:1fr;gap:2px}
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Ébauche de gamification</div>
+    <h1>La Carte des équations</h1>
+    <p class="lede">Un parcours de 52 problèmes répartis en 10 régions, plus un Sommet avec un défi du jour. Le Port sert de tutoriel et fait découvrir l'interface une fonctionnalité à la fois. Ensuite, la carte se sépare en branches, et trois jonctions obligent à croiser les notions. Le mode libre reste accessible dès le départ. Les problèmes marqués d'un point orange demandent d'abord une évolution de l'application. Cliquez sur un nœud pour voir le problème, ce qu'il enseigne et ce que le coach montre.</p>
+  </header>
+
+  <div class="mapcard">
+    <div class="maptools">
+      <div class="seg" role="group" aria-label="Profil simulé">
+        <button id="pf-debut" data-p="debut" aria-pressed="false">Débutant</button>
+        <button id="pf-milieu" data-p="milieu" aria-pressed="true">Mi-parcours</button>
+        <button id="pf-fin" data-p="fin" aria-pressed="false">Presque fini</button>
+      </div>
+      <div class="hud" aria-live="polite">
+        <span>Problèmes <b id="h-done">0</b>/<b id="h-total">0</b></span>
+        <span>Étoiles <b id="h-stars">0</b></span>
+        <span>Badges <b id="h-badges">0</b></span>
+      </div>
+    </div>
+    <div class="mapscroll"><svg class="map" id="map" viewBox="0 0 1710 650" role="img" aria-label="Carte des problèmes"></svg></div>
+    <aside class="panel" id="panel"></aside>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--done-soft);border-color:var(--done)"></i>Résolu (étoiles gagnées)</span>
+    <span><i class="dot" style="background:var(--surface);border-color:var(--accent)"></i>Disponible</span>
+    <span><i class="dot" style="background:var(--boss-soft);border-color:var(--boss)"></i>Épreuve de fin de région</span>
+    <span><i class="dot" style="background:var(--lock-fill);border-color:var(--lock)"></i>Verrouillé</span>
+    <span><i class="dot" style="width:10px;height:10px;background:var(--boss);border-color:var(--boss)"></i>Demande une évolution de l'application</span>
+    <span>Trait plein : chemin ouvert · pointillés : chemin à venir</span>
+  </div>
+
+  <section>
+    <h2>Les régions et leurs embranchements</h2>
+    <p class="lede" style="margin-top:0">Une région s'ouvre dès que ses prérequis sont résolus. Le Marais, la Citadelle et l'Observatoire sont des jonctions : elles exigent deux branches terminées, ce qui oblige à croiser les notions.</p>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Région</th><th>Notion</th><th>S'ouvre après</th><th>Récompense</th></tr></thead>
+      <tbody id="zonesTable"></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>L'évolution du joueur</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Étoiles par problème</h3>
+        <p><span class="starsbig">★</span> Arriver à la ligne « S = … » correcte.</p>
+        <p><span class="starsbig">★★</span> Sans indice et sans « Annuler ».</p>
+        <p><span class="starsbig">★★★</span> En au plus <i>n</i> étapes, le nombre optimal indiqué sur le problème.</p>
+        <p>« Simplifier » ne compte jamais comme une étape, avec ou sans le réglage « Toujours simplifier ». Un problème peut être rejoué pour améliorer son score. Les étoiles ne bloquent que le Sommet.</p>
+      </div>
+      <div class="card">
+        <h3>Déblocages</h3>
+        <ul>
+          <li>Dans la campagne, seuls les boutons qui agissent sur l'équation (Simplifier, Développer, Factoriser, Produit nul, √, Condition d'existence, Tableau de signes) apparaissent quand le problème qui les présente est atteint. Le reste de l'interface est toujours visible.</li>
+          <li>Le mode libre est ouvert dès le départ, avec tous les boutons et tous les générateurs.</li>
+          <li>Chaque région terminée ajoute sa fiche mémo, consultable depuis la carte.</li>
+          <li>Le réglage « Toujours simplifier » se débloque dans la campagne après la Plaine.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Badges</h3>
+        <ul id="badgeList"></ul>
+      </div>
+    </div>
+    <div class="timeline" id="timeline"></div>
+  </section>
+
+  <section>
+    <h2>Le tutoriel intégré</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Un coach, pas un mode d'emploi</h3>
+        <p>Dans le Port, une bulle pointe l'élément à utiliser (terme, pavé Opération, bouton Simplifier) et le met en surbrillance. Elle attend l'action attendue, puis passe à la suivante. Les autres actions restent possibles : le joueur n'est jamais bloqué.</p>
+      </div>
+      <div class="card">
+        <h3>Les indices ensuite</h3>
+        <p>Hors du Port, un bouton « Indice » désigne d'abord la notion (« pense à factoriser »), puis l'action précise. Utiliser un indice plafonne le problème à ★.</p>
+      </div>
+      <div class="card">
+        <h3>Des pièges voulus</h3>
+        <p>Quelques problèmes sont construits pour faire échouer le réflexe : une valeur interdite qui apparaît comme solution, un sens d'inégalité à inverser, une racine d'un nombre négatif. Les repérer rapporte un badge.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Esquisse technique</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Nouveaux fichiers</h3>
+        <ul>
+          <li><code>js/levels.js</code> : le catalogue des problèmes (données pures), chargé après <code>generator.js</code>.</li>
+          <li><code>js/progress.js</code> : étoiles, badges et déblocages dans <code>localStorage</code>, comme <code>App.Settings</code>.</li>
+          <li><code>js/map.js</code> : la carte en SVG et le coach, chargés avant <code>main.js</code>.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Détecter la réussite</h3>
+        <p>La ligne finale existe déjà (<code>App.Ineq.solutionRanges</code>). Il suffit de comparer ces intervalles à la solution attendue du niveau, et de compter les étapes de la chaîne et les appels à « Annuler ».</p>
+      </div>
+      <div class="card">
+        <h3>Contraintes respectées</h3>
+        <p>Pas de réseau, pas de build, ES5 et <code>file://</code>. La carte n'est qu'un écran de plus avant le canevas existant, qui n'a pas à changer.</p>
+      </div>
+    </div>
+<pre>// js/levels.js — un niveau
+{ id: 'm5', zone: 'marais', title: 'Le faux ami',
+  latex: '\\frac{(x+3)(x+1)}{x+3}=0',
+  requires: ['m4'],
+  solution: [{ eq: -1 }],         // −3 est exclu par la condition d'existence
+  par: 4,                         // nombre d'étapes pour ★★★
+  teaches: ['domain'],
+  badge: 'chasseur-interdits',
+  hints: ['Commence par la condition d\'existence.', 'Factorise le numérateur.'] }</pre>
+  </section>
+
+  <section>
+    <h2>Ce que l'application doit apprendre à faire</h2>
+    <p class="lede" style="margin-top:0">J'ai vérifié ces points dans le code. Tout le reste de la carte fonctionne déjà avec l'application actuelle, y compris l'exercice 23 question 1, que le tableau de signes accepte tel quel.</p>
+    <div class="grid">
+      <div class="card"><h3>Facteur de signe constant</h3><p>Le tableau de signes n'accepte que des facteurs de degré 1 au plus. Il faut une ligne « x² + 1 : toujours + » pour l'exercice 23 question 2, et reconnaître (x² + 10x + 25) = (x + 5)² pour la question 3.</p></div>
+      <div class="card"><h3>Simplifier un quotient</h3><p>« Simplifier » ne supprime pas encore un facteur commun au numérateur et au dénominateur. Pour l'exercice 24, il faut passer de h à (x + 5)/(4 − x) en gardant x ≠ 2/3 visible, comme le « si (…) ≠ 0 » actuel.</p></div>
+      <div class="card"><h3>Racine d'un quotient</h3><p>La condition d'existence ne traite que des radicandes linéaires. √(1/x) demande de chaîner deux conditions (x ≠ 0 et 1/x ≥ 0) pour le problème des jumeaux.</p></div>
+      <div class="card"><h3>Problèmes « Df seul » et en plusieurs parties</h3><p>Un niveau « Df » est réussi quand toutes ses colonnes « Condition d'existence » sont résolues, sans équation à finir. Un problème en plusieurs parties partage l'énoncé f, g, h entre plusieurs nœuds.</p></div>
+      <div class="card"><h3>Factoriser un trinôme</h3><p>Pour 2x² − 3x + 1, l'élève saisit la forme factorisée proposée par l'énoncé (« Développer (2x − 1)(x − 1) ») et l'application vérifie l'égalité en développant.</p></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+var Z = {
+  port:{name:'Le Port', sub:'Tutoriel', lp:'br', fill:'--z-port', x:30,y:250,w:330,h:380, notion:'Prise en main : sélection, Opération, glisser, Simplifier, navigation', after:'Départ', reward:'Badge « Premiers pas »'},
+  plaine:{name:'La Plaine', sub:'Équations du 1er degré', lx:500, fill:'--z-plaine', x:360,y:285,w:330,h:245, notion:'x des deux côtés, parenthèses, Développer, cas S = ∅ et S = ℝ', after:'Le Port', reward:'Réglage « Toujours simplifier » dans la campagne, fiche mémo'},
+  foret:{name:'La Forêt', sub:'Fractions', fill:'--z-foret', x:390,y:66,w:300,h:174, notion:'\\frac, multiplier pour chasser les dénominateurs', after:'Plaine, 1er problème', reward:'Fiche mémo'},
+  coll:{name:'Les Collines', sub:'Inéquations', lx:652, fill:'--z-coll', x:580,y:537,w:320,h:100, notion:'Sens de l\'inégalité, S en intervalles', after:'Plaine, 5e problème', reward:'Badge « Retourneur », fiche mémo'},
+  mont:{name:'La Montagne', sub:'Degré 2', fill:'--z-mont', x:700,y:230,w:390,h:190, notion:'Produit nul, Factoriser, facteur commun', after:'Épreuve de la Plaine', reward:'Badge « Alpiniste », fiche mémo'},
+  grotte:{name:'La Grotte', sub:'Identités remarquables', fill:'--z-grotte', x:860,y:66,w:250,h:154, notion:'a² − b², (a ± b)²', after:'Montagne, 3e problème', reward:'Fiche mémo'},
+  source:{name:'La Source', sub:'Racine carrée', lp:'bl', fill:'--z-source', x:920,y:430,w:280,h:195, notion:'Racine carrée en deux temps, branches ±', after:'Montagne, 5e problème', reward:'Badge « Racine double », fiche mémo'},
+  marais:{name:'Le Marais', sub:'Ensembles de définition', fill:'--z-marais', x:1120,y:66,w:285,h:314, notion:'Df d\'une fonction, valeurs interdites, √ d\'une expression, simplification piégée', after:'Forêt + Montagne', reward:'Badge « Chasseur d\'interdits », fiche mémo'},
+  cit:{name:'La Citadelle', sub:'Tableau de signes', lp:'bl', fill:'--z-cit', x:1215,y:390,w:290,h:245, notion:'Produits et quotients comparés à 0, facteur de signe constant', after:'Collines + Montagne', reward:'Badge « Stratège », fiche mémo'},
+  obs:{name:'L\'Observatoire', sub:'Fonctions, problèmes en plusieurs parties', fill:'--z-obs', x:1420,y:66,w:270,h:314, notion:'Enchaîner factorisation, Df, simplification, équations et inéquations sur une même fonction', after:'Marais + Citadelle', reward:'Badge « Astronome »'},
+  som:{name:'Le Sommet', sub:'Défi du jour', fill:'--z-som', x:1520,y:400,w:170,h:170, notion:'Une équation générée par jour, toutes notions confondues', after:'Observatoire + 110 ★', reward:'Badge « Cartographe »'}
+};
+// req: prérequis ; par: étapes pour ★★★ (Simplifier ne compte pas) ; kind 'domain': réussi quand Df est établi ;
+// app: évolution de l'application nécessaire
+var N = [
+ {id:'t1',x:70,y:560,z:'port',req:[],t:'Premier pas',eq:'x + 3 = 7',learn:'Isoler x en retirant la même chose des deux côtés',feat:'Cliquer un terme, pavé Opération « −3 »',par:1,coach:['Clique sur le 3.','Le pavé Opération s\'ouvre : tape −3 et valide.','Clique sur « Simplifier » : x = 4 apparaît, puis S = {4}.']},
+ {id:'t2',x:150,y:500,z:'port',req:['t1'],t:'Ajouter',eq:'x − 5 = 2',learn:'Ajouter aux deux côtés',feat:'Lire la flèche entre deux étapes',par:1,coach:['Même geste, mais avec +5.','Regarde la flèche : elle rappelle l\'opération faite.']},
+ {id:'t3',x:100,y:430,z:'port',req:['t2'],t:'Diviser',eq:'3x = 12',learn:'Diviser par le coefficient',feat:'Opération « ÷3 »',par:1,coach:['Tape ÷3 dans le pavé.','Simplifie : x = 4.']},
+ {id:'t4',x:185,y:375,z:'port',req:['t3'],t:'Faire glisser',eq:'x + 8 = 3',learn:'Passer un terme de l\'autre côté',feat:'Glisser un terme au-delà du « = »',par:1,coach:['Attrape le 8 et lâche-le de l\'autre côté du « = ».','L\'application écrit « −8 » des deux côtés pour toi.']},
+ {id:'t5',x:120,y:305,z:'port',req:['t4'],t:'Deux étapes',eq:'2x + 5 = 11',learn:'Enchaîner soustraction puis division',feat:'Glisser le coefficient 2 pour diviser',par:2,coach:['Retire d\'abord le 5.','Glisse ensuite le 2 de 2x de l\'autre côté : c\'est une division.']},
+ {id:'t6',x:215,y:265,z:'port',req:['t5'],t:'Rassembler',eq:'3x + 2x − 4 = 11',learn:'Regrouper les termes semblables',feat:'Sélection multiple et « Simplifier »',par:2,coach:['Sélectionne 3x puis 2x.','« Simplifier » les réunit en 5x.']},
+ {id:'t7',x:310,y:300,z:'port',req:['t6'],t:'Grand large',eq:'5x + 3 = 2x + 12',learn:'x des deux côtés',feat:'Déplacer le canevas et zoomer (loupes, Ctrl + molette)',par:3,boss:1,badge:'Premiers pas',coach:['La chaîne va s\'allonger : fais glisser le fond pour te déplacer.','Utilise les loupes pour voir toute la résolution.']},
+
+ {id:'l1',x:400,y:340,z:'plaine',req:['t7'],t:'Les négatifs',eq:'4x − 7 = −2x + 5',learn:'Signes et x des deux côtés',par:3},
+ {id:'l2',x:470,y:395,z:'plaine',req:['l1'],t:'Virgules',eq:'0,5x + 1,2 = 3',learn:'Coefficients décimaux',par:2},
+ {id:'l3',x:420,y:470,z:'plaine',req:['l2'],t:'Parenthèses',eq:'3(x + 2) = 2x − 1',learn:'Développer avant de résoudre',feat:'Bouton « Développer »',par:3},
+ {id:'l4',x:510,y:490,z:'plaine',req:['l3'],t:'Le moins devant',eq:'5 − 2(x − 3) = x',learn:'Distribuer un facteur négatif',par:4},
+ {id:'l5',x:590,y:450,z:'plaine',req:['l4'],t:'Aucune ou toutes',eq:'2x + 3 = 2x + 5',learn:'Reconnaître S = ∅ (et S = ℝ en variante)',par:1,trap:'Les x disparaissent : il faut lire la ligne finale 3 = 5.'},
+ {id:'lB',x:640,y:370,z:'plaine',req:['l5'],t:'Épreuve de la Plaine',eq:'2(3x − 1) − (x + 4) = 3(x − 2) + 7',learn:'Tout le 1er degré à la fois',par:6,boss:1,badge:'Équilibriste'},
+
+ {id:'f1',x:440,y:190,z:'foret',req:['l1'],t:'Le tiers',eq:'x/3 + 1 = 4',learn:'Multiplier pour chasser un dénominateur',par:2},
+ {id:'f2',x:530,y:140,z:'foret',req:['f1'],t:'Numérateur',eq:'(2x + 1)/5 = 3',learn:'Fraction d\'une expression',par:3},
+ {id:'f3',x:630,y:175,z:'foret',req:['f2'],t:'Deux fractions',eq:'x/2 + x/3 = 5',learn:'Dénominateur commun',par:3,boss:1},
+
+ {id:'i1',x:625,y:590,z:'coll',req:['l5'],t:'Plus petit que',eq:'x + 4 < 9',learn:'Mêmes règles que pour =',feat:'Relation « < » dans la fenêtre Nouvelle équation',par:1},
+ {id:'i2',x:710,y:600,z:'coll',req:['i1'],t:'Le retournement',eq:'−2x ≥ 6',learn:'Diviser par un négatif inverse le sens',par:1,badge:'Retourneur',trap:'Le sens de l\'inégalité doit changer.'},
+ {id:'i3',x:790,y:570,z:'coll',req:['i2'],t:'Des deux côtés',eq:'3x − 1 > 5x + 7',learn:'Choisir le côté où garder x',par:3},
+ {id:'iB',x:865,y:590,z:'coll',req:['i3'],t:'Épreuve des Collines',eq:'2(x − 1) ≤ 5x + 4',learn:'Inéquation avec parenthèses',par:4,boss:1},
+
+ {id:'p1',x:735,y:340,z:'mont',req:['lB'],t:'Produit nul',eq:'(x − 2)(x + 5) = 0',learn:'Un produit est nul si un facteur l\'est',feat:'Sélectionner le produit, « Produit nul », colonnes côte à côte',par:3},
+ {id:'p2',x:800,y:290,z:'mont',req:['p1'],t:'Trois facteurs',eq:'x(x − 1)(2x + 3) = 0',learn:'Autant de branches que de facteurs',par:4},
+ {id:'p3',x:870,y:340,z:'mont',req:['p2'],t:'Mettre en facteur',eq:'x² + 3x = 0',learn:'Factoriser par x',feat:'Bouton « Factoriser »',par:3},
+ {id:'p4',x:940,y:290,z:'mont',req:['p3'],t:'Facteur commun',eq:'(x + 1)(2x − 3) + (x + 1)(x + 4) = 0',learn:'Factoriser par une parenthèse',par:5},
+ {id:'p5',x:1000,y:350,z:'mont',req:['p4'],t:'Tout d\'un côté',eq:'x² = 5x',learn:'Ramener à 0 avant de factoriser',par:4,trap:'Diviser par x fait perdre la solution 0.'},
+ {id:'pB',x:1060,y:280,z:'mont',req:['p5'],t:'Épreuve de la Montagne',eq:'x³ − 4x = 0',learn:'Degré 3 : factoriser deux fois',par:5,boss:1,badge:'Alpiniste'},
+
+ {id:'g1',x:905,y:185,z:'grotte',req:['p3'],t:'Différence de carrés',eq:'x² − 9 = 0',learn:'a² − b² = (a − b)(a + b)',par:4},
+ {id:'g2',x:990,y:150,z:'grotte',req:['g1'],t:'Carré parfait',eq:'x² + 6x + 9 = 0',learn:'(a + b)², solution double',par:3},
+ {id:'g3',x:1070,y:170,z:'grotte',req:['g2'],t:'Deux carrés',eq:'(2x + 1)² − (x − 3)² = 0',learn:'a² − b² avec des expressions',par:6,boss:1},
+
+ {id:'r1',x:965,y:480,z:'source',req:['p5'],t:'Racine carrée',eq:'x² = 16',learn:'√ des deux côtés puis ±',feat:'Touche √ du pavé, puis « Simplifier » côté par côté',par:2,badge:'Racine double'},
+ {id:'r2',x:1040,y:520,z:'source',req:['r1'],t:'Carré d\'une expression',eq:'(x + 3)² = 9',learn:'Deux branches à résoudre',par:4},
+ {id:'r3',x:1110,y:570,z:'source',req:['r2'],t:'Racine non entière',eq:'(2x − 1)² = 5',learn:'Garder √5 exact',par:6},
+ {id:'r4',x:1165,y:490,z:'source',req:['r3'],t:'Pas de racine',eq:'x² = −4',learn:'Un carré n\'est jamais négatif',par:1,boss:1,trap:'S = ∅, rien à calculer.'},
+
+ {id:'m1',x:1160,y:150,z:'marais',req:['f3','pB'],t:'Df d\'un quotient',eq:'f(x) = 1/(1 + x)',kind:'domain',learn:'Df = ℝ \\ {−1}',feat:'Colonne « Condition d\'existence »',par:2,src:'Exercice 22'},
+ {id:'m2',x:1240,y:138,z:'marais',req:['m1'],t:'Df d\'une racine',eq:'g(x) = √(3 − 2x)',kind:'domain',learn:'Df = ]−∞ ; 3/2]',par:2,src:'Exercice 22'},
+ {id:'m3',x:1320,y:140,z:'marais',req:['m2'],t:'Dénominateur en x',eq:'3/(x − 2) = 1',learn:'Condition x ≠ 2, puis résoudre',par:4},
+ {id:'m4',x:1370,y:210,z:'marais',req:['m3'],t:'Quotient',eq:'(x + 1)/(x − 3) = 2',learn:'Multiplier par un dénominateur en x',par:4},
+ {id:'m5',x:1295,y:220,z:'marais',req:['m4'],t:'Le faux ami',eq:'(x + 3)(x + 1)/(x + 3) = 0',learn:'−3 annule le numérateur mais est interdite',par:4,badge:'Chasseur d\'interdits',trap:'Écrire S = {−3 ; −1} au lieu de S = {−1}. Le niveau exige la condition d\'existence avant de valider.'},
+ {id:'m6',x:1210,y:235,z:'marais',req:['m5'],t:'Le faux ami caché',eq:'(x² − 9)/(x + 3) = 0',learn:'Le même piège, après factorisation',par:5,trap:'Même valeur interdite, moins visible.'},
+ {id:'m7',x:1170,y:310,z:'marais',req:['m6'],t:'Racine d\'expression',eq:'√(x + 2) = 3',learn:'Radicande ≥ 0',par:3},
+ {id:'m8',x:1260,y:330,z:'marais',req:['m7'],t:'Les jumeaux',eq:'√x = 0   et   1/√(1/x) = 0',learn:'Même expression après simplification, domaines différents : [0 ; +∞[ contre ]0 ; +∞[',par:4,trap:'La première donne S = {0}, la seconde S = ∅.',app:'Condition d\'existence d\'un radicande qui est lui-même un quotient (√(1/x)).'},
+ {id:'mB',x:1350,y:300,z:'marais',req:['m8'],t:'Épreuve du Marais',eq:'(x − 6)√(x − 8) = 0',learn:'Produit nul et domaine',par:4,boss:1,trap:'x = 6 est hors du domaine.'},
+
+ {id:'s1',x:1250,y:430,z:'cit',req:['iB','pB'],t:'Signe d\'un produit',eq:'(x − 1)(x + 3) > 0',learn:'Lire un tableau de signes',feat:'« Tableau de signes »',par:3},
+ {id:'s2',x:1320,y:470,z:'cit',req:['s1'],t:'Facteur inversé',eq:'(2 − x)(x + 4) ≤ 0',learn:'Un facteur décroissant',par:3},
+ {id:'s3',x:1260,y:535,z:'cit',req:['s2'],t:'Le moins devant',eq:'−(x + 1)(x − 2)/(1 − x) ≥ 0',learn:'Signe de tête, valeur interdite en double barre',par:4,src:'Exercice 23, question 1'},
+ {id:'s4',x:1355,y:575,z:'cit',req:['s3'],t:'Trois facteurs',eq:'x(x − 1)(x + 2) < 0',learn:'Degré 3',par:4},
+ {id:'s5',x:1440,y:600,z:'cit',req:['s4'],t:'Toujours positif',eq:'(2x² − 3x + 1)/(x² + 1) ≤ 0',learn:'Factoriser le numérateur en (2x − 1)(x − 1) ; x² + 1 est toujours positif',par:4,src:'Exercice 23, question 2',app:'Tableau de signes avec un facteur de signe constant de degré 2 (x² + 1), et factorisation d\'un trinôme vérifiée par développement.'},
+ {id:'sB',x:1455,y:480,z:'cit',req:['s5'],t:'Épreuve de la Citadelle',eq:'(x² − 4)/(x − 1) ≤ 0',learn:'Factoriser puis étudier le signe',par:5,boss:1,badge:'Stratège'},
+
+ {id:'o1',x:1465,y:150,z:'obs',req:['mB','sB'],t:'h(x) = 0',eq:'h(x) = f(x)/g(x) = 0',learn:'f = 9x² − 4 + (3 − 2x)(3x − 2) et g = x² + 2x + 1 − (2x − 3)². Factoriser f et g, poser Df, résoudre.',par:8,src:'Exercice 24',trap:'2/3 annule le numérateur mais est interdite.'},
+ {id:'o2',x:1550,y:200,z:'obs',req:['o1'],t:'h(x) = 3',eq:'h(x) = 3',learn:'Simplifier h en (x + 5)/(4 − x) sans oublier x ≠ 2/3',par:5,src:'Exercice 24',app:'Simplifier un facteur commun dans un quotient en gardant la valeur exclue.'},
+ {id:'o3',x:1625,y:260,z:'obs',req:['o2'],t:'h(x) < 0',eq:'h(x) < 0',learn:'Tableau de signes de la forme simplifiée, 2/3 toujours exclue',par:4,src:'Exercice 24'},
+ {id:'oB',x:1520,y:320,z:'obs',req:['o3'],t:'Épreuve de l\'Observatoire',eq:'√(x + 8)(x² + 10x + 25)(−x + 3) / ((x² − 4)√(−x + 6)) ≥ 0',learn:'Df puis signe : identités, racines au numérateur et au dénominateur',par:10,boss:1,badge:'Astronome',src:'Exercice 23, question 3',trap:'Racine au dénominateur : condition stricte −x + 6 > 0. −5 est une racine double.'},
+
+ {id:'top',x:1605,y:490,z:'som',req:['oB'],t:'Le Sommet',eq:'Défi du jour',learn:'Une équation générée chaque jour, la même pour tout le monde ce jour-là',par:0,boss:1,badge:'Cartographe',stars:110}
+];
+var byId = {}; N.forEach(function(n){ byId[n.id]=n; });
+
+var PROFILES = {
+  debut:{t1:3,t2:3,t3:2,t4:1},
+  milieu:{t1:3,t2:3,t3:3,t4:2,t5:3,t6:2,t7:3,l1:3,l2:2,l3:3,l4:2,l5:3,lB:2,f1:3,f2:2,i1:3,p1:3,p2:2},
+  fin:{}
+};
+N.forEach(function(n){ if(n.id!=='top' && ['s5','sB','r4','m8','mB','o2','o3','oB'].indexOf(n.id)<0) PROFILES.fin[n.id] = (n.id.charCodeAt(1)%3)+1; });
+
+var BADGES = [
+  ['Premiers pas','terminer le Port'],['Équilibriste','réussir l\'épreuve de la Plaine'],['Retourneur','inverser le sens d\'une inégalité'],
+  ['Alpiniste','réussir l\'épreuve de la Montagne'],['Racine double','séparer les branches ±'],['Chasseur d\'interdits','écarter une valeur interdite'],
+  ['Stratège','réussir l\'épreuve de la Citadelle'],['Perfectionniste','toutes les ★★★ d\'une région'],['Cartographe','atteindre le Sommet']
+];
+document.getElementById('badgeList').innerHTML = BADGES.map(function(b){return '<li><b style="color:var(--text);font-weight:500">'+b[0]+'</b> : '+b[1]+'</li>';}).join('');
+
+document.getElementById('zonesTable').innerHTML = Object.keys(Z).map(function(k){var z=Z[k];
+  return '<tr><td><i class="sw" style="background:var('+z.fill+')"></i><b style="font-weight:600">'+z.name+'</b><br><span style="color:var(--muted);font-size:13px">'+z.sub+'</span></td><td>'+z.notion+'</td><td>'+z.after+'</td><td>'+z.reward+'</td></tr>';}).join('');
+
+document.getElementById('timeline').innerHTML = [
+  ['Minutes 0 à 15','Le Port. Le coach présente une fonctionnalité par problème ; l\'interface se remplit au fur et à mesure.'],
+  ['Séance 1','La Plaine et le début de la Forêt. Premier choix de chemin après « Les négatifs ».'],
+  ['Séances 2 et 3','Les Collines ou la Montagne, dans l\'ordre voulu. La Grotte et la Source s\'ouvrent en chemin.'],
+  ['Séances 4 et 5','Les jonctions : le Marais et la Citadelle exigent deux branches terminées.'],
+  ['Séance 6','L\'Observatoire : des problèmes d\'examen en plusieurs parties sur une même fonction.'],
+  ['Ensuite','Le Sommet : défi du jour, amélioration des étoiles, mode libre avec tous les générateurs.']
+].map(function(r){return '<div class="tl"><b>'+r[0]+'</b><span>'+r[1]+'</span></div>';}).join('');
+
+var svg = document.getElementById('map'), NS='http://www.w3.org/2000/svg';
+function el(tag, attrs, parent){ var e=document.createElementNS(NS,tag); for(var k in attrs) e.setAttribute(k,attrs[k]); (parent||svg).appendChild(e); return e; }
+var profile = 'milieu', selected = null;
+
+function state(n, done){
+  if (done[n.id]) return 'done';
+  var total = 0; for (var k in done) total += done[k];
+  var ok = n.req.every(function(r){ return done[r]; }) && (!n.stars || total >= n.stars);
+  return ok ? 'open' : 'locked';
+}
+
+function draw(){
+  var done = PROFILES[profile];
+  svg.innerHTML = '';
+  Object.keys(Z).forEach(function(k){ var z=Z[k], g=el('g',{'class':'zone'});
+    el('rect',{x:z.x,y:z.y,width:z.w,height:z.h,rx:28,fill:'var('+z.fill+')'},g);
+    var lx = z.lp==='br' ? z.x+z.w-18 : (z.lx || z.x+18), ly = z.lp ? z.y+z.h-34 : z.y+26, anc = z.lp==='br' ? 'end' : 'start';
+    var t=el('text',{x:lx,y:ly,'text-anchor':anc},g); t.textContent=z.name;
+    var s=el('text',{x:lx,y:ly+16,'class':'zsub','text-anchor':anc},g); s.textContent=z.sub;
+  });
+  N.forEach(function(n){ n.req.forEach(function(r){ var a=byId[r];
+    var mx=(a.x+n.x)/2 + (n.y-a.y)*0.18, my=(a.y+n.y)/2 - (n.x-a.x)*0.18;
+    var cls = done[n.id] ? 'walked' : (done[r] ? 'open' : '');
+    el('path',{d:'M'+a.x+' '+a.y+' Q'+mx+' '+my+' '+n.x+' '+n.y,'class':'edge '+cls});
+  }); });
+  var firstOpen = null;
+  N.forEach(function(n){
+    var st = state(n, done); if (st==='open' && !firstOpen) firstOpen = n.id;
+    var g = el('g',{'class':'node '+st+(n.boss?' boss':'')+(selected===n.id?' sel':''),transform:'translate('+n.x+' '+n.y+')',tabindex:0,role:'button','aria-label':n.t+' ('+(st==='done'?'résolu':st==='open'?'disponible':'verrouillé')+')','data-id':n.id});
+    el('circle',{r:18,'class':'halo'},g);
+    el('circle',{r:n.boss?21:17,'class':'body'},g);
+    var t = el('text',{'class':'lbl'},g);
+    t.textContent = n.id==='top' ? '★' : n.id.toUpperCase();
+    if (n.app) el('circle',{cx:(n.boss?16:13),cy:-(n.boss?16:13),r:5,fill:'var(--boss)'},g);
+    if (st==='done'){ var s=el('text',{'class':'stars',y:(n.boss?36:33)},g); s.textContent='★★★'.slice(0,done[n.id])+'☆☆☆'.slice(0,3-done[n.id]); }
+    g.addEventListener('click',function(){ select(n.id); });
+    g.addEventListener('keydown',function(e){ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); select(n.id); } });
+  });
+  N.forEach(function(n){ if (n.id===firstOpenCurrent(done)) { var g=svg.querySelector('[data-id="'+n.id+'"]'); if(g) g.classList.add('current'); } });
+  var tot=0,cnt=0,b=0; for (var k in done){ tot+=done[k]; cnt++; if(byId[k].badge) b++; }
+  document.getElementById('h-done').textContent=cnt;
+  document.getElementById('h-total').textContent=N.length;
+  document.getElementById('h-stars').textContent=tot;
+  document.getElementById('h-badges').textContent=b;
+  if (!selected) select(firstOpenCurrent(done) || 't1'); else renderPanel();
+}
+function firstOpenCurrent(done){ for (var i=0;i<N.length;i++){ if (state(N[i],done)==='open') return N[i].id; } return null; }
+
+function select(id){ selected = id; svg.querySelectorAll('.node').forEach(function(g){ g.classList.toggle('sel', g.getAttribute('data-id')===id); }); renderPanel(); }
+
+function fmtEq(s){ return s==='Défi du jour' ? s : '<span class="eq">'+s+'</span>'; }
+function renderPanel(){
+  var n = byId[selected], done = PROFILES[profile], st = state(n, done), z = Z[n.z];
+  var chip = st==='done' ? '<span class="chip st-done">Résolu '+'★★★'.slice(0,done[n.id])+'</span>' : st==='open' ? '<span class="chip st-open">Disponible</span>' : '<span class="chip">Verrouillé</span>';
+  var h = '<div class="col"><div class="pz">'+z.name+' · '+z.sub+'</div><h3 style="font-size:20px">'+n.t+'</h3>'+
+    '<div class="peq">'+fmtEq(n.eq)+'</div><div class="chips">'+chip+(n.boss?'<span class="chip st-boss">Épreuve</span>':'')+(n.badge?'<span class="chip">Badge : '+n.badge+'</span>':'')+(n.kind==='domain'?'<span class="chip">Objectif : Df</span>':'')+(n.src?'<span class="chip">'+n.src+'</span>':'')+'</div></div>'+
+    '<dl class="kv"><dt>Apprend</dt><dd>'+n.learn+'</dd>'+
+    (n.feat?'<dt>Découvre</dt><dd>'+n.feat+'</dd>':'')+
+    (n.par?'<dt>★★★ en</dt><dd>'+n.par+' étape'+(n.par>1?'s':'')+' au plus</dd>':'')+
+    (n.trap?'<dt>Piège</dt><dd>'+n.trap+'</dd>':'')+
+    (n.app?'<dt style="color:var(--boss)">À développer</dt><dd>'+n.app+'</dd>':'')+
+    '<dt>Prérequis</dt><dd>'+(n.req.length?n.req.map(function(r){return byId[r].t;}).join(' + '):'aucun')+(n.stars?' + '+n.stars+' ★':'')+'</dd></dl>';
+  h += n.coach ? '<div class="coach"><b style="color:var(--text);font-weight:500">Le coach dit</b><ol>'+n.coach.map(function(c){return '<li>'+c+'</li>';}).join('')+'</ol></div>'
+    : '<div class="coach"><b style="color:var(--text);font-weight:500">Indices</b><ol><li>La notion à utiliser.</li><li>L\'action précise (plafonne à ★).</li></ol></div>';
+  document.getElementById('panel').innerHTML = h;
+}
+
+document.querySelectorAll('.seg button').forEach(function(b){ b.addEventListener('click',function(){
+  profile = b.getAttribute('data-p'); selected = null;
+  document.querySelectorAll('.seg button').forEach(function(x){ x.setAttribute('aria-pressed', x===b?'true':'false'); });
+  draw();
+}); });
+draw();
+})();
+</script>
