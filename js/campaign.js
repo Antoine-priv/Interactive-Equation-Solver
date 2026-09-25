@@ -322,6 +322,7 @@
     bar.querySelector('[data-level-hint]').addEventListener('click', showHint);
     bar.querySelector('[data-level-restart]').addEventListener('click', function () { if (run) startLevel(run.level.id); });
     hintEl.querySelector('[data-hint-close]').addEventListener('click', function () { hintEl.hidden = true; });
+    winEl.querySelector('[data-win-close]').addEventListener('click', hideWin);
     winEl.querySelector('[data-win-replay]').addEventListener('click', function () { if (run) startLevel(run.level.id); });
     winEl.querySelector('[data-win-map]').addEventListener('click', function () {
       var res = run && run.result;

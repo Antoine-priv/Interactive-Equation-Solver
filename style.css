@@ -2780,6 +2780,7 @@ body.campaign-lock-key-square [data-key="square"] { visibility: hidden; }
 }
 #levelWin[hidden] { display: none; }
 #levelWin h3 { margin: 0; font-size: 19px; }
+#levelWin .level-hint-close { color: var(--text-muted); }
 .win-stars { display: flex; justify-content: center; gap: 8px; font-size: 40px; line-height: 1; }
 .win-stars span { color: var(--border); }
 .win-stars span.on { color: var(--star); }
