@@ -103,7 +103,10 @@ their DOM ids.
 Arrows between steps are hand-drawn SVG in `arrows.js`, positioned via `getBoundingClientRect()` math after
 each render (`requestAnimationFrame`). Overlay cleanup is scoped to `:scope > svg.arrows-overlay` (never a global id).
 
-Term drag-and-drop is mouse-only (no native HTML5 DnD) and shares its pointer gesture with click-to-select. It is intentionally disabled inside "Produit nul" branch columns (`noDrag`).
+Term drag-and-drop is mouse-only (no native HTML5 DnD) and shares its pointer gesture with click-to-select. It works in every
+column type ("Produit nul", "Condition d'existence", "Tableau de signes" factors): `renderSide` acts on the row's OWN engine
+(`options.engine`, never `App.History`, whose delegation follows the *focused* column) and focuses that column first
+(`options.beforeAction`).
 Dropping past the middle of the "=" (`crossTargetSide`/`setDragCrossing` in `render.js`) turns the
 drag into a regular "Opération" step via `dragAcross` (`history.js`, shares `commitExprOps` with
 `confirm()`): a top-level term is subtracted/added on both sides; a factor of a product that is

@@ -800,6 +800,18 @@
     container.setAttribute('data-side', sideName);
 
     var drilled = options && options.drilled;
+    // Moteur réellement affiché par CETTE ligne (chaîne principale, colonne "Produit nul",
+    // colonne "Condition d'existence", facteur du "Tableau de signes"...) : le glisser agit
+    // directement dessus plutôt que via App.History, dont la délégation suit la colonne
+    // FOCALISÉE — qui n'est pas forcément celle où le glisser a lieu. `beforeAction`
+    // (re)focalise d'abord cette colonne, comme le ferait un clic.
+    var dragEngine = (options && options.engine) || App.History;
+    function withFocus(fn) {
+      return function () {
+        if (options && options.beforeAction) options.beforeAction();
+        return fn.apply(null, arguments);
+      };
+    }
 
     // Un clic visant le dénominateur-expression d'une fraction (\htmlData{fracpart=den},
     // voir Expr.nodeLatex) devrait normalement se détecter via targetEl.closest — SAUF que
@@ -959,7 +971,7 @@
             factorEl.setAttribute('data-drag-id', String(j));
             attachPointerDrag(factorEl, container, t.factors, {
               getSelected: function () { return new Set(); },
-              commit: function (order) { App.History.setDrilledFactorOrder(i, order); },
+              commit: withFocus(function (order) { dragEngine.setDrilledFactorOrder(i, order); }),
               buildLatex: function (orderedFactors) { return buildNestedFactorDragLatex(i, orderedFactors); },
               tagClass: 'factor-slot'
             }, j, function () {
@@ -967,7 +979,7 @@
               // d'un cran pour éditer les termes DE CE facteur (ex. "x"/"9" dans "(x+9)"),
               // exactement comme drillIntoProductBranch le fait déjà pour un produit au
               // premier niveau du membre — voir drillIntoNestedProductBranch.
-              App.History.clickNestedFactor(i, j);
+              withFocus(function () { dragEngine.clickNestedFactor(i, j); })();
             });
           });
         });
@@ -996,14 +1008,14 @@
     // l'a déclenché.
     var topLevelDragCtx = options.draggable ? {
       getSelected: function () {
-        var p = App.History.getPending();
+        var p = dragEngine.getPending();
         return new Set(sideName === 'left' ? p.selectedLeft : p.selectedRight);
       },
-      commit: function (order) { App.History.setSideOrder(sideName, order); },
+      commit: withFocus(function (order) { dragEngine.setSideOrder(sideName, order); }),
       // Lâché de l'AUTRE côté du "=" (voir updateTermDrag/endTermDrag) : le terme change
       // de membre -> soustraction (ou addition) des deux côtés, voir dragAcross.
-      crossOps: function (origIdx) { return App.History.dragAcrossOps(sideName, { kind: 'term', index: origIdx }); },
-      onCross: function (origIdx) { App.History.dragAcross(sideName, { kind: 'term', index: origIdx }); },
+      crossOps: function (origIdx) { return dragEngine.dragAcrossOps(sideName, { kind: 'term', index: origIdx }); },
+      onCross: withFocus(function (origIdx) { dragEngine.dragAcross(sideName, { kind: 'term', index: origIdx }); }),
       buildLatex: function (orderedArr) {
         return orderedArr.map(function (node, i) {
           return '\\htmlId{dragpv-' + i + '}{' + Expr.nodeLatex(node, i === 0) + '}';
@@ -1042,7 +1054,7 @@
               return options.selectedFactors && options.selectedFactors.index === idx
                 ? options.selectedFactors.branches : new Set();
             },
-            commit: function (order) { App.History.setFactorOrder(sideName, idx, order); },
+            commit: withFocus(function (order) { dragEngine.setFactorOrder(sideName, idx, order); }),
             buildLatex: function (orderedFactors) { return buildFactorDragLatex(side, idPrefix, idx, orderedFactors); },
             tagClass: 'factor-slot',
             // Produit SEUL dans son membre : lâcher un facteur de l'autre côté du "=" divise
@@ -1050,8 +1062,8 @@
             // le produit entier (aucun frère avec qui le réordonner de toute façon).
             // Sinon, comportement habituel : sortir du produit bascule sur le produit
             // entier, qui lui traverse alors comme un terme normal (soustraction).
-            crossOps: side.length === 1 ? function (fi) { return App.History.dragAcrossOps(sideName, { kind: 'factor', index: idx, factorIndex: fi }); } : null,
-            onCross: side.length === 1 ? function (fi) { App.History.dragAcross(sideName, { kind: 'factor', index: idx, factorIndex: fi }); } : null,
+            crossOps: side.length === 1 ? function (fi) { return dragEngine.dragAcrossOps(sideName, { kind: 'factor', index: idx, factorIndex: fi }); } : null,
+            onCross: side.length === 1 ? withFocus(function (fi) { dragEngine.dragAcross(sideName, { kind: 'factor', index: idx, factorIndex: fi }); }) : null,
             escalate: side.length === 1 ? null : { side: side, topIdx: idx, idPrefix: idPrefix, dragCtx: topLevelDragCtx }
           }, i, options.onTermClick ? function (targetEl) { options.onTermClick(sideName, idx, targetEl); } : null);
         }
@@ -1068,10 +1080,10 @@
       coeffEl.classList.add('coeff-slot', 'draggable-term');
       attachPointerDrag(coeffEl, container, [node], {
         getSelected: function () { return new Set(); },
-        commit: function () { App.History.setSideOrder(sideName, [0]); },
+        commit: withFocus(function () { dragEngine.setSideOrder(sideName, [0]); }),
         noReorder: true,
-        crossOps: function () { return App.History.dragAcrossOps(sideName, { kind: 'coeff', index: idx }); },
-        onCross: function () { App.History.dragAcross(sideName, { kind: 'coeff', index: idx }); }
+        crossOps: function () { return dragEngine.dragAcrossOps(sideName, { kind: 'coeff', index: idx }); },
+        onCross: withFocus(function () { dragEngine.dragAcross(sideName, { kind: 'coeff', index: idx }); })
       }, 0, options.onTermClick ? function (targetEl, coords) {
         options.onTermClick(sideName, idx, targetEl, resolveIsDenPart(idx, targetEl, coords));
       } : null);
@@ -1730,6 +1742,14 @@
         selected: selected,
         drilled: drilledOpt,
         selectedFactors: selectedFactorsOpt,
+        // Voir dragEngine/withFocus dans renderSide : un glisser agit sur CE moteur et
+        // focalise sa colonne au passage (silencieusement si possible, sinon via
+        // notifyFocus — ex. la chaîne principale pendant qu'une colonne est focalisée).
+        engine: engine,
+        beforeAction: function () {
+          if (opts.onBeforeAction) opts.onBeforeAction();
+          else if (opts.focused === false && opts.notifyFocus) opts.notifyFocus();
+        },
         onTermClick: function (side, idx, targetEl, isDenPart) {
           // Colonne de branche PAS ENCORE focalisée au moment de ce rendu (voir
           // opts.focused/opts.notifyFocus, câblés depuis renderBranchNode — toujours
@@ -1809,7 +1829,7 @@
         // renderSide/drilled) — mêmes conditions, sans exclure "drilled" lui-même, que ce
         // soit un FactorGroup classique ou une branche de ProductGroup (voir setInnerOrder
         // dans history.js, qui gère les deux cas).
-        var innerDraggableHere = !pending.opType && !opts.noDrag;
+        var innerDraggableHere = !pending.opType;
         var draggableLeft = innerDraggableHere && !(pending.drilled && pending.drilled.side === 'left');
         var draggableRight = innerDraggableHere && !(pending.drilled && pending.drilled.side === 'right');
         rowOpts.leftOptions = selectDragOptions(leftSelected, leftSelectable, draggableLeft, innerDraggableHere, 'left');
@@ -2002,7 +2022,7 @@
     // colonne parente). Entièrement autonome (dessine ses propres flèches, y compris la
     // fourche vers ses enfants) — le premier niveau (ci-dessous) et les niveaux plus
     // profonds (récursion) l'utilisent de façon identique. `opts` : mêmes clés que pour
-    // renderChain (onBeforeAction/focused/noDrag). Renvoie { rowsData, framedRowEl,
+    // renderChain (onBeforeAction/notifyFocus/focused). Renvoie { rowsData, framedRowEl,
     // framedSolved, liveInfo } du noeud FEUILLE réellement focalisé (bulle à travers
     // toute la récursion, quelle que soit la profondeur), PLUS `scrollEngine` (ce même
     // noeud feuille, pour le suivi de recentrage par moteur) et `leafEngines` (TOUTES les
@@ -2107,7 +2127,6 @@
         colEls.push(col);
 
         var childRes = renderBranchNode(child, chainEl, {
-          noDrag: true, // simplifie le focus multi-branches (voir la tâche associée)
           onBeforeAction: function () {
             if (opts.onBeforeAction) opts.onBeforeAction();
             engine.focusBranch(idx);
@@ -2243,7 +2262,6 @@
         wrap.appendChild(col);
 
         var childRes = renderBranchNode(cond.engine, chainEl, {
-          noDrag: true,
           onBeforeAction: function () { engineRoot.focusDomain(idx); },
           notifyFocus: function () { engineRoot.setFocusedDomain(idx); },
           focused: isFocused,
@@ -2410,7 +2428,6 @@
         wrap.appendChild(col);
 
         var childRes = renderBranchNode(f.engine, chainEl, {
-          noDrag: true,
           onBeforeAction: function () { engineRoot.focusSignChartFactor(idx); },
           notifyFocus: function () { engineRoot.setFocusedSignChartFactor(idx); },
           focused: isFocused
@@ -2944,7 +2961,6 @@
         splitWrap.appendChild(col);
 
         var branchRes = renderBranchNode(engine, chainEl, {
-          noDrag: true, // simplifie le focus multi-branches (voir la tâche associée)
           onBeforeAction: function () { Hist.focusBranch(idx); },
           // Variante NON silencieuse de onBeforeAction ci-dessus, pour le cas où AUCUNE
           // action réelle ne suit (voir le même commentaire dans le renderBranchNode
@@ -3341,6 +3357,14 @@
       if (!inBranchColumn) return;
       branchOutlineVisible = true;
       renderAll();
+    }, true);
+    // Terme GLISSABLE d'une colonne (voir attachPointerDrag) : son clic est traité dès le
+    // mouseup et le rendu qui s'ensuit remplace l'élément avant que le 'click' natif
+    // n'atteigne la colonne — le listener ci-dessus ne le verrait donc jamais. On réaffiche
+    // le liseré dès le mousedown, sans rendu propre (l'action du geste en déclenche un).
+    document.addEventListener('mousedown', function (e) {
+      if (branchOutlineVisible || e.button !== 0) return;
+      if (e.target.closest && e.target.closest('.produit-nul-branch .draggable-term')) branchOutlineVisible = true;
     }, true);
   }
 
