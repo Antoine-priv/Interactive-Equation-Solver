@@ -1901,7 +1901,7 @@
       // changé, chaîne vide), pas l'aperçu Simplifier/Développer de la sélection en cours.
       var preview = (pending.opType === null && App.Toolbar.getHoveredOp() === 'expr')
         ? { equation: lastEq, opLeft: null, opRight: null }
-        : engine.computePreview();
+        : engine.computePreview(App.Toolbar.getHoveredOp());
       // Même priorité que pour une étape confirmée un peu plus bas (step.operator d'abord,
       // opts.eqGlyph en repli — voir son commentaire) : currentOperator (moteur en mode
       // inégalité, ex. un facteur "Tableau de signes") l'emporte sur le glyphe d'AFFICHAGE

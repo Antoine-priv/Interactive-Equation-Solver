@@ -706,6 +706,77 @@
     return out;
   }
 
+  // Simplifie TOUS les termes simples d'un tableau (par degré, voir simplifyNodes), en
+  // descendant d'abord dans chaque groupe imbriqué qu'il contient (voir simplifyInsideGroup).
+  function simplifyWholeArray(arr) {
+    var out = arr.map(function (n) { return isGroup(n) ? simplifyInsideGroup(n) : cloneNode(n); });
+    var idx = [];
+    out.forEach(function (n, i) { if (!isGroup(n)) idx.push(i); });
+    return idx.length >= 2 ? simplifyNodes(out, idx) : out;
+  }
+
+  // Simplifie l'INTÉRIEUR d'un groupe sans avoir à y "entrer" (pending.drilled) : les
+  // termes intérieurs d'un FactorGroup (et son dénominateur-expression factorTerms), chaque
+  // facteur d'un ProductGroup (seulement ceux de `branches` si fourni, voir
+  // pending.selectedFactors), le radicand d'une racine carrée. Renvoie un nouveau noeud.
+  function simplifyInsideGroup(node, branches) {
+    var c = cloneNode(node);
+    if (isSqrtGroup(c)) {
+      c.radicand = simplifyWholeArray(c.radicand);
+    } else if (isProductGroup(c)) {
+      c.factors.forEach(function (f, i) {
+        if (!branches || branches.indexOf(i) !== -1) f.terms = simplifyWholeArray(f.terms);
+      });
+    } else if (isFactorGroup(c)) {
+      c.innerTerms = simplifyWholeArray(c.innerTerms);
+      if (c.factorTerms) c.factorTerms = simplifyWholeArray(c.factorTerms);
+    }
+    return c;
+  }
+
+  // "Simplifier" sur une sélection libre d'un membre : les termes simples sélectionnés
+  // (au moins 2) fusionnent comme avant (simplifyNodes), et chaque GROUPE sélectionné se
+  // simplifie de l'intérieur (simplifyInsideGroup) — un groupe dont l'intérieur est déjà
+  // simplifié est ignoré. `factorSel` (optionnel, { index, branches }, voir
+  // pending.selectedFactors) ne simplifie que ces facteurs-là d'un produit. Renvoie
+  // { side, terms } (terms = noeuds effectivement simplifiés, pour l'étiquette), ou null
+  // s'il n'y a rien à simplifier.
+  function simplifySelection(side, indices, factorSel) {
+    var out = cloneSide(side);
+    var acted = [];
+    var flat = [];
+    indices.forEach(function (i) {
+      var n = side[i];
+      if (!n) return;
+      if (!isGroup(n)) { flat.push(i); return; }
+      var s = simplifyInsideGroup(n);
+      if (JSON.stringify(s) !== JSON.stringify(n)) { out[i] = s; acted.push(i); }
+    });
+    var partialDesc = null;
+    if (factorSel && indices.indexOf(factorSel.index) === -1 && isProductGroup(side[factorSel.index]) &&
+        factorSel.branches.length > 0) {
+      var pn = side[factorSel.index];
+      var ps = simplifyInsideGroup(pn, factorSel.branches);
+      if (JSON.stringify(ps) !== JSON.stringify(pn)) {
+        out[factorSel.index] = ps;
+        var picked = factorSel.branches.slice().sort(function (a, b) { return a - b; })
+          .map(function (b) { return { terms: cloneSide(pn.factors[b].terms), exponent: pn.factors[b].exponent }; });
+        partialDesc = { index: factorSel.index, node: picked.length === 1 && picked[0].exponent === 1
+          ? { sign: 1, factor: { coeff: 1, pow: 0 }, innerTerms: picked[0].terms }
+          : { sign: 1, factors: picked } };
+      }
+    }
+    if (flat.length < 2) flat = [];
+    if (flat.length === 0 && acted.length === 0 && !partialDesc) return null;
+    var descIdx = flat.concat(acted).sort(function (a, b) { return a - b; });
+    var terms = descIdx.map(function (i) { return side[i]; });
+    if (partialDesc) terms.push(partialDesc.node);
+    // Les simplifications intérieures ne changent pas la longueur du membre : les indices
+    // des termes simples restent valides pour simplifyNodes.
+    if (flat.length >= 2) out = simplifyNodes(out, flat);
+    return { side: out, terms: terms };
+  }
+
   // Facteur commun quand la sélection est déjà DES FactorGroup numériques (ex.
   // "2(5x-7)-10(9+3x)" factorisé par 2 donne "2[(5x-7)-5(9+3x)]") : chaque terme
   // sélectionné doit être un FactorGroup à facteur numérique simple (factor.pow===0, pas
@@ -1658,6 +1729,8 @@
     wrapSideInFactor: wrapSideInFactor,
     wrapSideInFraction: wrapSideInFraction,
     simplifyNodes: simplifyNodes,
+    simplifyInsideGroup: simplifyInsideGroup,
+    simplifySelection: simplifySelection,
     factorNodes: factorNodes,
     factorRemarkableIdentityChoice: factorRemarkableIdentityChoice,
     factorDifferenceOfSquaresFromGroup: factorDifferenceOfSquaresFromGroup,

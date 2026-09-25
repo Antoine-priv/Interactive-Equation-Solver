@@ -56,20 +56,20 @@
   // Simplifie indépendamment le membre gauche et/ou le membre droit en une seule étape.
   // leftIndices/rightIndices : tableaux d'indices (peuvent être vides ou avoir <2 éléments
   // pour ne pas toucher au membre correspondant).
-  function applySimplifyBoth(eq, leftIndices, rightIndices) {
+  // `factorSel` (optionnel) : { left, right } au format de pending.selectedFactors —
+  // facteurs d'un produit sélectionnés individuellement (voir Expr.simplifySelection).
+  function applySimplifyBoth(eq, leftIndices, rightIndices, factorSel) {
     var out = cloneEquation(eq);
     var opLeft = null, opRight = null;
-    if (leftIndices && leftIndices.length >= 2) {
-      var leftSorted = leftIndices.slice().sort(function (a, b) { return a - b; });
-      var leftTerms = leftSorted.map(function (i) { return eq.left[i]; });
-      out.left = Expr.simplifyNodes(eq.left, leftIndices);
-      opLeft = { type: 'simplify', terms: leftTerms };
+    var left = Expr.simplifySelection(eq.left, leftIndices || [], factorSel && factorSel.left);
+    if (left) {
+      out.left = left.side;
+      opLeft = { type: 'simplify', terms: left.terms };
     }
-    if (rightIndices && rightIndices.length >= 2) {
-      var rightSorted = rightIndices.slice().sort(function (a, b) { return a - b; });
-      var rightTerms = rightSorted.map(function (i) { return eq.right[i]; });
-      out.right = Expr.simplifyNodes(eq.right, rightIndices);
-      opRight = { type: 'simplify', terms: rightTerms };
+    var right = Expr.simplifySelection(eq.right, rightIndices || [], factorSel && factorSel.right);
+    if (right) {
+      out.right = right.side;
+      opRight = { type: 'simplify', terms: right.terms };
     }
     return { equation: out, opLeft: opLeft, opRight: opRight };
   }

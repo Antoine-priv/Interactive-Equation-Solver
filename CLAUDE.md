@@ -100,6 +100,9 @@ index-based), rendered side by side and each fully solvable on its own. `App.His
 is called right before delegating a term click to a branch engine.
 
 `pending.opType` is `'expr' | 'factor' | null`. Simplify/Factoriser-selection/Développer/Produit nul are **not** persistent modes — they act immediately directly from free term selection.
+"Simplifier" on a selected group (or on individually selected factors of a product) also
+simplifies like terms *inside* its parentheses without drilling in (`Expr.simplifySelection`/
+`simplifyInsideGroup`); `computePreview(hoveredOp)` picks the Simplifier vs Développer preview.
 
 ## Rendering (`js/render.js`, `js/arrows.js`)
 

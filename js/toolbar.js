@@ -254,6 +254,15 @@
   // Simplifier (au moins 2 termes "plats" — pas déjà factorisés — d'un même membre),
   // Factoriser (au moins 1 terme plat, un seul membre à la fois), Développer (exactement
   // un groupe factorisé sélectionné, seul).
+  // Vrai si `fn` (un essai de simplification) renvoie un résultat sans lever d'erreur.
+  function simplifiable(fn) {
+    try {
+      return !!fn();
+    } catch (e) {
+      return false;
+    }
+  }
+
   function computeSelectionInfo() {
     var eq = App.History.lastEquation();
     var pending = App.History.getPending();
@@ -316,7 +325,6 @@
       // dans l'appli : pas de combinaison ici non plus, seule la sélection intérieure compte.
       var otherSide = pending.drilled.side === 'left' ? 'right' : 'left';
       var otherSel = otherSide === 'left' ? pending.selectedLeft : pending.selectedRight;
-      var otherClean = otherSel.every(function (i) { return !isGroup(eq[otherSide][i]); });
       // Cas particulier "(expr)²-constante" (ex. (x+8)²-4, voir getFactorTargetShape dans
       // history.js) : la sélection contient un groupe (le carré), donc innerClean est
       // faux, mais reste factorisable via l'identité 3 avec a=l'expression du carré.
@@ -324,7 +332,11 @@
       var innerCanFactorGroup = sel.length === 2 && innerShape &&
         !!(innerShape.groupBase || (innerShape.groupBaseA && innerShape.groupBaseB));
       return {
-        canSimplify: (sel.length >= 2 && innerClean) || (otherSel.length >= 2 && otherClean),
+        // Un groupe sélectionné (intérieur OU autre membre) se simplifie aussi de
+        // l'intérieur, sans y entrer (voir Expr.simplifySelection).
+        canSimplify: simplifiable(function () {
+          return App.Expr.simplifySelection(inner, sel) || App.Expr.simplifySelection(eq[otherSide], otherSel);
+        }),
         // Factoriser un terme seul n'a rien à "extraire de commun" : exige au moins 2 termes.
         canFactor: (sel.length >= 2 && innerClean) || innerCanFactorGroup ||
           allNumericFactorGroups(inner, sel) || allProductGroups(inner, sel),
@@ -352,8 +364,14 @@
     // confirmSquareRoot dans history.js — jamais automatique, contrairement à "Produit nul"
     // ci-dessous) : le clic (data-op="simplify" dans toolbar.js) délègue alors à
     // confirmSquareRoot plutôt qu'à confirmSimplifySelection.
-    var canSimplify = (L.length >= 2 && leftClean) || (R.length >= 2 && rightClean) ||
-      !!App.History.squareRootAction();
+    // Un groupe sélectionné (ou seulement certains facteurs d'un produit, voir
+    // pending.selectedFactors) dont l'intérieur contient des termes semblables se simplifie
+    // aussi directement, sans avoir à y "entrer" (voir Expr.simplifySelection).
+    var canSimplify = simplifiable(function () {
+      var r = App.Equation.applySimplifyBoth(eq, App.History.getFactorSelectionIndices('left'),
+        App.History.getFactorSelectionIndices('right'), pending.selectedFactors);
+      return r.opLeft || r.opRight;
+    }) || !!App.History.squareRootAction();
     // Cas particulier "(expr)²-constante" (ex. (x+8)²-4, voir getFactorTargetShape dans
     // history.js) : la sélection contient un groupe (le carré), donc leftClean/rightClean
     // est faux, mais reste factorisable via l'identité 3 avec a=l'expression du carré.

@@ -1317,35 +1317,26 @@
         var isSqrt = d.part === 'sqrt' && groupNode && Expr.isSqrtGroup(groupNode);
         if (!groupNode || (!isBranch && !isDen && !isSqrt && !Expr.isFactorGroup(groupNode))) return false;
         var innerArr = Expr.drilledWorkingArray(groupNode, d);
-        var innerOk = pending.selectedInner.length >= 2;
-        var otherOk = otherIndices.length >= 2;
-        if (!innerOk && !otherOk) return false;
         var outD = Eq.cloneEquation(eq);
         var innerOpDesc = null, otherOpDesc = null;
-        if (innerOk) {
-          var newInner;
-          try {
-            newInner = Expr.simplifyNodes(innerArr, pending.selectedInner);
-          } catch (eD) {
-            return false;
-          }
-          var selectedTerms = pending.selectedInner.slice().sort(function (a, b) { return a - b; })
-            .map(function (i) { return innerArr[i]; });
-          outD[d.side] = applyDrilledArray(eq, d, newInner)[d.side];
-          innerOpDesc = { type: 'simplify', terms: selectedTerms };
+        var innerRes, otherRes;
+        try {
+          innerRes = Expr.simplifySelection(innerArr, pending.selectedInner);
+          otherRes = Expr.simplifySelection(eq[otherSide], otherIndices);
+        } catch (eD) {
+          return false;
+        }
+        if (!innerRes && !otherRes) return false;
+        if (innerRes) {
+          outD[d.side] = applyDrilledArray(eq, d, innerRes.side)[d.side];
+          innerOpDesc = { type: 'simplify', terms: innerRes.terms };
         }
         // L'autre membre se simplifie indépendamment, dans la MÊME étape (voir
         // computeSelectionInfo dans toolbar.js) — exactement comme applySimplifyBoth le
         // fait déjà pour une sélection libre gauche+droite classique.
-        if (otherOk) {
-          var otherSorted = otherIndices.slice().sort(function (a, b) { return a - b; });
-          var otherTerms = otherSorted.map(function (i) { return eq[otherSide][i]; });
-          try {
-            outD[otherSide] = Expr.simplifyNodes(eq[otherSide], otherIndices);
-          } catch (eOther) {
-            return false;
-          }
-          otherOpDesc = { type: 'simplify', terms: otherTerms };
+        if (otherRes) {
+          outD[otherSide] = otherRes.side;
+          otherOpDesc = { type: 'simplify', terms: otherRes.terms };
         }
         var stepD = { equation: outD, opLeft: null, opRight: null };
         stepD[d.side === 'left' ? 'opLeft' : 'opRight'] = innerOpDesc;
@@ -1356,7 +1347,8 @@
       }
       var result;
       try {
-        result = Eq.applySimplifyBoth(eq, pending.selectedLeft, pending.selectedRight);
+        result = Eq.applySimplifyBoth(eq, combinedFactorIndices('left'), combinedFactorIndices('right'),
+          pending.selectedFactors);
       } catch (e) {
         return false;
       }
@@ -1670,7 +1662,10 @@
 
     // Calcule l'équation et les étiquettes d'opération "en direct" pour la ligne en attente,
     // sans committer quoi que ce soit dans `steps`.
-    function computePreview() {
+    // `hoveredOp` (bouton survolé, voir App.Toolbar.getHoveredOp) : un groupe sélectionné
+    // peut désormais aussi bien se développer que se simplifier de l'intérieur (voir
+    // Expr.simplifySelection) — sur "Simplifier", l'aperçu Développer est alors ignoré.
+    function computePreview(hoveredOp) {
       var last = lastEquation();
       var p = pending;
 
@@ -1694,7 +1689,7 @@
           // chercher, ses termes sont supposés plats. Un dénominateur-expression et un
           // radicand de racine carrée, eux, se comportent comme un FactorGroup classique
           // ici (voir isDenPrev/isSqrtPrev ci-dessus).
-          if (!isBranchPrev && p.selectedInner.length === 1) {
+          if (!isBranchPrev && p.selectedInner.length === 1 && hoveredOp !== 'simplify') {
             var targetIdxPrev = p.selectedInner[0];
             var targetNodePrev = innerArrPrev[targetIdxPrev];
             // Même exclusion que confirmExpandFullSelection : un dénominateur-expression
@@ -1730,26 +1725,18 @@
           // confirmSimplifySelection (les deux simplifiés dans la même étape).
           var otherSidePrev = dPrev.side === 'left' ? 'right' : 'left';
           var otherIndicesPrev = otherSidePrev === 'left' ? p.selectedLeft : p.selectedRight;
-          var innerOkPrev = p.selectedInner.length >= 2;
-          var otherOkPrev = otherIndicesPrev.length >= 2;
-          if (!innerOkPrev && !otherOkPrev) {
-            return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
-          }
           try {
             var eqPrevD = Eq.cloneEquation(last);
             var innerDescPrev = null, otherDescPrev = null;
-            if (innerOkPrev) {
-              var newInnerPrev = Expr.simplifyNodes(innerArrPrev, p.selectedInner);
-              var selectedTermsPrev = p.selectedInner.slice().sort(function (a, b) { return a - b; })
-                .map(function (i) { return innerArrPrev[i]; });
-              eqPrevD[dPrev.side] = applyDrilledArray(last, dPrev, newInnerPrev)[dPrev.side];
-              innerDescPrev = { type: 'simplify', terms: selectedTermsPrev };
+            var innerResPrev = Expr.simplifySelection(innerArrPrev, p.selectedInner);
+            var otherResPrev = Expr.simplifySelection(last[otherSidePrev], otherIndicesPrev);
+            if (innerResPrev) {
+              eqPrevD[dPrev.side] = applyDrilledArray(last, dPrev, innerResPrev.side)[dPrev.side];
+              innerDescPrev = { type: 'simplify', terms: innerResPrev.terms };
             }
-            if (otherOkPrev) {
-              var otherSortedPrev = otherIndicesPrev.slice().sort(function (a, b) { return a - b; });
-              var otherTermsPrev = otherSortedPrev.map(function (i) { return last[otherSidePrev][i]; });
-              eqPrevD[otherSidePrev] = Expr.simplifyNodes(last[otherSidePrev], otherIndicesPrev);
-              otherDescPrev = { type: 'simplify', terms: otherTermsPrev };
+            if (otherResPrev) {
+              eqPrevD[otherSidePrev] = otherResPrev.side;
+              otherDescPrev = { type: 'simplify', terms: otherResPrev.terms };
             }
             var stepPrevD = { equation: eqPrevD, opLeft: null, opRight: null };
             stepPrevD[dPrev.side === 'left' ? 'opLeft' : 'opRight'] = innerDescPrev;
@@ -1763,8 +1750,7 @@
         // sous-ensembles de facteurs marqués, voir computeExpandTargets/applyExpandTargets
         // ci-dessus) ou Simplifier (sélection suffisante), pour voir le résultat avant
         // même de cliquer sur le bouton correspondant.
-        var pL = p.selectedLeft, pR = p.selectedRight;
-        var pTargets = computeExpandTargets(last, p);
+        var pTargets = hoveredOp === 'simplify' ? [] : computeExpandTargets(last, p);
         if (pTargets.length > 0) {
           try {
             var previewRes = applyExpandTargets(last, pTargets);
@@ -1773,9 +1759,10 @@
             return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
           }
         }
-        if (pL.length >= 2 || pR.length >= 2) {
+        if (hoveredOp !== 'expand') {
           try {
-            return Eq.applySimplifyBoth(last, pL, pR);
+            return Eq.applySimplifyBoth(last, combinedFactorIndices('left'), combinedFactorIndices('right'),
+              p.selectedFactors);
           } catch (ePrevSimp) {
             return { equation: Eq.cloneEquation(last), opLeft: null, opRight: null };
           }
