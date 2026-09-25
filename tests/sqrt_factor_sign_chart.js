@@ -260,6 +260,29 @@ function ok(label, cond) {
   ok('"(x-3)√(x+2)=0" splits via Produit nul into x-3=0 and √(x+2)=0',
     JSON.stringify(pn) === JSON.stringify(['x - 3', '\\sqrt{x + 2}']));
 
+  // --- Deux colonnes de domaine créées d'un coup : côte à côte, jamais empilées ---
+  // (bug rapporté avec "(x+5)√(x+5)" au dénominateur, "+5x" des deux côtés).
+  await page.evaluate(() => {
+    var eq = window.App.Parser.parseLatexEquation('\\frac{\\left(x+8\\right)\\left(x-6\\right)\\left(x+1\\right)}' +
+      '{\\htmlData{fracpart=den}{\\left(x+5\\right)\\sqrt{x+5}}}+5x<5x');
+    window.App.History.startNewEquation({ left: eq.left, right: eq.right }, { operator: eq.operator });
+    window.App.Canvas.set(0, 0);
+  });
+  await page.waitForTimeout(150);
+  await page.click(denSel, { force: true });
+  await page.click(denSel, { force: true });
+  await page.click('button[data-op="existence"]');
+  await page.waitForTimeout(900);
+  const domCols = await page.$$eval('.domain-split > .domain-branch', (els) => els.map((e) => {
+    var r = e.getBoundingClientRect();
+    return { top: Math.round(r.top), left: Math.round(r.left), right: Math.round(r.right) };
+  }));
+  ok('two domain columns spawned', domCols.length === 2);
+  ok('domain columns side by side (same top, second to the right of the first)',
+    domCols.length === 2 && domCols[0].top === domCols[1].top && domCols[1].left >= domCols[0].right);
+  if (domCols.length === 2 && domCols[0].top !== domCols[1].top) console.log('  columns:', JSON.stringify(domCols));
+  await page.screenshot({ path: __dirname + '/screenshots/sqrt_factor_domain_columns.png' });
+
   ok('no page errors', errs.length === 0);
   if (errs.length) console.log(errs.join('\n'));
   await browser.close();

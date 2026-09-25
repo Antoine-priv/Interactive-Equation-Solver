@@ -565,12 +565,17 @@ button {
   align-items: center;
 }
 
+/* Colonnes TOUJOURS côte à côte (jamais flex-wrap) : le groupe étant en position
+   absolue, sa largeur disponible dépend de sa position dans #history — un retour à la
+   ligne empilait alors les colonnes l'une sous l'autre dès qu'un dénominateur en créait
+   plusieurs d'un coup (ex. "(x+5)√(x+5)"). Même principe que .sign-chart-factors-row. */
 .domain-split {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 64px;
+  width: max-content;
   margin: 0;
 }
 
@@ -645,7 +650,7 @@ button {
   margin: 130px 0 0;
 }
 
-/* PAS .domain-split (flex-wrap:wrap) : les colonnes de facteurs restent TOUJOURS alignées
+/* Comme .domain-split : les colonnes de facteurs restent TOUJOURS alignées
    horizontalement côte à côte, quitte à déborder de la largeur visible — #historyScroll
    pan(ote) déjà tout contenu large (voir renderSignChartFactors dans render.js pour le
    même raisonnement que .produit-nul-split-nested). */
