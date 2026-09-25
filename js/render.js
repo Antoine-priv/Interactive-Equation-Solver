@@ -297,7 +297,7 @@
     if (desc.isDivision) {
       return '\\frac{' + innerLatex + '}{' + Expr.termLatexBody(desc.factor) + '}';
     }
-    var factorBody = Expr.termLatexBody(desc.factor);
+    var factorBody = Expr.factorPrefixLatex(desc.factor);
     return factorBody + '\\left(' + innerLatex + '\\right)';
   }
 
@@ -536,7 +536,7 @@
       var frac = '\\frac{' + innerLatex + '}{' + denomLatex + '}';
       body = isLeaf ? '\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{' + frac + '}' : frac;
     } else {
-      var factorBody = node.factor ? Expr.termLatexBody({ coeff: node.factor.coeff, pow: node.factor.pow }) : '';
+      var factorBody = Expr.factorPrefixLatex(node.factor);
       var parens = '\\left(' + innerLatex + '\\right)';
       body = factorBody + (isLeaf ? '\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{' + parens + '}' : parens);
     }
@@ -574,7 +574,7 @@
       var denomLatexForOrder = node.factorTerms ? Expr.innerTermsLatex(node.factorTerms) : Expr.termLatexBody(node.factor);
       body = '\\frac{' + innerLatex + '}{' + denomLatexForOrder + '}';
     } else {
-      var factorBody = node.factor ? Expr.termLatexBody({ coeff: node.factor.coeff, pow: node.factor.pow }) : '';
+      var factorBody = Expr.factorPrefixLatex(node.factor);
       body = factorBody + '\\left(' + innerLatex + '\\right)';
     }
     var sign = node.sign < 0 ? '-' : '+';
@@ -954,7 +954,7 @@
               var denomLatexP = node.factorTerms ? Expr.innerTermsLatex(node.factorTerms) : Expr.termLatexBody(node.factor);
               innerBody = '\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{\\frac{' + innerLatexP + '}{' + denomLatexP + '}}';
             } else {
-              var factorBodyP = node.factor ? Expr.termLatexBody({ coeff: node.factor.coeff, pow: node.factor.pow }) : '';
+              var factorBodyP = Expr.factorPrefixLatex(node.factor);
               innerBody = factorBodyP + '\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{\\left(' + innerLatexP + '\\right)}';
             }
             var signP = node.sign < 0 ? '-' : '+';

@@ -222,6 +222,14 @@
     return formatNumberLatex(abs);
   }
 
+  // Préfixe numérique d'un FactorGroup (non-division) devant sa parenthèse. Un facteur 1
+  // n'est jamais affiché ("-(x-1)", pas "-1(x-1)", voir wrapSideInProduct) ; null (aperçu
+  // "en direct" avant saisie du facteur commun) non plus.
+  function factorPrefixLatex(factor) {
+    if (!factor || (factor.pow === 0 && roundClean(factor.coeff) === 1)) return '';
+    return termLatexBody({ coeff: factor.coeff, pow: factor.pow });
+  }
+
   // Latex des noeuds à l'intérieur d'un groupe (Term ou FactorGroup/ProductGroup imbriqué) :
   // délègue à nodeLatex, qui gère déjà correctement le signe et la récursion sur les groupes.
   function innerTermsLatex(terms) {
@@ -289,7 +297,7 @@
       } else {
         // factor === null : aperçu "en direct" avant saisie du facteur commun, comme si
         // c'était 1 (donc pas de chiffre affiché du tout devant la parenthèse).
-        var factorBody = node.factor ? termLatexBody({ coeff: node.factor.coeff, pow: node.factor.pow }) : '';
+        var factorBody = factorPrefixLatex(node.factor);
         body = factorBody + '\\left(' + innerTermsLatex(node.innerTerms) + '\\right)';
       }
       var sign = node.sign < 0 ? '-' : '+';
@@ -626,8 +634,19 @@
     // groupSlotLatex, qui parenthèse tout facteur rendu avec un "-" en tête).
     var first = factors[0];
     if (first.exponent === 1 && first.terms.length === 1 && !isGroup(first.terms[0]) && first.terms[0].coeff < 0) {
-      factors[0] = { terms: [{ coeff: -first.terms[0].coeff, pow: first.terms[0].pow }], exponent: 1 };
+      first = factors[0] = { terms: [{ coeff: -first.terms[0].coeff, pow: first.terms[0].pow }], exponent: 1 };
       sign = -sign;
+    }
+    // Facteur de tête réduit à 1 (ex. membre "-1" multiplié par "(x-1)") : on l'omet, pour
+    // afficher "-(x-1)" plutôt que "-1(x-1)". S'il ne reste qu'UN facteur d'exposant 1, un
+    // ProductGroup n'est plus permis (voir expandProductFactorSubset) : FactorGroup de
+    // facteur 1, dont le "1" n'est jamais affiché (voir factorPrefixLatex).
+    if (factors.length > 1 && first.exponent === 1 && first.terms.length === 1 && !isGroup(first.terms[0]) &&
+      first.terms[0].coeff === 1 && first.terms[0].pow === 0) {
+      factors = factors.slice(1);
+      if (factors.length === 1 && factors[0].exponent === 1) {
+        return [{ sign: sign, factor: { coeff: 1, pow: 0 }, innerTerms: cloneSide(factors[0].terms) }];
+      }
     }
     return [{ sign: sign, factors: factors }];
   }
@@ -1603,6 +1622,7 @@
     isSquareFactorGroup: isSquareFactorGroup,
     isGroup: isGroup,
     isExpressionQuotient: isExpressionQuotient,
+    factorPrefixLatex: factorPrefixLatex,
     sideHasVariable: sideHasVariable,
     wrapSideInProduct: wrapSideInProduct,
     canonicalizeFactors: canonicalizeFactors,

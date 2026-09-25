@@ -67,6 +67,27 @@ function ok(label, cond) {
     window.App.History.getSteps().slice(-1)[0].equation.right[0], true));
   ok('renders as -4(x-1), no parenthesized (-4)', /^-4\\left\(/.test(negLatex));
 
+  // Membre "-1" : le 1 disparaît, "-(x-1)" et non "-1(x-1)".
+  await page.evaluate(() => {
+    window.App.History.startNewEquation(window.App.Parser.parseLatexEquation('\\frac{8}{x-1}=-1'));
+    window.App.History.selectOp('expr');
+    window.App.History.setExprChainText('\\times(x-1)');
+    window.App.History.confirm();
+  });
+  await page.waitForTimeout(150);
+  const m1Right = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0].equation.right);
+  console.log('membre droit apres -1×(x-1):', JSON.stringify(m1Right));
+  const m1Latex = await page.evaluate((n) => window.App.Expr.nodeLatex(n, true), m1Right[0]);
+  ok('-1 × (x-1) renders as -(x-1)', m1Right.length === 1 && /^-\\left\(/.test(m1Latex));
+  const m1Expanded = await page.evaluate((side) => window.App.Expr.expandFactorGroup(side, 0, [0, 1]), m1Right);
+  ok('-(x-1) expands to -x+1', JSON.stringify(m1Expanded) === JSON.stringify([{ coeff: -1, pow: 1 }, { coeff: 1, pow: 0 }]));
+  const m1Dom = await page.evaluate(() => {
+    const rows = document.querySelectorAll('.katex');
+    return rows.length ? rows[rows.length - 1].textContent : '';
+  });
+  ok('no "1(" shown in the rendered row', m1Dom.indexOf('1(') === -1);
+  await page.screenshot({ path: `${SCRATCH}/mult_paren_minus_one.png` });
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;
