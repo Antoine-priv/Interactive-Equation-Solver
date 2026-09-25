@@ -1982,6 +1982,85 @@
     return { rowsData: rowsData, framedRowEl: framedRowEl, framedSolved: framedSolved, liveInfo: liveInfo };
   }
 
+  // Aperçu de "Produit nul"/"Racine carrée"/"(‥)²" sous la dernière ligne de la chaîne
+  // de `engine` (chaîne principale OU colonne focalisée — "Condition d'existence", branche
+  // "Produit nul"... voir renderAll/renderBranchNode) : ajoute la ligne/les colonnes
+  // d'aperçu à `container` (et à `rowsData` pour une ligne unique), renvoie { cols, label }
+  // quand une fourche d'aperçu reste à tracer (voir drawOpts.fork), sinon null. `eqGlyph` :
+  // glyphe d'affichage de la colonne (ex. "≠" d'un dénominateur), voir createRow.
+  function appendOpPreview(engine, container, rowsData, eqGlyph) {
+    var previewEquations = null;
+    var previewLabel = null;
+    // "sqrt-family" (envelopper à l'étape 1, simplifier à l'étape 2) : un aperçu à UNE
+    // seule équation (constante nulle, voir confirmSquareRoot/pushStep dans history.js)
+    // doit s'effondrer en ligne "pending" normale plutôt qu'en "fourche" à une seule
+    // branche — contrairement à "Produit nul", qui garde sa mise en page en colonnes
+    // même pour un seul facteur distinct (voir plus bas).
+    var previewCollapsible = false;
+    // Mode 'calc' de squareRootSimplifyAction (un seul membre sélectionné et calculé,
+    // voir plus bas) : seul CE côté change, l'étiquette ne doit apparaître QUE dessus —
+    // sinon null, comme confirmSquareRoot/pushAsymmetricStep pour l'étape confirmée.
+    var previewOnlySide = null;
+    var previewCols = null;
+    if (App.Toolbar.getHoveredOp() === 'produitnul') {
+      previewEquations = engine.previewProduitNul();
+      previewLabel = '\\text{produit nul}';
+    } else if (engine.getPending().opType === 'expr' && engine.getPending().sqrtArmed) {
+      previewEquations = engine.previewSquareRoot();
+      previewLabel = '\\sqrt{\\phantom{x}}';
+      previewCollapsible = true;
+    } else if (engine.getPending().opType === 'expr' && engine.getPending().squareArmed) {
+      // "(‥)²" armée : même principe que "√" juste au-dessus — TOUJOURS collapsible
+      // (previewSquareBothSides ne scinde jamais, contrairement à previewSquareRoot).
+      previewEquations = engine.previewSquareBothSides();
+      previewLabel = '\\left(\\phantom{x}\\right)^2';
+      previewCollapsible = true;
+    } else {
+      var sqrtAction = App.Toolbar.getHoveredOp() === 'simplify' ? engine.squareRootAction() : null;
+      if (sqrtAction) {
+        // Survol de "Simplifier" alors que la sélection en cours cible l'étape 2 de
+        // "Racine carrée" (voir squareRootSimplifyAction/computeSelectionInfo) : même
+        // aperçu que l'étape 1 ci-dessus (une seule équation en mode 'calc', qui ne
+        // scinde jamais ; ± scindé en mode 'split'/'both'), mais étiqueté "simplifier"
+        // (voir confirmSquareRoot dans history.js, qui utilise ce même libellé pour
+        // l'étape confirmée) plutôt que le symbole "√", puisque c'est désormais ce
+        // bouton-ci qui la déclenche.
+        previewEquations = engine.previewSquareRoot();
+        previewLabel = '\\text{simplifier}';
+        previewCollapsible = true;
+        if (sqrtAction.mode === 'calc') previewOnlySide = sqrtAction.side;
+      }
+    }
+    if (previewEquations && previewEquations.length === 1 && previewCollapsible) {
+      var soleRowEl = createRow(previewEquations[0], { pending: true, solved: false, current: false, eqGlyph: eqGlyph });
+      soleRowEl.classList.add('preview-pop-in');
+      container.appendChild(soleRowEl);
+      var soleOpLeft = previewOnlySide === 'right' ? null : previewLabel;
+      var soleOpRight = previewOnlySide === 'left' ? null : previewLabel;
+      rowsData.push({ el: soleRowEl, opLeft: soleOpLeft, opRight: soleOpRight, pending: true });
+    } else if (previewEquations) {
+      // PAS .produit-nul-split (dont le padding de 50vw sert uniquement à permettre,
+      // une fois une VRAIE scission confirmée, de défiler assez loin pour recentrer
+      // n'importe quelle colonne — inutile et contre-productif ici, cet aperçu est
+      // éphémère et doit juste apparaître centré là où il est, sans logique de
+      // défilement dédiée) : mise en page simple et indépendante, voir style.css.
+      var previewWrap = document.createElement('div');
+      previewWrap.className = 'produit-nul-preview preview-pop-in';
+      container.appendChild(previewWrap);
+      previewCols = previewEquations.map(function (eqPrev) {
+        var col = document.createElement('div');
+        col.className = 'produit-nul-branch';
+        var chainEl = document.createElement('div');
+        chainEl.className = 'produit-nul-chain';
+        chainEl.appendChild(createRow(eqPrev, { pending: false, solved: false, current: false, eqGlyph: eqGlyph }));
+        col.appendChild(chainEl);
+        previewWrap.appendChild(col);
+        return col;
+      });
+    }
+    return previewCols ? { cols: previewCols, label: previewLabel } : null;
+  }
+
   // Ligne juste AU-DESSUS de `framedEl` (la ligne "current") dans `rowsData` — jamais la
   // ligne "pending" elle-même si `renderChain` en a ajouté une en dernière position (voir
   // showPendingRow ci-dessus) : cette dernière n'est pas "au-dessus" de `framedEl`, elle
@@ -2055,6 +2134,10 @@
       if (!nodeBranches) {
         var leafRes = renderChain(engine, container, opts);
         if (!leafRes.liveInfo) App.MathKeypad.hideLiveOpPill();
+        // Même aperçu que la chaîne principale (voir appendOpPreview), pour la seule
+        // colonne focalisée — ajouté AVANT le marquage "flush-bottom" ci-dessous.
+        var leafPreview = opts.focused !== false
+          ? appendOpPreview(engine, container, leafRes.rowsData, opts.eqGlyph) : null;
         // Neutralise le margin-bottom (46px, voir .eq-row) de la DERNIÈRE ligne : sans
         // ça, il s'ajoute au padding bas de .produit-nul-branch et l'espace en bas de la
         // colonne devient nettement plus grand qu'en haut. Fait en JS (pas en CSS
@@ -2074,6 +2157,11 @@
           // jamais à cheval sur la colonne voisine (juxtaposées, séparées de 56px seulement).
           var leafDrawOpts = { constrainLabels: true };
           if (leafRes.liveInfo) leafDrawOpts.live = leafRes.liveInfo;
+          if (leafPreview) {
+            var leafLastSign = leafRes.rowsData.length
+              ? leafRes.rowsData[leafRes.rowsData.length - 1].el.querySelector('.eq-sign') : null;
+            leafDrawOpts.fork = { from: leafLastSign, to: leafPreview.cols, label: leafPreview.label, preview: true };
+          }
           App.Arrows.drawAll(container, leafRes.rowsData, leafDrawOpts);
         });
         return {
@@ -2840,94 +2928,20 @@
       // ET la flèche fourchue AVANT de cliquer "Valider" — purement visuel (aucune
       // branche réelle créée, lignes non interactives, voir .produit-nul-preview).
       // Disparaît tout seul au prochain rendu dès que la condition n'est plus remplie.
-      // Tout ce bloc d'aperçu au survol (Produit nul/Racine carrée) ne s'applique QUE
-      // quand la chaîne principale est bien la cible active : une colonne de domaine
-      // focalisée gère ses propres actions (via renderBranchNode plus bas), sans aperçu
-      // de survol dédié — même simplification déjà en place pour toute colonne "Produit
-      // nul"/"Racine carrée" imbriquée (voir renderBranchNode, qui n'a jamais eu ce
-      // bloc non plus).
-      var previewEquations = null;
-      var previewLabel = null;
-      // "sqrt-family" (envelopper à l'étape 1, simplifier à l'étape 2) : un aperçu à UNE
-      // seule équation (constante nulle, voir confirmSquareRoot/pushStep dans history.js)
-      // doit s'effondrer en ligne "pending" normale plutôt qu'en "fourche" à une seule
-      // branche — contrairement à "Produit nul", qui garde sa mise en page en colonnes
-      // même pour un seul facteur distinct (voir plus bas).
-      var previewCollapsible = false;
-      // Mode 'calc' de squareRootSimplifyAction (un seul membre sélectionné et calculé,
-      // voir plus bas) : seul CE côté change, l'étiquette ne doit apparaître QUE dessus —
-      // sinon null, comme confirmSquareRoot/pushAsymmetricStep pour l'étape confirmée.
-      var previewOnlySide = null;
-      var previewCols = null;
-      if (mainFocused) {
-        if (App.Toolbar.getHoveredOp() === 'produitnul') {
-          previewEquations = Hist.previewProduitNul();
-          previewLabel = '\\text{produit nul}';
-        } else if (Hist.getPending().opType === 'expr' && Hist.getPending().sqrtArmed) {
-          previewEquations = Hist.previewSquareRoot();
-          previewLabel = '\\sqrt{\\phantom{x}}';
-          previewCollapsible = true;
-        } else if (Hist.getPending().opType === 'expr' && Hist.getPending().squareArmed) {
-          // "(‥)²" armée : même principe que "√" juste au-dessus — TOUJOURS collapsible
-          // (previewSquareBothSides ne scinde jamais, contrairement à previewSquareRoot).
-          previewEquations = Hist.previewSquareBothSides();
-          previewLabel = '\\left(\\phantom{x}\\right)^2';
-          previewCollapsible = true;
-        } else {
-          var sqrtAction = App.Toolbar.getHoveredOp() === 'simplify' ? Hist.squareRootAction() : null;
-          if (sqrtAction) {
-            // Survol de "Simplifier" alors que la sélection en cours cible l'étape 2 de
-            // "Racine carrée" (voir squareRootSimplifyAction/computeSelectionInfo) : même
-            // aperçu que l'étape 1 ci-dessus (une seule équation en mode 'calc', qui ne
-            // scinde jamais ; ± scindé en mode 'split'/'both'), mais étiqueté "simplifier"
-            // (voir confirmSquareRoot dans history.js, qui utilise ce même libellé pour
-            // l'étape confirmée) plutôt que le symbole "√", puisque c'est désormais ce
-            // bouton-ci qui la déclenche.
-            previewEquations = Hist.previewSquareRoot();
-            previewLabel = '\\text{simplifier}';
-            previewCollapsible = true;
-            if (sqrtAction.mode === 'calc') previewOnlySide = sqrtAction.side;
-          }
-        }
-        if (previewEquations && previewEquations.length === 1 && previewCollapsible) {
-          var soleRowEl = createRow(previewEquations[0], { pending: true, solved: false, current: false });
-          soleRowEl.classList.add('preview-pop-in');
-          history.appendChild(soleRowEl);
-          var soleOpLeft = previewOnlySide === 'right' ? null : previewLabel;
-          var soleOpRight = previewOnlySide === 'left' ? null : previewLabel;
-          res.rowsData.push({ el: soleRowEl, opLeft: soleOpLeft, opRight: soleOpRight, pending: true });
-        } else if (previewEquations) {
-          // PAS .produit-nul-split (dont le padding de 50vw sert uniquement à permettre,
-          // une fois une VRAIE scission confirmée, de défiler assez loin pour recentrer
-          // n'importe quelle colonne — inutile et contre-productif ici, cet aperçu est
-          // éphémère et doit juste apparaître centré là où il est, sans logique de
-          // défilement dédiée) : mise en page simple et indépendante, voir style.css.
-          var previewWrap = document.createElement('div');
-          previewWrap.className = 'produit-nul-preview preview-pop-in';
-          history.appendChild(previewWrap);
-          previewCols = previewEquations.map(function (eqPrev) {
-            var col = document.createElement('div');
-            col.className = 'produit-nul-branch';
-            var chainEl = document.createElement('div');
-            chainEl.className = 'produit-nul-chain';
-            chainEl.appendChild(createRow(eqPrev, { pending: false, solved: false, current: false }));
-            col.appendChild(chainEl);
-            previewWrap.appendChild(col);
-            return col;
-          });
-        }
-      }
+      // Seulement quand la chaîne principale est bien la cible active : une colonne
+      // focalisée (domaine, branche) affiche le sien via renderBranchNode.
+      var opPreview = mainFocused ? appendOpPreview(Hist, history, res.rowsData) : null;
 
       requestAnimationFrame(function () {
         if (isStaleRender()) return;
         var drawOpts = {};
-        if (previewCols) {
+        if (opPreview) {
           var lastEqSign = res.rowsData.length
             ? res.rowsData[res.rowsData.length - 1].el.querySelector('.eq-sign') : null;
           // preview:true (voir drawFork dans arrows.js) : SEULE cette fourche, purement
           // visuelle et éphémère, doit se tracer progressivement — la vraie scission
           // confirmée (autre appel à drawAll, ailleurs dans ce fichier) reste instantanée.
-          drawOpts.fork = { from: lastEqSign, to: previewCols, label: previewLabel, preview: true };
+          drawOpts.fork = { from: lastEqSign, to: opPreview.cols, label: opPreview.label, preview: true };
         }
         if (res.liveInfo) drawOpts.live = res.liveInfo;
         App.Arrows.drawAll(history, res.rowsData, drawOpts);
