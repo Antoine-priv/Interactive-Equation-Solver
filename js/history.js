@@ -616,8 +616,21 @@
       if (pending.opType !== null) return;
       // Une branche, un dénominateur ou un radicand déjà engagés sont des profondeurs
       // terminales (voir toggleInnerSelection) : jamais de nouvelle descente depuis là.
-      if (typeof pending.drilled.branch === 'number' || pending.drilled.part === 'den' || pending.drilled.part === 'sqrt') return;
+      if (typeof pending.drilled.branch === 'number' || pending.drilled.part === 'sqrt') return;
       var currentNode = Expr.nodeAtPath(lastEquation()[pending.drilled.side], pending.drilled.path);
+      // Dans un dénominateur qui est un produit (ex. "(x²-4)√(-x+6)") : on descend dans
+      // UN de ses facteurs pour le factoriser, en restant dans le dénominateur (part 'den').
+      if (pending.drilled.part === 'den') {
+        var den = currentNode && Expr.isExpressionQuotient(currentNode) ? currentNode.factorTerms : null;
+        if (!den || den.length !== 1 || innerIndex !== 0 || !Expr.isProductGroup(den[0])) return;
+        var denBranch = den[0].factors[branch] && den[0].factors[branch].terms;
+        if (!denBranch || denBranch.length < 2) return;
+        pending.drilled = { side: pending.drilled.side, path: pending.drilled.path, part: 'den', branch: branch };
+        pending.selectedInner = [];
+        pending.error = null;
+        notify();
+        return;
+      }
       var innerNode = currentNode && Expr.drilledWorkingArray(currentNode, pending.drilled)[innerIndex];
       if (!innerNode || !Expr.isProductGroup(innerNode)) return;
       var branchArr = innerNode.factors[branch] && innerNode.factors[branch].terms;
@@ -647,6 +660,14 @@
       if (!pending.drilled) return;
       var side = pending.drilled.side;
       var path = pending.drilled.path;
+      // D'un facteur du dénominateur, on remonte au dénominateur entier.
+      if (pending.drilled.part === 'den' && typeof pending.drilled.branch === 'number') {
+        pending.drilled = { side: side, path: path, part: 'den' };
+        pending.selectedInner = [];
+        pending.error = null;
+        notify();
+        return;
+      }
       if (path.length === 1) {
         pending.drilled = null;
       } else {
@@ -672,7 +693,7 @@
         // d'une racine carrée, ou intérieur d'un FactorGroup classique (voir
         // drilledWorkingArray/applyDrilledArray) : même tableau Node[] dans les quatre cas,
         // seule la reconstitution ensuite diffère.
-        if (typeof d.branch === 'number' && !Expr.isProductGroup(groupNode)) return null;
+        if (typeof d.branch === 'number' && d.part !== 'den' && !Expr.isProductGroup(groupNode)) return null;
         if (d.part === 'den' && !Expr.isExpressionQuotient(groupNode)) return null;
         if (d.part === 'sqrt' && !Expr.isSqrtGroup(groupNode)) return null;
         if (!d.part && typeof d.branch !== 'number' && !Expr.isFactorGroup(groupNode)) return null;

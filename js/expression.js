@@ -1725,6 +1725,9 @@
   // history.js ET toolbar.js, qui utilisent tous deux ceci), seule la façon de RECONSTITUER
   // le membre ensuite diffère (voir withDrilledArrayAtPath).
   function drilledWorkingArray(groupNode, d) {
+    // Un facteur d'un dénominateur-produit (ex. "(x²-4)" dans "…/((x²-4)√(-x+6))", voir
+    // drillIntoNestedProductBranch dans history.js).
+    if (d.part === 'den' && typeof d.branch === 'number') return groupNode.factorTerms[0].factors[d.branch].terms;
     if (d.part === 'den') return groupNode.factorTerms;
     if (d.part === 'sqrt') return groupNode.radicand;
     if (typeof d.branch === 'number') return groupNode.factors[d.branch].terms;
@@ -1734,6 +1737,10 @@
   // Symétrique de drilledWorkingArray : reconstruit `side` avec `newArray` remis à sa place
   // (path/branch-ou-part de `d`).
   function withDrilledArrayAtPath(side, d, newArray) {
+    if (d.part === 'den' && typeof d.branch === 'number') {
+      var den = nodeAtPath(side, d.path).factorTerms;
+      return withQuotientDenominatorAtPath(side, d.path, withProductBranchAtPath(den, [0], d.branch, newArray));
+    }
     if (d.part === 'den') return withQuotientDenominatorAtPath(side, d.path, newArray);
     if (d.part === 'sqrt') return withSqrtRadicandAtPath(side, d.path, newArray);
     if (typeof d.branch === 'number') return withProductBranchAtPath(side, d.path, d.branch, newArray);

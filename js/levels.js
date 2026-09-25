@@ -262,7 +262,7 @@
       hints: ['Deux facteurs : x + 5 et 4 − x.', 'Condition d\'existence, puis tableau de signes.'] },
     { id: 'oB', zone: 'obs', x: 1520, y: 320, req: ['o3'], title: 'Épreuve de l\'Observatoire',
       latex: '\\frac{\\sqrt{x+8}(x^2+10x+25)(-x+3)}{(x^2-4)\\sqrt{-x+6}}\\geq0',
-      sol: U(I(-8, true, -2, false), I(2, false, 3, true)), par: 10, boss: true, badge: 'astronome',
+      sol: U(I(-8, true, -2, false), I(2, false, 3, true)), par: 22, boss: true, badge: 'astronome',
       learn: 'Domaine puis signe, avec des racines', trap: 'Racine au dénominateur : −x + 6 > 0. −5 est une racine double.',
       hints: ['Factorise x² + 10x + 25 et x² − 4.', 'Conditions d\'existence de chaque racine et de x² − 4, puis tableau de signes.'] },
 

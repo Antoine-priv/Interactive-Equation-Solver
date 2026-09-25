@@ -250,13 +250,14 @@ const S = {
     });
     R.simp('left', [0]); R.op('\\times(4-x)'); R.tidy(); R.linear();
   },
-  // Variante avec x² − 4 déjà factorisé (voir BLOCKED) : factoriser à l'intérieur d'un
-  // produit placé au dénominateur n'est pas possible dans l'app.
   oB: () => {
-    R.drill('left', 0); window.App.History.clickNestedFactor(0, 1); window.App.History.clickNestedFactor(0, 1);
+    var H = window.App.History;
+    R.drill('left', 0); H.clickNestedFactor(0, 1); H.clickNestedFactor(0, 1);
     R.innerIdentity([0, 1, 2], 1, 'x', '5');
+    R.drillDen('left', 0); H.clickNestedFactor(0, 0); H.clickNestedFactor(0, 0);
+    R.innerIdentity([0, 1], 3, 'x', '2');
     R.drill('left', 0); R.existence(); R.drillDen('left', 0); R.existence();
-    window.App.History.getDomainConditions().forEach((_, i) => R.inDomain(i, R.linear));
+    H.getDomainConditions().forEach((_, i) => R.inDomain(i, R.linear));
     R.signChart();
   },
   o2: () => { R.drillDen('left', 0); R.existence(); R.inDomain(0, R.linear); R.op('\\times(4-x)'); R.expandAll(); R.linear(); },
@@ -266,7 +267,7 @@ const S = {
 // Niveaux qu'on sait impossibles à finir avec l'app actuelle (voir le compte rendu).
 const BLOCKED = {
   mB: 'Produit nul indisponible sur une équation qui porte déjà une condition d\'existence (restriction v1)',
-  oB: 'x² − 4 ne se factorise pas dans un produit au dénominateur ; la variante (x − 2)(x + 2) se résout (script oB)' };
+};
 
 (async () => {
   const zones = process.argv.slice(2);

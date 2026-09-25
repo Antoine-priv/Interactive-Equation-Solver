@@ -752,12 +752,24 @@
   // "-inner-j", le tout enveloppé d'un "-exit" pour ressortir) mais sur node.factorTerms. Le
   // NUMÉRATEUR (node.innerTerms), lui, reste un bloc opaque normal — on est "entré" dans le
   // dénominateur, pas dans lui.
-  function drilledQuotientDenominatorLatex(node, idPrefix, topIdx, isFirst) {
+  function drilledQuotientDenominatorLatex(node, idPrefix, topIdx, isFirst, branch) {
     var numLatex = Expr.innerTermsLatex(node.innerTerms);
-    var activeLatex = node.factorTerms.map(function (t, j) {
-      return '\\htmlId{' + idPrefix + '-' + topIdx + '-inner-' + j + '}{' + Expr.nodeLatex(t, j === 0) + '}';
-    }).join('');
-    var body = '\\frac{' + numLatex + '}{\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{' + activeLatex + '}}';
+    var body;
+    if (typeof branch === 'number') {
+      // Un facteur du dénominateur-produit est lui-même "entré" (voir
+      // drillIntoNestedProductBranch) : rendu comme une branche de produit drillée.
+      body = '\\frac{' + numLatex + '}{' + drilledProductBranchLatex(node.factorTerms[0], idPrefix, topIdx, branch, true) + '}';
+    } else {
+      // Un produit ("(x²-4)√(-x+6)") marque chacun de ses facteurs, pour pouvoir entrer
+      // dans l'un d'eux par double-clic (câblé dans renderSide).
+      var activeLatex = node.factorTerms.map(function (t, j) {
+        var inner = Expr.isProductGroup(t) && t.factors.length >= 2
+          ? productGroupBranchesLatex(t, idPrefix + '-' + topIdx + '-inner-' + j, j === 0)
+          : Expr.nodeLatex(t, j === 0);
+        return '\\htmlId{' + idPrefix + '-' + topIdx + '-inner-' + j + '}{' + inner + '}';
+      }).join('');
+      body = '\\frac{' + numLatex + '}{\\htmlId{' + idPrefix + '-' + topIdx + '-exit}{' + activeLatex + '}}';
+    }
     var sign = node.sign < 0 ? '-' : '+';
     if (isFirst) return (sign === '-' ? '-' : '') + body;
     return ' ' + sign + ' ' + body;
@@ -766,11 +778,13 @@
   // Variante de drilledQuotientDenominatorLatex utilisée PENDANT un glisser en cours dans le
   // dénominateur (voir buildInnerDragLatex plus bas) : même principe que
   // drilledProductBranchLatexForOrder, sur node.factorTerms.
-  function drilledQuotientDenominatorLatexForOrder(node, orderedLeaf, isFirst) {
+  function drilledQuotientDenominatorLatexForOrder(node, orderedLeaf, isFirst, branch) {
     var numLatex = Expr.innerTermsLatex(node.innerTerms);
-    var activeLatex = orderedLeaf.map(function (t, j) {
-      return '\\htmlId{dragpv-' + j + '}{' + Expr.nodeLatex(t, j === 0) + '}';
-    }).join('');
+    var activeLatex = typeof branch === 'number'
+      ? drilledProductBranchLatexForOrder(node.factorTerms[0], branch, orderedLeaf, true)
+      : orderedLeaf.map(function (t, j) {
+        return '\\htmlId{dragpv-' + j + '}{' + Expr.nodeLatex(t, j === 0) + '}';
+      }).join('');
     var body = '\\frac{' + numLatex + '}{' + activeLatex + '}';
     var sign = node.sign < 0 ? '-' : '+';
     if (isFirst) return (sign === '-' ? '-' : '') + body;
@@ -905,7 +919,7 @@
     var latex = side.map(function (node, idx) {
       if (drilled && drilled.path[0] === idx) {
         if (drilled.part === 'den') {
-          return drilledQuotientDenominatorLatex(node, idPrefix, idx, idx === 0);
+          return drilledQuotientDenominatorLatex(node, idPrefix, idx, idx === 0, drilled.branch);
         }
         if (drilled.part === 'sqrt') {
           return drilledSqrtLatex(node, idPrefix, idx, idx === 0);
@@ -945,13 +959,27 @@
       function buildInnerDragLatex(orderedLeaf) {
         return side.map(function (node, idx) {
           if (idx !== topIdx) return Expr.nodeLatex(node, idx === 0);
-          if (drilled.part === 'den') return drilledQuotientDenominatorLatexForOrder(node, orderedLeaf, idx === 0);
+          if (drilled.part === 'den') return drilledQuotientDenominatorLatexForOrder(node, orderedLeaf, idx === 0, drilled.branch);
           if (drilled.part === 'sqrt') return drilledSqrtLatexForOrder(node, orderedLeaf, idx === 0);
           if (typeof drilled.branch === 'number' && drilled.path.length === 1) {
             return drilledProductBranchLatexForOrder(node, drilled.branch, orderedLeaf, idx === 0);
           }
           return drilledGroupLatexForOrder(node, drilled.path.slice(1), orderedLeaf, idx === 0, drilled.branch);
         }).join('');
+      }
+      // Clic sur un terme intérieur. Dans un dénominateur-produit drillé, un clic qui
+      // tombe sur l'un de ses facteurs compte pour ce facteur (double-clic : y entrer,
+      // voir clickNestedFactor/drillIntoNestedProductBranch dans history.js).
+      function innerClick(i, target) {
+        if (drilled.part === 'den' && typeof drilled.branch !== 'number') {
+          var slot = target && target.closest && target.closest('[id^="' + idPrefix + '-' + topIdx + '-inner-' + i + '-factor-"]');
+          if (slot) {
+            var j = parseInt(slot.id.split('-factor-').pop(), 10);
+            withFocus(function () { dragEngine.clickNestedFactor(i, j); })();
+            return;
+          }
+        }
+        drilled.onInnerClick(i);
       }
       innerArr.forEach(function (t, i) {
         var innerEl = container.querySelector('#' + escId(idPrefix + '-' + topIdx + '-inner-' + i));
@@ -987,11 +1015,11 @@
             getSelected: function () { return drilled.selectedInner; },
             commit: drilled.onSetInnerOrder,
             buildLatex: buildInnerDragLatex
-          }, i, function () { drilled.onInnerClick(i); });
+          }, i, function (target) { innerClick(i, target); });
         } else {
           innerEl.addEventListener('click', function (e) {
             e.stopPropagation();
-            drilled.onInnerClick(i);
+            innerClick(i, e.target);
           });
         }
       });
@@ -1003,6 +1031,18 @@
       // et limité à une seule profondeur de "drilled" (path.length===1) sans branche/
       // dénominateur : les combinaisons plus profondes/rares restent un bloc opaque pour
       // l'instant, comme avant ce correctif.
+      // Dénominateur-produit drillé (voir drilledQuotientDenominatorLatex) : ses facteurs
+      // sont repérables au survol ; le double-clic est géré par innerClick ci-dessus.
+      if (drilled.part === 'den' && typeof drilled.branch !== 'number') {
+        innerArr.forEach(function (t, i) {
+          if (!Expr.isProductGroup(t) || t.factors.length < 2) return;
+          t.factors.forEach(function (f, j) {
+            var factorEl = container.querySelector('#' + escId(idPrefix + '-' + topIdx + '-inner-' + i + '-factor-' + j));
+            if (!factorEl) return;
+            factorEl.classList.add('factor-slot');
+          });
+        });
+      }
       if (!drilled.part && typeof drilled.branch !== 'number' && drilled.path.length === 1 && drilled.draggable) {
         function buildNestedFactorDragLatex(innerIdx, orderedFactors) {
           return side.map(function (node, idx) {
