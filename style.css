@@ -2050,13 +2050,6 @@ button {
    discret que .key-btn (pavé mathématique), pas le style rempli/accent des boutons
    d'action .modal-section button ci-dessus (surchargé explicitement ici, même
    spécificité mais règle plus spécifique .modal-section .relation-picker button). */
-.relation-picker-label {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
 .relation-picker { display: flex; gap: 6px; }
 .modal-section .relation-picker button {
   flex: 1;
