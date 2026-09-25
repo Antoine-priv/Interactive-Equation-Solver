@@ -148,6 +148,7 @@
     applyExpandProduct: applyExpandProduct,
     applyExpandProductFactorSubset: applyExpandProductFactorSubset,
     isSolved: isSolved,
+    isConstantSide: isConstantSide,
     solvedValue: solvedValue
   };
 })(window.App = window.App || {});

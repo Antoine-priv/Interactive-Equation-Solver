@@ -149,22 +149,36 @@
   // (from===to, les deux bornes incluses — un point isolé, voir signChartSolutionRanges)
   // s'affiche comme un singleton "{r}" plutôt qu'un intervalle "[r;r]".
   function signChartSolutionLatex(ranges) {
-    if (!ranges.length) return 'S=\\emptyset';
-    function numLabel(v) {
-      if (v === -Infinity) return '-\\infty';
-      if (v === Infinity) return '+\\infty';
-      return (v < 0 ? '-' : '') + Expr.formatNumberLatex(v);
-    }
-    var parts = ranges.map(function (r) {
-      if (r.from === r.to && r.fromIncluded && r.toIncluded) {
-        return '\\left\\{' + numLabel(r.from) + '\\right\\}';
+    return 'S=' + App.Ineq.rangesLatex(ranges);
+  }
+
+  // Domaine de définition combiné de toutes les colonnes "Condition d'existence" (voir
+  // renderDomainSplit) sous forme d'intervalles (voir App.Ineq) : R s'il n'y en a aucune,
+  // null tant qu'au moins une n'est pas encore résolue. Un dénominateur (kind 'den',
+  // équation "=" affichée "≠") EXCLUT ses solutions ; un radicand (kind 'sqrt', moteur en
+  // mode inégalité) donne directement son ensemble.
+  function domainRanges(conditions) {
+    var Ineq = App.Ineq;
+    var result = Ineq.ALL_REALS.slice();
+    for (var i = 0; conditions && i < conditions.length; i++) {
+      var eng = conditions[i].engine;
+      var set = Ineq.solutionRanges(eng.lastEquation(), eng.getCurrentOperator());
+      if (!set) return null;
+      if (conditions[i].kind === 'den') {
+        if (set.length === 1 && set[0].from === -Infinity && set[0].to === Infinity) set = [];
+        else set = Ineq.complementOfPoints(set.map(function (r) { return r.from; }));
       }
-      var openLeft = r.from === -Infinity || !r.fromIncluded;
-      var openRight = r.to === Infinity || !r.toIncluded;
-      return (openLeft ? '\\left]' : '\\left[') + numLabel(r.from) + ';' + numLabel(r.to) +
-        (openRight ? '\\right[' : '\\right]');
-    });
-    return 'S=' + parts.join('\\cup');
+      result = Ineq.intersectRanges(result, set);
+    }
+    return result;
+  }
+
+  // Ligne "S=..." finale (même habillage que le résumé de "Produit nul"/"Df=...").
+  function createSolutionSetEl(ranges) {
+    var el = document.createElement('div');
+    el.className = 'solution-set final-solution-set';
+    window.katex.render('S=' + App.Ineq.rangesLatex(ranges), el, { throwOnError: false });
+    return el;
   }
 
   // Popup compact (2 boutons pour une case, ou une liste verticale pour "+ Ajouter une
@@ -1751,7 +1765,9 @@
 
     steps.forEach(function (step, i) {
       var isLastConfirmed = (i === steps.length - 1);
-      var solved = isLastConfirmed && App.Equation.isSolved(step.equation);
+      // Arrivée au bout : "x=r" (ou "x<r"...), mais aussi deux constantes ("3=5", "0=0")
+      // — plus aucune opération n'a de sens, voir App.Ineq.solutionRanges.
+      var solved = isLastConfirmed && App.Ineq.solutionRanges(step.equation, step.operator || null) !== null;
       // L'équation encadrée est celle qui vient d'être obtenue (le dernier résultat),
       // pas la ligne "pending" du dessous qui reste, elle, à construire.
       var current = isLastConfirmed && !solved;
@@ -1935,13 +1951,6 @@
       if (rowsData[i].el === framedEl) return i > 0 ? rowsData[i - 1].el : null;
     }
     return null;
-  }
-
-  // Valeur de x une fois une branche résolue (voir Equation.isSolved : un membre "x",
-  // l'autre une constante).
-  function extractRoot(eq) {
-    var leftIsX = Expr.sideIsSingleTerm(eq.left) && eq.left[0].pow === 1;
-    return (leftIsX ? eq.right : eq.left)[0].coeff;
   }
 
   function renderAll() {
@@ -2689,6 +2698,18 @@
         focused: mainFocused
       });
 
+      // "S=..." sous la chaîne principale une fois arrivée au bout (voir
+      // App.Ineq.solutionRanges : une solution, aucune, ou une infinité — équation comme
+      // inéquation), restreint au domaine de définition s'il y en a un (attend alors que
+      // toutes ses colonnes soient résolues). Jamais avec un "Tableau de signes", qui
+      // affiche déjà son propre "S=..." (voir renderSignChartTable).
+      var mainSet = Hist.getSignChart() ? null :
+        App.Ineq.solutionRanges(mainEngine.lastEquation(), mainEngine.getCurrentOperator());
+      var mainDomain = mainSet && domainRanges(Hist.getDomainConditions());
+      if (mainSet && mainDomain) {
+        history.appendChild(createSolutionSetEl(App.Ineq.intersectRanges(mainSet, mainDomain)));
+      }
+
       // En-tête "Équation" : ajouté APRÈS coup (renderChain vide et reconstruit `history`
       // à chaque rendu, voir son tout début) comme premier enfant plutôt qu'avant — même
       // habillage que ".domain-split-header" (voir .section-header dans style.css) pour
@@ -3036,19 +3057,18 @@
       // voir leafEngines dans renderBranchNode, pas seulement le premier niveau)
       // résolues : "S = {...}", fusionnant les racines identiques (ex. racine double
       // "(x+3)²=0", ou deux facteurs par ailleurs distincts qui finissent par la même
-      // solution).
+      // solution). Une feuille peut aussi finir sans solution ("3=0") ou avec une infinité
+      // ("0=0") — réunion d'ensembles (voir App.Ineq), restreinte au domaine s'il y en a un.
       var allLeafEngines = branchResults.reduce(function (acc, b) { return acc.concat(b.res.leafEngines); }, []);
-      if (allLeafEngines.every(function (le) { return App.Equation.isSolved(le.lastEquation()); })) {
-        var roots = allLeafEngines.map(function (le) { return extractRoot(le.lastEquation()); })
-          .filter(function (v, i, arr) { return arr.indexOf(v) === i; })
-          .sort(function (a, b) { return a - b; });
-        var rootsLatex = roots.map(function (v) {
-          return (v < 0 ? '-' : '') + Expr.formatNumberLatex(v);
-        }).join('\\,;\\,');
-        var summaryEl = document.createElement('div');
-        summaryEl.className = 'solution-set';
-        window.katex.render('S=\\left\\{' + rootsLatex + '\\right\\}', summaryEl, { throwOnError: false });
-        history.appendChild(summaryEl);
+      var leafSets = allLeafEngines.map(function (le) {
+        // getLeaf() : sa PROPRE chaîne, jamais celle d'une colonne qu'il aurait focalisée.
+        var own = le.getLeaf ? le.getLeaf() : le;
+        return App.Ineq.solutionRanges(own.lastEquation(), own.getCurrentOperator());
+      });
+      var branchesDomain = domainRanges(Hist.getDomainConditions());
+      if (branchesDomain && leafSets.every(function (set) { return set !== null; })) {
+        var unionSet = App.Ineq.unionRanges([].concat.apply([], leafSets));
+        history.appendChild(createSolutionSetEl(App.Ineq.intersectRanges(unionSet, branchesDomain)));
       }
     }
 

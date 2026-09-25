@@ -110,6 +110,11 @@ drag into a regular "Opération" step via `dragAcross` (`history.js`, shares `co
 alone on its side, or the coefficient of a lone `3x`/`3(x+2)` (`Expr.leadingCoefficient`, rendered
 as its own `.coeff-slot`), divides both sides instead.
 
+Once a chain reaches its end — `x=r`/`x<r`… or two constants (`3=5`, `0=0`) — a final "S=..." line is shown
+(`App.Ineq.solutionRanges`/`rangesLatex` in `inequality.js`, sets as sorted interval lists): under the main chain
+(intersected with the "Condition d'existence" domain once all its columns are resolved; skipped when a "Tableau de signes"
+exists, which shows its own), and under "Produit nul" columns (union of every leaf).
+
 ## Infinite canvas (`js/canvas.js`)
 
 `#historyScroll` is a fixed-size `overflow:hidden` viewport — it never scrolls natively.
