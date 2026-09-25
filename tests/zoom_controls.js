@@ -182,6 +182,31 @@ function approx(a, b, eps) {
     anchorCheck.screenX.toFixed(2) + ' vs ' + anchorCheck.vcx.toFixed(2) + ', y=' + anchorCheck.screenY.toFixed(2) + ' vs ' + anchorCheck.vcy.toFixed(2) + ')',
     approx(anchorCheck.screenX, anchorCheck.vcx, 1) && approx(anchorCheck.screenY, anchorCheck.vcy, 1));
 
+  // Même ancrage, mais PENDANT l'animation "smooth" (boutons loupe) et pas seulement à la
+  // fin : le point central doit rester immobile à chaque frame peinte, pas filer vers le
+  // bas-droite puis se rattraper (voir l'ordre translate/scale dans apply(), canvas.js).
+  const midAnimCheck = await page.evaluate(async () => {
+    var scroller = document.getElementById('historyScroll');
+    var layer = document.getElementById('canvasLayer');
+    window.App.Canvas.zoomAt(1); window.App.Canvas.set(0, 0);
+    var vcx = scroller.clientWidth / 2, vcy = scroller.clientHeight / 2;
+    var local = { x: vcx, y: vcy };
+    window.App.Canvas.zoomAt(2, vcx, vcy, { behavior: 'smooth' });
+    var samples = [];
+    for (var i = 0; i < 4; i++) {
+      await new Promise(function (r) { setTimeout(r, 40); });
+      var m = new DOMMatrixReadOnly(getComputedStyle(layer).transform);
+      samples.push({ s: m.a, dx: m.a * local.x + m.m41 - vcx, dy: m.d * local.y + m.m42 - vcy });
+    }
+    return samples;
+  });
+  console.log('echantillons en cours d\'animation:', JSON.stringify(midAnimCheck));
+  ok('au moins un échantillon pris en cours de transition (echelle strictement entre 1 et 2)',
+    midAnimCheck.some(function (p) { return p.s > 1.01 && p.s < 1.99; }));
+  ok('le point central reste immobile PENDANT l\'animation du zoom',
+    midAnimCheck.every(function (p) { return Math.abs(p.dx) < 1 && Math.abs(p.dy) < 1; }));
+  await page.waitForTimeout(400);
+
   const cursorAnchorCheck = await page.evaluate(() => {
     var before = { x: window.App.Canvas.getX(), y: window.App.Canvas.getY(), s: window.App.Canvas.getScale() };
     var cursor = { x: 180, y: 260 }; // point volontairement hors du centre du viewport

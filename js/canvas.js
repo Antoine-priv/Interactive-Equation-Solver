@@ -37,14 +37,19 @@
     return Math.max(MIN_SCALE, Math.min(MAX_SCALE, s));
   }
 
-  // Ordre important : `scale(...)` PUIS `translate(...)` — un point du repère local (non
-  // transformé) de #canvasLayer subit donc d'abord la translation, puis la mise à
-  // l'échelle (les fonctions d'une liste `transform` s'appliquent de la DERNIÈRE vers la
-  // PREMIÈRE à un point donné). La position visible d'un point local `p` vaut alors
-  // `scale * (p - {x, y})` : c'est cette relation que zoomAt() (voir plus bas) inverse
-  // pour garder un point ÉCRAN fixe pendant un changement de zoom.
+  // Ordre important : `translate(...)` PUIS `scale(...)` — un point local `p` de
+  // #canvasLayer est d'abord mis à l'échelle, puis translaté d'un offset ÉCRAN
+  // (`-offset * scale`). Sa position visible vaut donc `scale * (p - {x, y})` : c'est cette
+  // relation que zoomAt() (voir plus bas) inverse pour garder un point ÉCRAN fixe pendant
+  // un changement de zoom. L'ordre inverse (`scale() translate(-x, -y)`) donne la même
+  // matrice finale, mais une transition CSS interpole chaque fonction séparément : le
+  // décalage peint y vaut `scale(t) * x(t)`, produit de deux interpolations, qui fait
+  // dériver le point censé rester fixe (zoom qui file vers le bas-droite puis se
+  // rattrape). Ici, translation écran et échelle progressent du même pas, et comme
+  // `translation = point écran fixe - scale * point local` est linéaire en `scale`, ce
+  // point reste immobile pendant toute l'animation.
   function apply() {
-    if (layer) layer.style.transform = 'scale(' + scale + ') translate(' + (-x) + 'px, ' + (-y) + 'px)';
+    if (layer) layer.style.transform = 'translate(' + (-x * scale) + 'px, ' + (-y * scale) + 'px) scale(' + scale + ')';
   }
 
   function stopAnimated() {
@@ -67,9 +72,8 @@
   function paintedOffset() {
     if (!animating || !layer) return { x: x, y: y };
     var m = new DOMMatrixReadOnly(getComputedStyle(layer).transform);
-    // m41/m42 portent la translation APRÈS mise à l'échelle (voir apply() : `scale()`
-    // englobe `translate()`), donc `-x*scale`/`-y*scale`, pas `-x`/`-y` — diviser par
-    // `m.a` (le facteur d'échelle courant, lu sur la même matrice plutôt que sur `scale`
+    // m41/m42 portent la translation ÉCRAN (voir apply() : `translate()` en tête), donc
+    // `-x*scale`/`-y*scale`, pas `-x`/`-y` — diviser par `m.a` (le facteur d'échelle courant, lu sur la même matrice plutôt que sur `scale`
     // pour rester cohérent avec ce qui est réellement peint pendant la transition) annule
     // ce facteur et retrouve l'offset "local" non transformé.
     return { x: -m.m41 / m.a, y: -m.m42 / m.a };
