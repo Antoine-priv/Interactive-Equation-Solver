@@ -195,15 +195,19 @@ J'ai vérifié ces points dans le code le 2026-09-25. Tous les autres problèmes
 avec l'application actuelle. Par exemple, `−(x+1)(x−2)/(1−x) ≥ 0` (exercice 23, question 1)
 est accepté tel quel par le tableau de signes (`Expr.extractSignChartFactors`).
 
-1. **Facteur de signe constant dans le tableau de signes.** `extractSignChartFactors`
-   refuse tout facteur de degré ≥ 2. Il faut une ligne « x² + 1 : toujours + » pour
-   s5. Pour oB, la carte prévoit que l'élève factorise d'abord x² + 10x + 25 en (x + 5)²
-   (une puissance paire est déjà gérée).
-2. **Simplifier un facteur commun dans un quotient** en gardant la valeur exclue visible,
-   comme le « si (…) ≠ 0 » actuel (`desc.nonZero`). C'est nécessaire pour o2 (h simplifiée
-   en (x + 5)/(4 − x), x ≠ 2/3). Aujourd'hui, seul un numérateur nul se simplifie.
-3. **Condition d'existence d'un radicande qui est un quotient** (`√(1/x)`, m8). Aujourd'hui,
-   seuls les radicandes linéaires sont traités.
+1. **Facteur de signe constant dans le tableau de signes** : FAIT le 2026-09-25 (commit
+   `7f36fe4`, test `tests/sign_chart_constant_factor.js`). Un trinôme sans racine (x² + 1,
+   b² − 4ac < 0) devient un facteur de signe constant. Sa colonne « x² + 1 > 0 » est posée
+   déjà résolue, en vert, et l'élève remplit lui-même les « + » de sa rangée (niveau s5).
+2. **Simplifier un facteur commun dans un quotient** : FAIT le 2026-09-25 (commit
+   `1ac49bc`, test `tests/simplify_quotient_common_factor.js`). L'étape est étiquetée
+   « simplifier … si (3x − 2) ≠ 0 » : c'est le facteur simplifié qui est écrit, jamais
+   la valeur x ≠ 2/3, comme pour un numérateur nul. Un facteur opposé (x − 3 face à
+   3 − x) se simplifie aussi, en changeant le signe. Niveaux m5 et o2. Le parcours
+   complet de o1 (factoriser f et g dans la fraction, puis simplifier) reste à dérouler
+   dans l'app.
+3. **Condition d'existence d'un radicande qui est un quotient** (`√(1/x)`, m8) : à faire,
+   la méthode reste à choisir (voir les questions ouvertes).
 4. **Identités remarquables avec une puissance de x** : FAIT le 2026-09-25 (commit
    `6cde151`). « a » peut valoir k·xᵖ, par exemple x⁴ − 25 = (x² − 5)(x² + 5) avec a = x²
    (niveau g6). L’exercice 4 sert seulement d’inspiration pour des équations de la Grotte.
@@ -322,14 +326,21 @@ Maquette : `maquette.html`, dans ce dossier.
   `canvas.js` (pas de boucle `requestAnimationFrame`, qui peut être ralentie). Avec
   `prefers-reduced-motion`, tout devient un fondu court.
 
+## Décisions prises (2026-09-25, suite)
+
+- s5 garde x² + 1 (voir l'évolution 1).
+- Les évolutions de l'app nécessaires aux niveaux sont à faire.
+- Pas de profils multiples sur un même ordinateur.
+- Quitter un niveau en cours le fait recommencer.
+- Les seuils ★★★ viennent d'une solution de référence enregistrée pour chaque niveau.
+
 ## Questions ouvertes
 
-1. s5 : implémenter la ligne « toujours positif » pour x² + 1 dans le tableau de signes,
-   ou remplacer x² + 1 par un dénominateur du 1er degré ?
-2. m8 (√(1/x)) et o2 (simplifier un quotient en gardant la valeur exclue) : implémenter,
-   ou adapter ces niveaux ?
-3. Faut-il plusieurs profils d'élèves sur un même ordinateur (salle informatique) ?
-4. Quitter un niveau en cours : garder la résolution entamée, ou recommencer ?
-5. Les seuils ★★★ : les fixer à la main, ou les calculer à partir d'une solution de
-   référence enregistrée pour chaque niveau ?
-
+1. √(1/x) (m8) : quelle méthode pour « 1/x > 0 » dans une colonne « Condition
+   d'existence » ?
+   - Autoriser le tableau de signes dans cette colonne (fidèle à la méthode du lycée,
+     mais c'est le plus gros chantier).
+   - Remplacer g par x/√x, qui se simplifie aussi en √x, avec Df = ]0 ; +∞[ contre
+     [0 ; +∞[ : déjà possible avec l'app actuelle.
+2. Problème en plusieurs parties (o1 → o3) : chaque partie repart-elle de h(x) tel que
+   donné, ou de la forme simplifiée obtenue dans la partie précédente ?
