@@ -62,23 +62,24 @@ function ok(label, cond) {
   await page.waitForTimeout(250);
   ok('Escape closes settings modal', await page.evaluate(() => document.getElementById('settingsOverlay').hidden));
 
-  // 4) Activé : "-3" puis simplification automatique -> 2x=4.
+  // 4) Activé : "-3" donne directement 2x=4, en UNE seule étape étiquetée "-3".
   await start('2x+3=7');
   await op('-3');
-  ok('with setting: two steps added (operation + simplify)', await steps() === 3);
-  ok('with setting: equation is 2x=4', await last() === JSON.stringify({ left: [{ coeff: 2, pow: 1 }], right: [{ coeff: 4, pow: 0 }] }));
+  ok('with setting: a single step added', await steps() === 2);
+  ok('with setting: equation is directly 2x=4', await last() === JSON.stringify({ left: [{ coeff: 2, pow: 1 }], right: [{ coeff: 4, pow: 0 }] }));
   const lastStep = await page.evaluate(() => { var s = window.App.History.getSteps(); var l = s[s.length - 1]; return { l: l.opLeft && l.opLeft.type, r: l.opRight && l.opRight.type }; });
-  ok('auto step is a simplify step on both sides', lastStep.l === 'simplify' && lastStep.r === 'simplify');
+  ok('the step keeps the operation label on both sides', lastStep.l === 'expr' && lastStep.r === 'expr');
+  await page.screenshot({ path: SCRATCH + '/settings_auto_simplify_step.png' });
 
-  // 5) Undo annule opération + simplification d'un coup.
+  // 5) Undo revient à l'équation de départ.
   await page.click('#undoBtn');
   await page.waitForTimeout(150);
-  ok('undo removes operation and its auto simplify together', await steps() === 1);
+  ok('undo returns to the initial equation', await steps() === 1);
 
   // 6) Rien à simplifier (÷2 sur un terme seul) : pas d'étape en plus.
   await start('2x=4');
   await op('\\div 2');
-  ok('nothing to simplify: no extra step', await steps() === 2);
+  ok('nothing to simplify: single step, x=2', await steps() === 2 && await last() === JSON.stringify({ left: [{ coeff: 1, pow: 1 }], right: [{ coeff: 2, pow: 0 }] }));
 
   // 7) Persistance après rechargement.
   await page.reload();

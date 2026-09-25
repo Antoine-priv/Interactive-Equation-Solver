@@ -252,8 +252,7 @@
     // l'équation de départ elle-même n'est jamais annulable (rien "avant" elle).
     function undo() {
       if (steps.length <= 1) return false;
-      var popped = steps.pop();
-      if (popped.autoSimplified && steps.length > 1) steps.pop();
+      steps.pop();
       resetPending();
       return true;
     }
@@ -1135,19 +1134,17 @@
         if (signFlips % 2 === 1) currentOperator = Ineq.flipOperator(currentOperator);
       }
       var opDescExpr = { type: 'expr', ops: ops };
+      if (App.Settings && App.Settings.get('autoSimplify')) newEqExpr = autoSimplify(newEqExpr);
       pushRaw({ equation: newEqExpr, opLeft: opDescExpr, opRight: opDescExpr });
-      if (App.Settings && App.Settings.get('autoSimplify')) pushAutoSimplifyStep(newEqExpr);
       return true;
     }
 
     // Réglage "Toujours simplifier après une opération" (voir App.Settings, settings.js) :
-    // enchaîne, juste après l'étape "Opération", une étape "Simplifier" normale portant sur
-    // TOUS les termes simples (non groupés) de chaque membre — exactement ce que produirait
-    // leur sélection manuelle suivie d'un clic sur "Simplifier" (applySimplifyBoth). Un
-    // membre déjà simplifié reste muet (pas de flèche), et rien n'est poussé si aucun ne
-    // change. Marquée `autoSimplified` pour que undo() l'annule avec l'opération qui l'a
-    // déclenchée, en un seul geste.
-    function pushAutoSimplifyStep(eq) {
+    // le résultat de l'étape "Opération" est directement simplifié, dans la MÊME étape (une
+    // seule flèche, étiquetée par l'opération) — sans étape "Simplifier" visible. Porte sur
+    // TOUS les termes simples (non groupés) de chaque membre, exactement ce que produirait
+    // leur sélection manuelle suivie d'un clic sur "Simplifier" (applySimplifyBoth).
+    function autoSimplify(eq) {
       function simplifiableIndices(side) {
         var idx = [];
         side.forEach(function (n, i) { if (!Expr.isGroup(n)) idx.push(i); });
@@ -1162,9 +1159,8 @@
       }
       var leftIdx = simplifiableIndices(eq.left);
       var rightIdx = simplifiableIndices(eq.right);
-      if (!leftIdx && !rightIdx) return;
-      var result = Eq.applySimplifyBoth(eq, leftIdx, rightIdx);
-      pushRaw({ equation: result.equation, opLeft: result.opLeft, opRight: result.opRight, autoSimplified: true });
+      if (!leftIdx && !rightIdx) return eq;
+      return Eq.applySimplifyBoth(eq, leftIdx, rightIdx).equation;
     }
 
     function confirm() {

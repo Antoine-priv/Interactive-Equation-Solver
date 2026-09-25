@@ -191,9 +191,9 @@ Gear button (`#settingsBtn`, top-right, right of the theme toggle) opens `#setti
 one row per boolean setting with an iOS-style switch (`input[data-setting="<key>"]`).
 `App.Settings.get/set` persists to `localStorage` (`equations-settings`), defaults in
 `DEFAULTS`. `autoSimplify` ("Toujours simplifier après une opération", off by default):
-`commitExprOps` (keypad Opération and drag-across) pushes an extra `autoSimplified` step
-simplifying every non-group term of each side (`pushAutoSimplifyStep`); `undo()` pops it
-together with its Opération step.
+`commitExprOps` (keypad Opération and drag-across) simplifies every non-group term of each
+side of the result (`autoSimplify`) within the SAME step — one arrow labelled with the
+operation, no visible "Simplifier" step.
 
 ## Constraints to preserve
 
