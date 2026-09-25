@@ -242,11 +242,11 @@ pre{background:var(--surface);border:1px solid var(--border);border-radius:14px;
     <h2>Ce que l'application doit apprendre à faire</h2>
     <p class="lede" style="margin-top:0">J'ai vérifié ces points dans le code. Tout le reste de la carte fonctionne déjà avec l'application actuelle, y compris l'exercice 23 question 1, que le tableau de signes accepte tel quel.</p>
     <div class="grid">
-      <div class="card"><h3>Facteur de signe constant</h3><p>Le tableau de signes n'accepte que des facteurs de degré 1 au plus. Il faut une ligne « x² + 1 : toujours + » pour l'exercice 23 question 2, et reconnaître (x² + 10x + 25) = (x + 5)² pour la question 3.</p></div>
+      <div class="card"><h3>Facteur de signe constant</h3><p>Le tableau de signes n'accepte que des facteurs de degré 1 au plus. Il faut une ligne « x² + 1 : toujours + » pour l'exercice 23 question 2. Le numérateur y est donné déjà factorisé : pas de factorisation de trinôme.</p></div>
       <div class="card"><h3>Simplifier un quotient</h3><p>« Simplifier » ne supprime pas encore un facteur commun au numérateur et au dénominateur. Pour l'exercice 24, il faut passer de h à (x + 5)/(4 − x) en gardant x ≠ 2/3 visible, comme le « si (…) ≠ 0 » actuel.</p></div>
       <div class="card"><h3>Racine d'un quotient</h3><p>La condition d'existence ne traite que des radicandes linéaires. √(1/x) demande de chaîner deux conditions (x ≠ 0 et 1/x ≥ 0) pour le problème des jumeaux.</p></div>
       <div class="card"><h3>Problèmes « Df seul » et en plusieurs parties</h3><p>Un niveau « Df » est réussi quand toutes ses colonnes « Condition d'existence » sont résolues, sans équation à finir. Un problème en plusieurs parties partage l'énoncé f, g, h entre plusieurs nœuds.</p></div>
-      <div class="card"><h3>Factoriser un trinôme</h3><p>Pour 2x² − 3x + 1, l'élève saisit la forme factorisée proposée par l'énoncé (« Développer (2x − 1)(x − 1) ») et l'application vérifie l'égalité en développant.</p></div>
+
     </div>
   </section>
 </div>
@@ -327,7 +327,7 @@ var N = [
  {id:'s2',x:1320,y:470,z:'cit',req:['s1'],t:'Facteur inversé',eq:'(2 − x)(x + 4) ≤ 0',learn:'Un facteur décroissant',par:3},
  {id:'s3',x:1260,y:535,z:'cit',req:['s2'],t:'Le moins devant',eq:'−(x + 1)(x − 2)/(1 − x) ≥ 0',learn:'Signe de tête, valeur interdite en double barre',par:4,src:'Exercice 23, question 1'},
  {id:'s4',x:1355,y:575,z:'cit',req:['s3'],t:'Trois facteurs',eq:'x(x − 1)(x + 2) < 0',learn:'Degré 3',par:4},
- {id:'s5',x:1440,y:600,z:'cit',req:['s4'],t:'Toujours positif',eq:'(2x² − 3x + 1)/(x² + 1) ≤ 0',learn:'Factoriser le numérateur en (2x − 1)(x − 1) ; x² + 1 est toujours positif',par:4,src:'Exercice 23, question 2',app:'Tableau de signes avec un facteur de signe constant de degré 2 (x² + 1), et factorisation d\'un trinôme vérifiée par développement.'},
+ {id:'s5',x:1440,y:600,z:'cit',req:['s4'],t:'Toujours positif',eq:'(2x − 1)(x − 1)/(x² + 1) ≤ 0',learn:'Numérateur donné déjà factorisé (l\'exercice fait développer (2x − 1)(x − 1) pour le vérifier) ; x² + 1 est toujours positif',par:4,src:'Exercice 23, question 2 (adapté)',app:'Tableau de signes avec un facteur de signe constant de degré 2 (x² + 1). Sans cette évolution, remplacer x² + 1 par un dénominateur du 1er degré.'},
  {id:'sB',x:1455,y:480,z:'cit',req:['s5'],t:'Épreuve de la Citadelle',eq:'(x² − 4)/(x − 1) ≤ 0',learn:'Factoriser puis étudier le signe',par:5,boss:1,badge:'Stratège'},
 
  {id:'o1',x:1465,y:150,z:'obs',req:['mB','sB'],t:'h(x) = 0',eq:'h(x) = f(x)/g(x) = 0',learn:'f = 9x² − 4 + (3 − 2x)(3x − 2) et g = x² + 2x + 1 − (2x − 3)². Factoriser f et g, poser Df, résoudre.',par:8,src:'Exercice 24',trap:'2/3 annule le numérateur mais est interdite.'},

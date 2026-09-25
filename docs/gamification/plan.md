@@ -167,7 +167,7 @@
 | s2 | Facteur inversé | `(2 − x)(x + 4) ≤ 0` | Un facteur décroissant | 3 | s1 |  |
 | s3 | Le moins devant | `−(x + 1)(x − 2)/(1 − x) ≥ 0` | Signe de tête, valeur interdite en double barre | 4 | s2 | Source : Exercice 23, question 1 |
 | s4 | Trois facteurs | `x(x − 1)(x + 2) < 0` | Degré 3 | 4 | s3 |  |
-| s5 | Toujours positif | `(2x² − 3x + 1)/(x² + 1) ≤ 0` | Factoriser le numérateur en (2x − 1)(x − 1) ; x² + 1 est toujours positif | 4 | s4 | Source : Exercice 23, question 2 · **À développer :** Tableau de signes avec un facteur de signe constant de degré 2 (x² + 1), et factorisation d'un trinôme vérifiée par développement. |
+| s5 | Toujours positif | `(2x − 1)(x − 1)/(x² + 1) ≤ 0` | Numérateur donné déjà factorisé (l'exercice fait développer (2x − 1)(x − 1) pour le vérifier) ; x² + 1 est toujours positif | 4 | s4 | Source : Exercice 23, question 2 (adapté) · **À développer :** Tableau de signes avec un facteur de signe constant de degré 2 (x² + 1). Sans cette évolution, remplacer x² + 1 par un dénominateur du 1er degré. |
 | sB | Épreuve de la Citadelle | `(x² − 4)/(x − 1) ≤ 0` | Factoriser puis étudier le signe | 5 | s5 | Épreuve · Badge « Stratège » |
 
 ### L'Observatoire — Fonctions, problèmes en plusieurs parties
@@ -204,15 +204,16 @@ est accepté tel quel par le tableau de signes (`Expr.extractSignChartFactors`).
    en (x + 5)/(4 − x), x ≠ 2/3). Aujourd'hui, seul un numérateur nul se simplifie.
 3. **Condition d'existence d'un radicande qui est un quotient** (`√(1/x)`, m8). Aujourd'hui,
    seuls les radicandes linéaires sont traités.
-4. **Factoriser un trinôme sans racine évidente** (s5 : 2x² − 3x + 1). Proposition :
-   l'élève saisit la forme factorisée suggérée par l'énoncé, et l'application vérifie
-   l'égalité en développant.
-5. **Identités remarquables avec une puissance de x** : FAIT le 2026-09-25 (commit
+4. **Identités remarquables avec une puissance de x** : FAIT le 2026-09-25 (commit
    `6cde151`). « a » peut valoir k·xᵖ, par exemple x⁴ − 25 = (x² − 5)(x² + 5) avec a = x²
    (niveau g6). L’exercice 4 sert seulement d’inspiration pour des équations de la Grotte.
-   Pas de mode « expression seule », pas de nouvelle fonctionnalité pour « Développer ».
-   Reste à vérifier : le niveau g5 (factoriser par −1, puis appliquer l’identité dans la
-   parenthèse).
+   Pas de mode « expression seule », pas de nouvelle fonctionnalité pour « Développer »,
+   pas de factorisation de trinôme (s5 donne son numérateur déjà factorisé).
+5. **Niveau g5 vérifié dans l’app** le 2026-09-25 (test
+   `tests/factor_minus_one_then_identity.js`). Factoriser par −1, puis double-cliquer la
+   parenthèse et appliquer (a − b)² avec a = x, b = 7, donne −((x − 7)²) = 0. « Produit
+   nul » donnait alors une branche (x − 7)² = 0 qui ne faisait que retirer le signe. C'est
+   corrigé (commit `79f176c`) : un seul « Produit nul » donne x − 7 = 0.
 6. **Nouveaux types de niveau :**
    - Niveau « Df seul » (m1, m2) : réussi quand toutes ses colonnes
      « Condition d'existence » sont résolues.
@@ -245,3 +246,90 @@ est accepté tel quel par le tableau de signes (`Expr.extractSignChartFactors`).
   badge: 'chasseur-interdits',
   hints: ['Commence par la condition d\'existence.', 'Produit nul sur le numérateur.'] }
 ```
+
+## Intégration dans l'interface
+
+Maquette : `maquette.html`, dans ce dossier.
+
+- **Entrée :** un bouton carré « carte », à droite de « Annuler ». Au tout premier lancement,
+  quand il n'y a aucune progression, la carte s'ouvre d'elle-même, avec un bouton
+  « Mode libre ». Aux lancements suivants, l'application rouvre le dernier écran utilisé.
+- **La carte :** un calque plein écran par-dessus `#historyScroll`. Elle se déplace par
+  glisser et se zoome comme le canevas. En haut, une barre affiche le total d'étoiles, les
+  badges et « Mode libre ». Au survol d'un nœud, une carte montre l'énoncé (rendu KaTeX), le
+  seuil ★★★ et « Jouer ».
+- **Dans un niveau :** c'est le canevas habituel, avec une barre en haut : région, titre,
+  étapes utilisées sur le seuil ★★★, « Indice », « Recommencer ». Le bouton carte y ramène.
+  « + » (Nouvelle équation) quitte le niveau pour le mode libre, après confirmation si une
+  résolution est en cours.
+- **Boutons masqués :** les boutons d'action pas encore présentés sont masqués (voir la
+  décision 1). Celui présenté par le niveau apparaît avec un halo qui pulse jusqu'à sa
+  première utilisation.
+- **Coach (le Port) :** une bulle sombre pointe l'élément attendu, et le passage à l'étape
+  suivante se fait sur l'action réelle (`App.History.subscribe`).
+- **Réussite :** la ligne « S = … » passe en vert. Une carte détaille chaque critère
+  d'étoile et propose « Rejouer », « Carte » et « Suivant ». Une solution fausse, par
+  exemple −3 gardé dans m5, affiche « Presque ! » avec un indice sur ce qui manque.
+
+## Sauvegarde des données
+
+- **Stockage :** tout reste dans `localStorage`, sous une clé `equations-progress`, sur le
+  même modèle que `equations-settings` : lecture et écriture dans un try/catch, valeurs par
+  défaut si rien n'est enregistré. Aucun serveur, aucun compte.
+- **Contenu :**
+  `{ version: 1, levels: { t1: { stars: 3, bestSteps: 1, solvedAt: '2026-09-25' } },
+  badges: ['premiers-pas'], features: ['simplify', 'expand'], daily: { date, done, streak },
+  lastScreen: 'map' }`. La version permet de migrer les données si le format change.
+- **Écriture :** à chaque niveau réussi et à chaque badge, jamais pendant la résolution.
+  v1 : quitter un niveau en cours le fait recommencer (voir les questions ouvertes).
+- **Limite :** avec `file://`, `localStorage` dépend du navigateur et de son profil.
+  Changer de navigateur ou d'ordinateur, ou effacer les données du site, fait perdre la
+  progression.
+- **Parade :**
+  - Dans les réglages, « Exporter ma progression » télécharge un fichier `.json` (Blob et
+    lien `download`, possible en `file://`), et « Importer » le relit (`<input type=file>`).
+  - En option, un « code de progression » court à copier-coller, pour passer de
+    l'ordinateur du lycée à celui de la maison.
+
+## Aspect graphique de la carte
+
+- Mêmes jetons de couleur que l'app (`--accent`, `--success`…), clair et sombre.
+- Régions en formes arrondies aux teintes pastel, chacune avec un grand symbole
+  mathématique en filigrane comme point de repère : « = » le Port, « x » la Plaine,
+  « ½ » la Forêt, « < » les Collines, « x² » la Montagne, « (a+b)² » la Grotte, « √ » la
+  Source, « ≠ » le Marais, « ± » la Citadelle, « f(x) » l'Observatoire, « ★ » le Sommet.
+- Les régions fermées sont dans un brouillard : désaturées et légèrement floues.
+- **Chemins :** en pointillés gris pour ceux à venir, en trait vert pour ceux parcourus.
+- **Nœuds :**
+  - pastilles rondes, vertes et étoilées une fois résolues ;
+  - bleu accent et pulsées quand elles sont disponibles ;
+  - grises avec un cadenas quand elles sont verrouillées ;
+  - bordure orange et plus grandes pour les épreuves.
+- Un jeton « x » marque la position de l'élève.
+- SVG construit en JS à partir de `levels.js`. Les positions des nœuds font partie des
+  données du niveau.
+
+## Animations
+
+- **Réussite :** la ligne S passe en vert, les étoiles apparaissent une à une avec un
+  rebond, espacées de 250 ms, puis le toast du badge glisse depuis le haut.
+- **Retour à la carte :** la carte se centre sur le niveau réussi, le chemin suivant se
+  trace (`stroke-dashoffset`), le cadenas tremble puis disparaît, et le jeton avance.
+- **Nouvelle région :** le brouillard se lève (opacité et flou) et le nom de la région
+  s'affiche.
+- **Nouveau bouton :** un halo pulse autour du bouton jusqu'à sa première utilisation.
+- **Technique :** uniquement des transitions et keyframes CSS, pour la même raison que
+  `canvas.js` (pas de boucle `requestAnimationFrame`, qui peut être ralentie). Avec
+  `prefers-reduced-motion`, tout devient un fondu court.
+
+## Questions ouvertes
+
+1. s5 : implémenter la ligne « toujours positif » pour x² + 1 dans le tableau de signes,
+   ou remplacer x² + 1 par un dénominateur du 1er degré ?
+2. m8 (√(1/x)) et o2 (simplifier un quotient en gardant la valeur exclue) : implémenter,
+   ou adapter ces niveaux ?
+3. Faut-il plusieurs profils d'élèves sur un même ordinateur (salle informatique) ?
+4. Quitter un niveau en cours : garder la résolution entamée, ou recommencer ?
+5. Les seuils ★★★ : les fixer à la main, ou les calculer à partir d'une solution de
+   référence enregistrée pour chaque niveau ?
+

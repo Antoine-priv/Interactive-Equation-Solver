@@ -1,0 +1,312 @@
+<title>Campagne, maquette</title>
+<style>
+:root{
+  --bg:#f6f7fb; --surface:#ffffff; --border:#e9eaf0; --text:#16181d; --muted:#6b7280; --faint:#9aa0ac;
+  --accent:#4f46e5; --accent-hover:#4338ca; --accent-soft:#eef0fe; --accent-line:#c9cdfa;
+  --success:#0f9d58; --success-soft:#dcf6e6; --warning:#b45309; --warning-soft:#fef3c7; --star:#f59e0b;
+  --hatch:#b8bccb; --lock-fill:#eceef4; --lock:#c4c8d4;
+  --r-port:#e4edff; --r-plaine:#e3f5e8; --r-foret:#dcefe2; --r-coll:#fbeedd; --r-mont:#ebe8fb;
+  --fog:#e9eaf0; --land:#f0f2f8;
+  --shadow-md:0 8px 24px rgba(16,24,40,.08),0 2px 6px rgba(16,24,40,.05);
+  --shadow-lg:0 24px 60px rgba(16,24,40,.18);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#15161f; --surface:#1e2029; --border:#2d2f3b; --text:#eceef3; --muted:#9aa0b0; --faint:#6b7280;
+  --accent:#8b85ff; --accent-hover:#a19cff; --accent-soft:#25264a; --accent-line:#3d3f7a;
+  --success:#34c77b; --success-soft:#153826; --warning:#f0a347; --warning-soft:#3a2a12; --star:#fbbf24;
+  --hatch:#5a5f73; --lock-fill:#262833; --lock:#4a4e5e;
+  --r-port:#1b2436; --r-plaine:#1a2a22; --r-foret:#18291f; --r-coll:#2e2619; --r-mont:#23213a;
+  --fog:#23252f; --land:#1a1c25; color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#15161f; --surface:#1e2029; --border:#2d2f3b; --text:#eceef3; --muted:#9aa0b0; --faint:#6b7280;
+  --accent:#8b85ff; --accent-hover:#a19cff; --accent-soft:#25264a; --accent-line:#3d3f7a;
+  --success:#34c77b; --success-soft:#153826; --warning:#f0a347; --warning-soft:#3a2a12; --star:#fbbf24;
+  --hatch:#5a5f73; --lock-fill:#262833; --lock:#4a4e5e;
+  --r-port:#1b2436; --r-plaine:#1a2a22; --r-foret:#18291f; --r-coll:#2e2619; --r-mont:#23213a;
+  --fog:#23252f; --land:#1a1c25; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:400 15px/1.55 Inter,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;padding-inline:20px;padding-block:28px 64px}
+.wrap{max-width:1140px;margin:0 auto;display:flex;flex-direction:column;gap:40px}
+h1,h2{margin:0;font-weight:700;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:30px} h2{font-size:21px}
+p{margin:0}
+.lede{color:var(--muted);max-width:70ch}
+section{display:flex;flex-direction:column;gap:14px}
+.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.math{font-family:"Latin Modern Math","STIX Two Math","Cambria Math",Georgia,serif;font-style:italic}
+.math b{font-style:normal;font-weight:400}
+
+/* App window */
+.screen{position:relative;background:var(--bg);border:1px solid var(--border);border-radius:16px;overflow:hidden;aspect-ratio:16/9;box-shadow:var(--shadow-md)}
+.scroll{overflow-x:auto}
+.scroll .screen{min-width:900px}
+.ibtn{position:absolute;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--surface);color:var(--text);box-shadow:var(--shadow-md);border:0;font:600 20px Inter,sans-serif}
+.ibtn.primary{background:var(--accent);color:#fff}
+.ibtn.on{background:var(--accent-soft);color:var(--accent);outline:2px solid var(--accent-line)}
+.ibtn svg{width:20px;height:20px}
+
+/* Map */
+svg.map{position:absolute;inset:0;width:100%;height:100%}
+.region{transition:opacity .6s ease,filter .6s ease}
+.fogged{opacity:.45;filter:saturate(.2) blur(1.5px)}
+.rlabel{font:700 15px Inter,sans-serif;fill:var(--text);opacity:.75}
+.rsub{font:500 11px Inter,sans-serif;fill:var(--muted)}
+.landmark{font:italic 34px "Latin Modern Math","STIX Two Math",Georgia,serif;fill:var(--text);opacity:.12}
+.trail{fill:none;stroke:var(--hatch);stroke-width:3;stroke-dasharray:1 8;stroke-linecap:round}
+.trail.done{stroke:var(--success);stroke-dasharray:none;opacity:.5}
+.trail.draw{stroke:var(--accent);stroke-dasharray:none}
+.node circle.b{stroke-width:3;transition:fill .3s,stroke .3s}
+.node.done circle.b{fill:var(--success-soft);stroke:var(--success)}
+.node.open circle.b{fill:var(--surface);stroke:var(--accent)}
+.node.locked circle.b{fill:var(--lock-fill);stroke:var(--lock)}
+.node text.n{font:700 12px Inter,sans-serif;text-anchor:middle;dominant-baseline:central;fill:var(--text)}
+.node.locked text.n{fill:var(--faint)}
+.node text.s{font-size:11px;text-anchor:middle;fill:var(--star);letter-spacing:1px}
+.pulse{fill:none;stroke:var(--accent);stroke-width:2;animation:pulse 1.8s ease-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes pulse{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(1.9)}}
+.token{transition:transform .9s cubic-bezier(.45,.05,.3,1)}
+.token circle{fill:var(--accent)}
+.token text{font:italic 700 15px Georgia,serif;fill:#fff;text-anchor:middle;dominant-baseline:central}
+.pop{animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+@keyframes pop{0%{transform:scale(.4)}100%{transform:scale(1)}}
+.lockshake{animation:shake .35s ease}
+@keyframes shake{0%,100%{transform:rotate(0)}25%{transform:rotate(-12deg)}75%{transform:rotate(12deg)}}
+
+.mapbar{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:14px;background:var(--surface);box-shadow:var(--shadow-md);border-radius:999px;padding:8px 8px 8px 18px;font-size:13.5px;white-space:nowrap}
+.mapbar b{font-weight:600}
+.pill{border:0;border-radius:999px;padding:7px 14px;font:600 13px Inter,sans-serif;background:var(--accent-soft);color:var(--accent)}
+.pill.solid{background:var(--accent);color:#fff}
+.pill.ghost{background:transparent;color:var(--muted)}
+.stat{color:var(--muted);font-variant-numeric:tabular-nums}
+.stat b{color:var(--text)}
+.stat .st{color:var(--star)}
+.tip{position:absolute;width:230px;background:var(--surface);border-radius:14px;box-shadow:var(--shadow-lg);padding:14px;display:flex;flex-direction:column;gap:8px;font-size:13px}
+.tip .t{font-weight:700;font-size:14px}
+.tip .eqbox{background:var(--accent-soft);border-radius:10px;padding:10px;text-align:center;font-size:20px}
+.tip .row{display:flex;justify-content:space-between;align-items:center;color:var(--muted)}
+.daily{position:absolute;right:16px;bottom:16px;background:var(--warning-soft);color:var(--warning);border-radius:12px;padding:10px 14px;font-size:13px;font-weight:600;box-shadow:var(--shadow-md)}
+
+/* Level */
+.levelbar{position:absolute;top:16px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:16px;background:var(--surface);box-shadow:var(--shadow-md);border-radius:14px;padding:8px 8px 8px 16px;font-size:13.5px;white-space:nowrap}
+.levelbar .where{display:flex;flex-direction:column;line-height:1.25}
+.levelbar .where small{color:var(--muted);font-size:11.5px}
+.steps{display:flex;gap:4px;align-items:center;color:var(--muted);font-variant-numeric:tabular-nums}
+.steps i{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+.steps i.empty{background:var(--border)}
+.ops{position:absolute;left:18px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:8px}
+.ops button{border:1px solid var(--border);background:var(--surface);border-radius:10px;padding:9px 14px;font:500 13px Inter,sans-serif;color:var(--text);text-align:left;min-width:128px}
+.ops button.new{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 4px var(--accent-soft);animation:glow 1.6s ease-in-out infinite}
+@keyframes glow{50%{box-shadow:0 0 0 8px transparent}}
+.ops .ghostop{border:1px dashed var(--border);background:transparent;color:var(--faint);font-size:12px}
+.eqs{position:absolute;left:62%;top:48%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:26px;font-size:40px}
+.eqline{display:flex;gap:18px;align-items:center}
+.eqline .eqs-sign{color:var(--hatch)}
+.term{padding:0 4px;border-radius:8px}
+.term.sel{background:var(--accent-soft);outline:2px solid var(--accent);outline-offset:2px}
+.coach{position:absolute;width:250px;background:var(--text);color:var(--bg);border-radius:14px;padding:12px 14px;font-size:13.5px;box-shadow:var(--shadow-lg)}
+.coach:after{content:"";position:absolute;left:-8px;top:24px;border:8px solid transparent;border-left:0;border-right-color:var(--text)}
+.coach .cstep{font-size:11.5px;opacity:.7;margin-bottom:4px}
+.spot{position:absolute;border-radius:12px;border:2px solid var(--accent);animation:ring 1.6s ease-out infinite}
+@keyframes ring{0%{box-shadow:0 0 0 0 rgba(79,70,229,.45)}100%{box-shadow:0 0 0 16px rgba(79,70,229,0)}}
+.arrowlbl{font-size:13px;color:var(--accent);background:var(--accent-soft);border-radius:8px;padding:2px 8px;font-family:Georgia,serif}
+.sline{padding:6px 18px;border-radius:12px;transition:background .5s,box-shadow .5s}
+.sline.win{background:var(--success-soft);box-shadow:0 0 0 2px var(--success)}
+
+/* Success */
+.win-card{position:absolute;right:28px;top:50%;transform:translateY(-50%);width:290px;background:var(--surface);border-radius:18px;box-shadow:var(--shadow-lg);padding:20px;display:flex;flex-direction:column;gap:12px;text-align:center}
+.win-card h3{margin:0;font-size:19px}
+.bigstars{display:flex;justify-content:center;gap:8px;font-size:40px;line-height:1}
+.bigstars span{color:var(--border);transform:scale(.3);opacity:0}
+.bigstars span.on{color:var(--star)}
+.bigstars.play span{animation:starin .5s cubic-bezier(.3,1.7,.5,1) forwards}
+.bigstars.play span:nth-child(2){animation-delay:.25s}
+.bigstars.play span:nth-child(3){animation-delay:.5s}
+@keyframes starin{to{transform:scale(1);opacity:1}}
+.crit{display:flex;flex-direction:column;gap:5px;font-size:13px;text-align:left}
+.crit div{display:flex;gap:8px}
+.crit .ok{color:var(--success)} .crit .ko{color:var(--faint)}
+.win-actions{display:flex;gap:8px;justify-content:center}
+.badge-toast{position:absolute;right:28px;top:18px;display:flex;gap:10px;align-items:center;background:var(--surface);border-radius:12px;box-shadow:var(--shadow-md);padding:10px 14px;font-size:13px;transform:translateY(-80px);transition:transform .5s cubic-bezier(.3,1.4,.5,1)}
+.badge-toast.show{transform:none}
+.badge-toast .ico{width:30px;height:30px;border-radius:50%;background:var(--warning-soft);color:var(--warning);display:grid;place-items:center;font-weight:700}
+
+.ctrl{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.ctrl button{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:10px;padding:8px 14px;font:500 13px Inter,sans-serif;cursor:pointer}
+.ctrl button:hover{border-color:var(--accent);color:var(--accent)}
+.ctrl button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.note{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px 16px;font-size:14px;color:var(--muted)}
+.note b{color:var(--text);font-weight:600;display:block;margin-bottom:4px}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:8px">
+    <div class="eyebrow">Maquette · campagne</div>
+    <h1>À quoi ressemblerait la campagne</h1>
+    <p class="lede">Trois écrans dans le style actuel de l'application : mêmes couleurs, mêmes boutons carrés, même canevas. Les animations se rejouent avec les boutons sous chaque écran. En sombre, la maquette suit le thème du navigateur, comme l'application.</p>
+  </header>
+
+  <section>
+    <h2>1. La carte</h2>
+    <p class="lede">Un nouveau bouton carte, à droite de « Annuler », ouvre la carte en plein écran par-dessus le canevas. Elle se déplace et se zoome comme le canevas. Les régions pas encore ouvertes restent dans le brouillard. Le jeton <span class="math">x</span> indique où en est l'élève.</p>
+    <div class="scroll"><div class="screen" id="mapScreen">
+      <svg class="map" viewBox="0 0 1100 619" aria-label="Carte de la campagne">
+        <rect width="1100" height="619" fill="var(--land)"/>
+        <g class="region"><path d="M40 610 C 20 470, 30 330, 110 250 C 190 180, 330 200, 380 270 C 420 330, 400 450, 420 520 C 440 600, 300 640, 40 610 Z" fill="var(--r-port)"/>
+          <text class="landmark" x="300" y="560">=</text><text class="rlabel" x="70" y="590">Le Port</text><text class="rsub" x="70" y="606">Tutoriel · 4/7</text></g>
+        <g class="region"><path d="M395 300 C 450 240, 600 230, 690 290 C 760 340, 740 470, 660 520 C 580 570, 450 560, 420 500 C 395 450, 360 350, 395 300 Z" fill="var(--r-plaine)"/>
+          <text class="landmark" x="650" y="500">x</text><text class="rlabel" x="470" y="290">La Plaine</text><text class="rsub" x="470" y="306">1er degré</text></g>
+        <g class="region fogged" id="regForet"><path d="M430 60 C 520 20, 690 30, 720 110 C 745 180, 640 230, 540 215 C 450 205, 380 110, 430 60 Z" fill="var(--r-foret)"/>
+          <text class="landmark" x="640" y="190">½</text><text class="rlabel" x="460" y="80">La Forêt</text><text class="rsub" x="460" y="96">Fractions</text></g>
+        <g class="region fogged"><path d="M700 470 C 780 430, 960 440, 1060 500 C 1100 540, 1080 619, 1000 619 L 720 619 C 660 600, 650 500, 700 470 Z" fill="var(--r-coll)"/>
+          <text class="landmark" x="1000" y="590">&lt;</text><text class="rlabel" x="760" y="500">Les Collines</text></g>
+        <g class="region fogged"><path d="M770 160 C 860 110, 1060 120, 1090 220 C 1110 320, 1000 400, 880 390 C 790 380, 700 250, 770 160 Z" fill="var(--r-mont)"/>
+          <text class="landmark" x="990" y="360">x²</text><text class="rlabel" x="820" y="190">La Montagne</text></g>
+
+        <path class="trail done" d="M90 540 Q 140 520 160 480"/>
+        <path class="trail done" d="M160 480 Q 150 430 120 410"/>
+        <path class="trail done" d="M120 410 Q 170 360 210 350"/>
+        <path class="trail done" d="M210 350 Q 200 300 170 285"/>
+        <path class="trail" id="trail56" d="M170 285 Q 230 240 270 250"/>
+        <path class="trail" d="M270 250 Q 330 250 350 300"/>
+        <path class="trail" d="M350 300 Q 400 330 450 350"/>
+
+        <g class="node done" transform="translate(90 540)"><circle class="b" r="17"/><text class="n">T1</text><text class="s" y="31">★★★</text></g>
+        <g class="node done" transform="translate(160 480)"><circle class="b" r="17"/><text class="n">T2</text><text class="s" y="31">★★★</text></g>
+        <g class="node done" transform="translate(120 410)"><circle class="b" r="17"/><text class="n">T3</text><text class="s" y="31">★★☆</text></g>
+        <g class="node done" transform="translate(210 350)"><circle class="b" r="17"/><text class="n">T4</text><text class="s" y="31">★☆☆</text></g>
+        <g class="node open" id="n5" transform="translate(170 285)"><circle class="pulse" r="17"/><circle class="b" r="17"/><text class="n">T5</text><text class="s" y="31" id="s5"></text></g>
+        <g class="node locked" id="n6" transform="translate(270 250)"><circle class="b" r="17"/><text class="n" id="t6">🔒︎</text></g>
+        <g class="node locked" transform="translate(350 300)"><circle class="b" r="21"/><text class="n">🔒︎</text></g>
+        <g class="node locked" transform="translate(450 350)"><circle class="b" r="17"/><text class="n">🔒︎</text></g>
+
+        <g class="token" id="token" transform="translate(170 285)"><g transform="translate(0 -38)"><circle r="14"/><text>x</text><path d="M-5 12 L0 20 L5 12 Z" fill="var(--accent)"/></g></g>
+      </svg>
+
+      <button class="ibtn primary" style="left:16px;top:16px" aria-label="Nouvelle équation">+</button>
+      <button class="ibtn" style="left:68px;top:16px" aria-label="Annuler"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button class="ibtn on" style="left:120px;top:16px" aria-label="Carte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg></button>
+      <div class="mapbar"><b>La Carte des équations</b><span class="stat"><span class="st">★</span> <b>11</b> / 162</span><span class="stat">Badges <b>0</b></span><button class="pill ghost">Mode libre</button></div>
+      <div class="tip" style="left:330px;top:330px"><div class="t">T5 · Deux étapes</div><div class="eqbox math">2x + 5 = 11</div><div class="row"><span>★★★ en 2 étapes</span><button class="pill solid">Jouer</button></div></div>
+      <div class="daily">Défi du jour · au Sommet</div>
+    </div></div>
+    <div class="ctrl"><button id="playMap" type="button">Animer : T5 réussi, T6 s'ouvre, la Forêt se dévoile</button><button id="resetMap" type="button">Revenir à l'état initial</button></div>
+  </section>
+
+  <section>
+    <h2>2. Dans un niveau</h2>
+    <p class="lede">C'est le canevas habituel. Une barre en haut rappelle le niveau, les étapes utilisées et le seuil des ★★★, avec « Indice », « Recommencer » et le retour à la carte. Dans le Port, le coach entoure l'élément à utiliser. Les boutons d'action pas encore présentés sont masqués, et le nouveau bouton du niveau s'allume.</p>
+    <div class="scroll"><div class="screen">
+      <button class="ibtn primary" style="left:16px;top:16px" aria-label="Nouvelle équation">+</button>
+      <button class="ibtn" style="left:68px;top:16px" aria-label="Annuler"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button class="ibtn" style="left:120px;top:16px" aria-label="Carte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg></button>
+      <div class="levelbar"><div class="where"><b>T6 · Rassembler</b><small>Le Port · tutoriel</small></div>
+        <div class="steps" title="Étapes utilisées (Simplifier ne compte pas)"><i></i><i class="empty"></i>&nbsp;1 / 2 pour ★★★</div>
+        <button class="pill">Indice</button><button class="pill ghost">Recommencer</button></div>
+      <div class="ops"><button>Opération</button><button class="new">Simplifier</button><button class="ghostop">Autres actions à découvrir</button><div class="coach" style="left:170px;top:22px"><div class="cstep">Coach · 2 / 2</div>Tu as sélectionné 3x et 2x. Clique sur <b>Simplifier</b> pour les réunir en un seul terme.</div></div>
+      <div class="eqs">
+        <div class="eqline math"><span class="term sel">3x</span><span>+</span><span class="term sel" id="t2x">2x</span><span>− 4</span><span class="eqs-sign">=</span><span>11</span></div>
+      </div>
+    </div></div>
+  </section>
+
+  <section>
+    <h2>3. Niveau réussi</h2>
+    <p class="lede">Quand la ligne « S = … » est juste, elle passe en vert. Une carte détaille les étoiles critère par critère et dit comment gagner celles qui manquent. Un badge gagné arrive en haut à droite.</p>
+    <div class="scroll"><div class="screen">
+      <button class="ibtn primary" style="left:16px;top:16px" aria-label="Nouvelle équation">+</button>
+      <button class="ibtn" style="left:68px;top:16px" aria-label="Annuler"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg></button>
+      <button class="ibtn" style="left:120px;top:16px" aria-label="Carte"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z"/><path d="M9 3v15M15 6v15"/></svg></button>
+      <div class="eqs" style="left:38%;font-size:34px;gap:16px">
+        <div class="eqline math">5x + 3 <span class="eqs-sign">=</span> 2x + 12</div>
+        <span class="arrowlbl">−2x</span>
+        <div class="eqline math">3x + 3 <span class="eqs-sign">=</span> 12</div>
+        <span class="arrowlbl">−3 puis ÷3</span>
+        <div class="eqline math">x <span class="eqs-sign">=</span> 3</div>
+        <div class="eqline math sline" id="sline">S = {3}</div>
+      </div>
+      <div class="win-card"><h3>T7 · Grand large</h3>
+        <div class="bigstars" id="stars"><span class="on">★</span><span class="on">★</span><span>★</span></div>
+        <div class="crit">
+          <div class="ok">✓ <span>Équation résolue</span></div>
+          <div class="ok">✓ <span>Sans indice ni « Annuler »</span></div>
+          <div class="ko">○ <span>4 étapes, il en faut 3 au plus pour ★★★</span></div>
+        </div>
+        <div class="win-actions"><button class="pill ghost">Rejouer</button><button class="pill">Carte</button><button class="pill solid">Suivant</button></div>
+      </div>
+      <div class="badge-toast" id="toast"><span class="ico">=</span><div><b>Badge « Premiers pas »</b><br><span style="color:var(--muted)">Le Port est terminé</span></div></div>
+    </div></div>
+    <div class="ctrl"><button id="playWin" type="button">Rejouer l'animation de réussite</button></div>
+  </section>
+
+  <section>
+    <h2>Les animations prévues</h2>
+    <div class="notes">
+      <div class="note"><b>Réussite</b>La ligne S passe en vert, puis les étoiles apparaissent une à une avec un léger rebond, espacées de 250 ms, et le badge glisse depuis le haut.</div>
+      <div class="note"><b>Retour à la carte</b>La carte se centre sur le niveau réussi. Le chemin vers le suivant se trace, son cadenas tremble puis disparaît, et le jeton x avance.</div>
+      <div class="note"><b>Nouvelle région</b>Le brouillard se lève : la région reprend sa couleur, perd son flou, et son nom s'affiche.</div>
+      <div class="note"><b>Nouveau bouton</b>Le bouton présenté par le niveau apparaît avec un halo qui pulse jusqu'à sa première utilisation.</div>
+      <div class="note"><b>Technique</b>Uniquement des transitions et animations CSS, comme le déplacement du canevas (<code>canvas.js</code>), pas de boucle requestAnimationFrame. Avec « réduire les animations », tout devient un simple fondu.</div>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+  var token = document.getElementById('token'), trail = document.getElementById('trail56');
+  var n5 = document.getElementById('n5'), n6 = document.getElementById('n6'), t6 = document.getElementById('t6');
+  var foret = document.getElementById('regForet'), s5 = document.getElementById('s5');
+  var timers = [];
+  function later(ms, fn){ timers.push(setTimeout(fn, ms)); }
+  function reset(){
+    timers.forEach(clearTimeout); timers = [];
+    n5.setAttribute('class','node open'); s5.textContent='';
+    if (!n5.querySelector('.pulse')) { var c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('class','pulse'); c.setAttribute('r','17'); n5.insertBefore(c, n5.firstChild); }
+    n6.setAttribute('class','node locked'); t6.textContent='🔒︎'; t6.classList.remove('lockshake');
+    var p6 = n6.querySelector('.pulse'); if (p6) p6.remove();
+    trail.setAttribute('class','trail'); trail.style.strokeDasharray=''; trail.style.strokeDashoffset=''; trail.style.transition='';
+    token.setAttribute('transform','translate(170 285)');
+    foret.classList.add('fogged');
+  }
+  function play(){
+    reset();
+    later(150, function(){
+      n5.setAttribute('class','node done'); var p = n5.querySelector('.pulse'); if (p) p.remove();
+      s5.textContent='★★★'; s5.classList.remove('pop'); void s5.getBBox(); s5.classList.add('pop');
+      s5.style.transformBox='fill-box'; s5.style.transformOrigin='center';
+    });
+    later(700, function(){
+      var len = trail.getTotalLength();
+      trail.setAttribute('class','trail draw');
+      trail.style.strokeDasharray = len; trail.style.strokeDashoffset = len;
+      void trail.getBBox();
+      trail.style.transition = 'stroke-dashoffset .8s ease';
+      trail.style.strokeDashoffset = 0;
+    });
+    later(1550, function(){ t6.classList.add('lockshake'); t6.style.transformBox='fill-box'; t6.style.transformOrigin='center'; });
+    later(1950, function(){
+      t6.textContent='T6'; n6.setAttribute('class','node open');
+      var c=document.createElementNS('http://www.w3.org/2000/svg','circle'); c.setAttribute('class','pulse'); c.setAttribute('r','17'); n6.insertBefore(c, n6.firstChild);
+      token.setAttribute('transform','translate(270 250)');
+    });
+    later(2900, function(){ foret.classList.remove('fogged'); });
+  }
+  document.getElementById('playMap').addEventListener('click', play);
+  document.getElementById('resetMap').addEventListener('click', reset);
+
+  var stars = document.getElementById('stars'), sline = document.getElementById('sline'), toast = document.getElementById('toast');
+  function win(){
+    stars.classList.remove('play'); sline.classList.remove('win'); toast.classList.remove('show');
+    void stars.offsetWidth;
+    setTimeout(function(){ sline.classList.add('win'); }, 100);
+    setTimeout(function(){ stars.classList.add('play'); }, 500);
+    setTimeout(function(){ toast.classList.add('show'); }, 1400);
+  }
+  document.getElementById('playWin').addEventListener('click', win);
+  win();
+})();
+</script>
