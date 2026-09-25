@@ -353,10 +353,8 @@ Fait : catalogue (`js/levels.js`), sauvegarde et export/import (`js/progress.js`
 Corrigé en chemin : parenthèse seule signée dans le parseur (`−(x+4)`), arrondi
 (`x/3 × 3` donnait `0,999999x`), `0 × (expression)` qui ne se simplifiait jamais en 0.
 
-Niveaux encore impossibles à finir dans l'app, en attente de décision :
-- r4 (`x² = −4`) et g6 (colonne `x² + 5 = 0`) : l'étape 2 de « Racine carrée » refuse un
-  nombre négatif sans conclure S = ∅. gB dépend de g6.
-- mB (`(x − 6)√(x − 8) = 0`) : « Produit nul » est indisponible sur une équation qui porte
-  déjà une condition d'existence (restriction v1). L'Observatoire dépend de mB.
-- oB : impossible d'entrer dans un facteur d'un produit placé au dénominateur pour
-  factoriser x² − 4. La variante `(x − 2)(x + 2)` se résout.
+Débloqués le 2026-09-25 (décisions de l'utilisateur) : la racine carrée d'un nombre
+négatif conclut S = ∅ (r4, g6, gB) ; « Produit nul » et « Condition d'existence »
+coexistent sur une même équation (mB, Observatoire) ; on peut entrer dans un facteur d'un
+produit au dénominateur pour le factoriser (oB, énoncé d'origine). Les 56 niveaux ont une
+solution de référence qui passe (`tests/campaign_reference.js`).

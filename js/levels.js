@@ -222,7 +222,7 @@
       ],
       learn: 'Même forme après simplification, domaines différents', trap: 'La première donne S = {0}, la seconde S = ∅.',
       hints: ['Compare les ensembles de définition.', 'Pour la 2e, la condition d\'existence donne x > 0.'] },
-    { id: 'mB', zone: 'marais', x: 1350, y: 300, req: ['m8'], title: 'Épreuve du Marais', latex: '(x-6)\\sqrt{x-8}=0', sol: P(8), par: 4,
+    { id: 'mB', zone: 'marais', x: 1350, y: 300, req: ['m8'], title: 'Épreuve du Marais', latex: '(x-6)\\sqrt{x-8}=0', sol: P(8), par: 6,
       boss: true, requireDomain: true, learn: 'Produit nul et domaine', trap: 'x = 6 est hors du domaine.',
       hints: ['La racine impose une condition.', 'Condition d\'existence sur la racine, puis Produit nul.'] },
 

@@ -91,21 +91,17 @@ async function typeEquation(page, raw) {
     await page.evaluate(() => {
       window.App.History.toggleTermSelection('left', 0);
       window.App.History.toggleTermSelection('right', 0);
-      window.App.History.confirmSquareRoot(); // étape 2 (mode 'both') : échoue, constante négative
+      window.App.History.confirmSquareRoot(); // étape 2 (mode 'both') : constante négative
     });
     await page.waitForTimeout(100);
     const state = await page.evaluate(() => ({
       branches: window.App.History.getBranches(),
-      error: window.App.History.getPending().error
+      error: window.App.History.getPending().error,
+      noSolution: !!window.App.History.lastEquation().noSolution,
+      ranges: window.App.Render.finalSolutionRanges()
     }));
-    console.log('3) etat (x+3)^2=-4:', JSON.stringify(state));
     ok('3) negative constant: no branches created', !state.branches);
-    ok('3) negative constant: error message set', !!state.error);
-    const errPanelText = await page.evaluate(() => {
-      var el = document.querySelector('.panel-error');
-      return el ? el.textContent : null;
-    });
-    ok('3) error message shown in panel', !!errPanelText);
+    ok('3) negative constant: concludes S = ∅ (no error)', !state.error && state.noSolution && JSON.stringify(state.ranges) === '[]');
     anyErr = anyErr.concat(errs);
     await page.close();
   }

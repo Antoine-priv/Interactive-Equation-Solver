@@ -198,21 +198,24 @@
   // colonnes "Produit nul", toujours restreint au domaine. null tant qu'il n'est pas
   // encore affiché. Utilisé par la campagne (voir campaign.js) pour valider un niveau.
   function finalSolutionRanges() {
-    var Hist = App.History, Ineq = App.Ineq;
-    if (Hist.getSignChart()) return Hist.signChartSolutionRanges();
-    var domain = domainRanges(Hist.getDomainConditions());
+    return nodeSolutionRanges(App.History);
+  }
+
+  // Ensemble-solution d'un noeud de l'arbre des scissions : son tableau de signes, sinon
+  // sa chaîne (ou la réunion de ses colonnes "Produit nul"), restreint à SON domaine.
+  // null tant qu'une partie n'est pas encore résolue.
+  function nodeSolutionRanges(node) {
+    var Ineq = App.Ineq;
+    if (node.getSignChart && node.getSignChart()) return node.signChartSolutionRanges();
+    var domain = domainRanges(node.getDomainConditions ? node.getDomainConditions() : null);
     if (!domain) return null;
-    var branches = Hist.getBranches();
+    var branches = node.getBranches ? node.getBranches() : null;
     if (!branches) {
-      var main = Hist.getLeaf();
-      var set = Ineq.solutionRanges(main.lastEquation(), main.getCurrentOperator());
+      var own = node.getLeaf ? node.getLeaf() : node;
+      var set = Ineq.solutionRanges(own.lastEquation(), own.getCurrentOperator());
       return set && Ineq.intersectRanges(set, domain);
     }
-    var leaves = [].concat.apply([], branches.map(leafChainEngines));
-    var sets = leaves.map(function (le) {
-      var own = le.getLeaf ? le.getLeaf() : le;
-      return Ineq.solutionRanges(own.lastEquation(), own.getCurrentOperator());
-    });
+    var sets = branches.map(nodeSolutionRanges);
     if (sets.some(function (x) { return x === null; })) return null;
     return Ineq.intersectRanges(Ineq.unionRanges([].concat.apply([], sets)), domain);
   }
@@ -3221,16 +3224,24 @@
       // "(x+3)²=0", ou deux facteurs par ailleurs distincts qui finissent par la même
       // solution). Une feuille peut aussi finir sans solution ("3=0") ou avec une infinité
       // ("0=0") — réunion d'ensembles (voir App.Ineq), restreinte au domaine s'il y en a un.
-      var allLeafEngines = branchResults.reduce(function (acc, b) { return acc.concat(b.res.leafEngines); }, []);
-      var leafSets = allLeafEngines.map(function (le) {
-        // getLeaf() : sa PROPRE chaîne, jamais celle d'une colonne qu'il aurait focalisée.
-        var own = le.getLeaf ? le.getLeaf() : le;
-        return App.Ineq.solutionRanges(own.lastEquation(), own.getCurrentOperator());
-      });
-      var branchesDomain = domainRanges(Hist.getDomainConditions());
-      if (branchesDomain && leafSets.every(function (set) { return set !== null; })) {
-        var unionSet = App.Ineq.unionRanges([].concat.apply([], leafSets));
-        history.appendChild(createSolutionSetEl(App.Ineq.intersectRanges(unionSet, branchesDomain)));
+      var branchSet = nodeSolutionRanges(Hist);
+      if (branchSet) history.appendChild(createSolutionSetEl(branchSet));
+
+      // Colonnes "Condition d'existence" posées sur l'équation qui porte la scission (voir
+      // splitOwnsConditions dans history.js) : même groupe qu'en l'absence de scission, à
+      // côté de la chaîne principale et à droite des colonnes "Produit nul".
+      var splitConds = Hist.getDomainConditions();
+      if (splitConds && splitConds.length) {
+        var splitDomain = renderDomainSplit(Hist, history, splitConds, Hist.getFocusedDomain());
+        if (splitDomain.focusedRes) {
+          scrollTarget = splitDomain.focusedRes.framedRowEl;
+          scrollTargetSolved = splitDomain.focusedRes.framedSolved;
+          scrollEngine = splitDomain.focusedRes.scrollEngine;
+          opPrevRowEl = findPrevRowEl(splitDomain.focusedRes.rowsData, scrollTarget);
+          var domSteps = scrollEngine.getSteps();
+          scrollIdentity = domSteps[domSteps.length - 1];
+        }
+        positionDomainGroup(splitDomain.group, history, primaryRowsData, splitConds, null);
       }
     }
 

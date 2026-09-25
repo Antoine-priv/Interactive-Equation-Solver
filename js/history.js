@@ -2130,9 +2130,10 @@
     // capturedArray, operator, engine, solved, solvedSetLatex }, ...]. `focusedDomain` est
     // null tant que le clavier/pavé cible `leaf` (ou un enfant de `branches`) ; sinon
     // l'index dans `domainConditions` dont l'`engine` reçoit la délégation à la place.
-    // Restriction v1 (voir CLAUDE.md/plan) : un même noeud n'a jamais `branches` ET
-    // `domainConditions` à la fois — Produit nul/Racine carrée deviennent indisponibles
-    // sur CE noeud une fois `domainConditions` posé (voir canProduitNul/canSquareRoot).
+    // Un même noeud peut porter `branches` ET `domainConditions` (ex. "(x-6)√(x-8)=0" :
+    // domaine posé, puis Produit nul) ; une colonne de domaine focalisée passe alors avant
+    // les colonnes "Produit nul" (voir activeChild), et une condition posée depuis l'une de
+    // ces colonnes remonte ici (voir splitOwnsConditions).
     var domainConditions = null;
     var focusedDomain = null;
     // "Tableau de signes" (voir canSignChart/signChartAction plus bas) : même principe de
@@ -2163,8 +2164,11 @@
     // `branches` a toujours priorité (voir la restriction v1 ci-dessus : jamais les deux
     // à la fois sur un même noeud).
     function activeChild() {
-      if (branches) return focusedChild();
+      // Une colonne "Condition d'existence" focalisée passe avant les colonnes "Produit
+      // nul" : les deux peuvent coexister sur un même noeud (ex. "(x-6)√(x-8)=0", domaine
+      // posé puis Produit nul).
       if (domainConditions && focusedDomain !== null) return domainConditions[focusedDomain].engine;
+      if (branches) return focusedChild();
       if (signChart && focusedSignChartFactor !== null) return signChart.factors[focusedSignChartFactor].engine;
       return null;
     }
@@ -2181,8 +2185,10 @@
     }
 
     function setFocusedBranch(index) {
-      if (!branches || index < 0 || index >= branches.length || focusedBranch === index) return;
+      if (!branches || index < 0 || index >= branches.length) return;
+      if (focusedBranch === index && focusedDomain === null) return;
       focusedBranch = index;
+      focusedDomain = null;
       notify();
     }
 
@@ -2190,7 +2196,10 @@
     // à cet enfant (ex. un clic sur un terme), pour que la délégation le cible déjà
     // correctement — l'action elle-même déclenchera son propre (unique) rendu.
     function focusBranch(index) {
-      if (branches && index >= 0 && index < branches.length) focusedBranch = index;
+      if (branches && index >= 0 && index < branches.length) {
+        focusedBranch = index;
+        focusedDomain = null;
+      }
     }
 
     // Même principe que setFocusedBranch/focusBranch, mais pour `domainConditions` (voir
@@ -2264,6 +2273,13 @@
     // la dernière étape de `leaf` (atStep, voir existenceConditionAction/signChartAction)
     // est retiré avant de toucher à cette étape, dont il dépend.
     function undo() {
+      if (domainConditions && focusedDomain !== null && branches) {
+        var dEngB = domainConditions[focusedDomain].engine;
+        if (dEngB.canUndo()) return dEngB.undo();
+        removeDomainCondition(focusedDomain);
+        notify();
+        return true;
+      }
       if (branches) {
         if (focusedChild().canUndo()) return focusedChild().undo();
         branches = null;
@@ -2338,6 +2354,7 @@
         return eng;
       });
       branches = engines;
+      focusedDomain = null;
       focusedBranch = 0;
       branchSplitLabel = labelLatex;
       notify();
@@ -2476,7 +2493,23 @@
       return existenceConditionsFor(groupNode, d);
     }
 
+    // Conditions portées par le membre drillé de la chaîne ACTIVE (à n'importe quelle
+    // profondeur de scission).
+    function collectDrilledConditions() {
+      if (activeChild()) return activeChild().collectDrilledConditions();
+      return drilledExistenceConditions();
+    }
+
+    // Dans une colonne "Produit nul", une condition d'existence remonte au noeud qui porte
+    // la scission : ses colonnes s'affichent avec la chaîne principale et restreignent
+    // l'ensemble-solution de toutes les colonnes (les colonnes "Produit nul" n'affichent
+    // pas de colonnes de domaine qui leur seraient propres).
+    function splitOwnsConditions() {
+      return !!branches && !(domainConditions && focusedDomain !== null);
+    }
+
     function canExistenceCondition() {
+      if (splitOwnsConditions()) return focusedChild().collectDrilledConditions().length > 0;
       if (activeChild()) return activeChild().canExistenceCondition();
       return drilledExistenceConditions().length > 0;
     }
@@ -2499,8 +2532,9 @@
     }
 
     function existenceConditionAction() {
-      if (activeChild()) return activeChild().existenceConditionAction();
-      var conds = drilledExistenceConditions();
+      var fromSplit = splitOwnsConditions();
+      if (!fromSplit && activeChild()) return activeChild().existenceConditionAction();
+      var conds = fromSplit ? focusedChild().collectDrilledConditions() : drilledExistenceConditions();
       if (!conds.length) return { spawned: false, pan: false };
       var fresh = conds.filter(function (c) { return findDomainCondition(c) === -1; });
       if (!fresh.length) return { spawned: false, pan: true, index: findDomainCondition(conds[0]) };
@@ -2531,7 +2565,7 @@
       // voir toggleTermSelection) et ne pourrait jamais drills un second
       // dénominateur/radicand du même côté sans d'abord ressortir manuellement (Échap).
       // exitDrill() notifie déjà lui-même : pas besoin d'un second notify() ici.
-      leaf.exitDrill();
+      if (fromSplit) focusedChild().exitDrill(); else leaf.exitDrill();
       return { spawned: true, pan: false, index: domainConditions.length - fresh.length };
     }
 
@@ -2540,7 +2574,6 @@
       // v1 : indisponible sur ce noeud une fois qu'il porte déjà des colonnes "Condition
       // d'existence" (voir la restriction en tête de createBranchable) — pas de conflit
       // de délégation possible plus bas (activeChild() aurait déjà intercepté).
-      if (domainConditions) return false;
       // Même restriction pour un "Tableau de signes" déjà posé ICI (retour utilisateur :
       // survoler "Produit nul" une fois le tableau construit montrait un aperçu de flèches
       // mal positionné, et cliquer dessus faisait carrément DISPARAÎTRE le tableau —
@@ -2575,7 +2608,6 @@
 
     function confirmProduitNul() {
       if (activeChild()) return activeChild().confirmProduitNul();
-      if (domainConditions) return false;
       if (signChart) return false;
       var detected = detectProduitNul(leaf.lastEquation());
       if (!detected) return false;
@@ -3114,7 +3146,6 @@
     // jamais vérifiée ici.
     function canSquareRoot() {
       if (activeChild()) return activeChild().canSquareRoot();
-      if (domainConditions) return false;
       return !!detectSquareRootUnwrapped(leaf.lastEquation());
     }
 
@@ -3123,7 +3154,6 @@
     // squareRootSimplifyAction, portée par "Simplifier" à la place).
     function squareRootStage() {
       if (activeChild()) return activeChild().squareRootStage();
-      if (domainConditions) return null;
       return detectSquareRootUnwrapped(leaf.lastEquation()) ? 'wrap' : null;
     }
 
@@ -3190,7 +3220,6 @@
     // (activation du bouton, aperçu au survol), sans dupliquer ici la détection de forme.
     function squareRootAction() {
       if (activeChild()) return activeChild().squareRootAction();
-      if (domainConditions) return null;
       return squareRootSimplifyAction(leaf.lastEquation(), leaf.getPending());
     }
 
@@ -3300,7 +3329,6 @@
     // peu clair (même geste répété pour un effet complètement différent).
     function confirmSquareRoot() {
       if (activeChild()) return activeChild().confirmSquareRoot();
-      if (domainConditions) return false;
       var eq = leaf.lastEquation();
       // Étape 1 : enveloppe l'INTÉGRALITÉ des deux membres dans une racine carrée — une
       // étape normale de la chaîne (deux flèches "√" identiques, comme "÷2" ou toute autre
@@ -3445,6 +3473,7 @@
       confirmProduitNul: confirmProduitNul,
       canExistenceCondition: canExistenceCondition,
       existenceConditionAction: existenceConditionAction,
+      collectDrilledConditions: collectDrilledConditions,
       canSignChart: canSignChart,
       signChartAction: signChartAction,
       getSignChartColumns: getSignChartColumns,

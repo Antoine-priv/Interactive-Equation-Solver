@@ -53,7 +53,7 @@ Equations are `{ left: Side, right: Side }`. A `Side` is `Array<Node>`. A `Node`
   `Expr.isExpressionQuotient`/`wrapSideInQuotient`. Such a quotient is excluded from
   "Développer" as a whole, but both its numerator and its expression-denominator remain
   independently drillable/simplifiable/factorable/expandable (`pending.drilled.part ===
-  'den'` for the denominator, mirroring `pending.drilled.branch` for a ProductGroup factor —
+  'den'` for the denominator — plus `branch` for one factor of a product denominator, mirroring `pending.drilled.branch` for a ProductGroup factor —
   see `Expr.drilledWorkingArray`/`withDrilledArrayAtPath`).
 - `ProductGroup = { sign: 1|-1, factors: Array<{ terms: Node[], exponent: number }> }` —
   represents a product of N factors, e.g. `(x+2)(x+3)` is 2 factors of exponent 1 each;
@@ -98,7 +98,12 @@ live in `expression.js` and return new arrays (never mutate in place — always 
 `createEngine()` is a factory producing a self-contained solving engine: `steps[]`
 (confirmed equation history) + `pending` (in-progress state) + all mutating methods. Multiple independent engines can exist at once.
 
-`App.History` is a thin orchestrator around one `primary` engine. When the equation is
+`App.History` is a thin orchestrator around one `primary` engine. A node may carry both
+"Produit nul" `branches` and "Condition d'existence" columns (`domainConditions`): a focused
+domain column takes priority in `activeChild()`, a condition created from inside a
+"Produit nul" column is stored on the node carrying the split (`splitOwnsConditions`), and
+the final S of a node is its branches' union intersected with its own domain
+(`nodeSolutionRanges` in `render.js`). When the equation is
 `(...)( ...)...=0`, selecting the product and clicking "Produit nul" (`confirmProduitNul`)
 spawns one independent child engine per DISTINCT factor (`branches`, a plain array,
 index-based), rendered side by side and each fully solvable on its own. `App.History.focusBranch(index)`

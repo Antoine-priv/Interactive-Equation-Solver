@@ -265,9 +265,7 @@ const S = {
 };
 
 // Niveaux qu'on sait impossibles à finir avec l'app actuelle (voir le compte rendu).
-const BLOCKED = {
-  mB: 'Produit nul indisponible sur une équation qui porte déjà une condition d\'existence (restriction v1)',
-};
+const BLOCKED = {};
 
 (async () => {
   const zones = process.argv.slice(2);
