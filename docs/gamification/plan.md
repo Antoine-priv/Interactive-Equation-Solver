@@ -118,15 +118,17 @@
 
 ### La Grotte — Identités remarquables
 
-*Notion :* a² − b², (a ± b)² : développer, factoriser, puis résoudre. *S’ouvre après :* Montagne, 1er problème (développer) et 3e (factoriser). *Récompense :* Fiche mémo.
+*Notion :* a² − b², (a ± b)² : développer, factoriser par −1, puissances de x. *S’ouvre après :* Montagne, 1er problème (développer) et 3e (factoriser). *Récompense :* Fiche mémo.
 
 | Id | Problème | Énoncé | Apprend | ★★★ en | Prérequis | Notes |
 |---|---|---|---|---|---|---|
-| gD | Développer A à G | `A = (5 + x)²` → `25 + 10x + x²`<br>`B = (x − 7)²` → `x² − 14x + 49`<br>`C = (5 + x)(5 − x)` → `25 − x²`<br>`D = (−x + 2)²` → `x² − 4x + 4`<br>`E = (−6 − x)²` → `36 + 12x + x²`<br>`F = −(−x − 4)(x − 4)` → `x² − 16`<br>`G = −(−x + 9)(−9 + x)` → `x² − 18x + 81` | Développer avec (a + b)², (a − b)² et (a − b)(a + b), y compris avec des signes piégés | 9 | p1 | Objectif : forme développée réduite · Découvre : Développer en choisissant une identité · Piège : F et G : faire rentrer le signe − dans la première parenthèse avant de reconnaître l'identité. · Source : Exercice 4 · **À développer :** Mode « expression seule » (A = …, sans relation) et Développer par identité remarquable (choix de l'identité, saisie de a et b). |
-| gF | Factoriser H à K | `H = x² + 8x + 16` → `(x + 4)²`<br>`I = x⁴ − 25` → `(x² − 5)(x² + 5)`<br>`J = 9 − (−x²) − 6x` → `(x − 3)²`<br>`K = −49 − x² + 14x` → `−(x − 7)²` | Reconnaître une identité dans une expression en désordre ou avec un signe devant | 5 | gD, p3 | Objectif : forme factorisée · Piège : J : simplifier −(−x²) d'abord. K : mettre −1 en facteur avant l'identité. · Source : Exercice 4 · **À développer :** Mode « expression seule », et identités dont le « a » n'est pas x (x⁴ = (x²)²), aujourd'hui limitées volontairement au degré 2. |
-| g1 | Différence de carrés | `x² − 9 = 0` | a² − b² = (a − b)(a + b) | 4 | gF |  |
-| g2 | Carré parfait | `x² + 6x + 9 = 0` | (a + b)², solution double | 3 | g1 |  |
-| g3 | Deux carrés | `(2x + 1)² − (x − 3)² = 0` | a² − b² avec des expressions | 6 | g2 | Épreuve |
+| g1 | Un carré à développer | `(x − 7)² = x² − 7` | Développer (a − b)² : les x² s'annulent, il reste une équation du 1er degré | 4 | p1 | Source : Inspiré de l'exercice 4 |
+| g2 | Toujours faux | `(5 + x)(5 − x) = 9 − x²` | (a + b)(a − b) = a² − b², puis 25 = 9 : S = ∅ | 2 | g1 | Piège : Les x disparaissent des deux côtés. · Source : Inspiré de l'exercice 4 |
+| g3 | Différence de carrés | `x² − 9 = 0` | a² − b² = (a − b)(a + b) | 4 | g2, p3 |  |
+| g4 | Moins moins | `9 − (−x²) − 6x = 0` | Simplifier −(−x²), remettre dans l'ordre, reconnaître (x − 3)² | 3 | g3 | Source : Inspiré de l'exercice 4 (J) |
+| g5 | Factoriser par −1 | `−49 − x² + 14x = 0` | Mettre −1 en facteur pour retrouver x² − 14x + 49 = (x − 7)² | 4 | g4 | Piège : Sans le −1, aucune identité ne s'applique. · Source : Inspiré de l'exercice 4 (K) · **À développer :** À vérifier : factoriser par −1, puis appliquer l'identité dans la parenthèse. |
+| g6 | Puissance 4 | `x⁴ − 25 = 0` | a = x² : (x² − 5)(x² + 5), puis √ sur x² = 5 | 6 | g5 | Piège : x² + 5 = 0 n'a pas de solution. · Source : Inspiré de l'exercice 4 (I) |
+| gB | Deux carrés | `(2x + 1)² − (x − 3)² = 0` | a² − b² avec des expressions | 6 | g6 | Épreuve |
 
 ### La Source — Racine carrée
 
@@ -205,16 +207,12 @@ est accepté tel quel par le tableau de signes (`Expr.extractSignChartFactors`).
 4. **Factoriser un trinôme sans racine évidente** (s5 : 2x² − 3x + 1). Proposition :
    l'élève saisit la forme factorisée suggérée par l'énoncé, et l'application vérifie
    l'égalité en développant.
-5. **Développer et factoriser une expression seule** (exercice 4, gD et gF) :
-   - Un mode « A = … » sans relation, réussi à la forme développée réduite (gD) ou
-     factorisée (gF), selon le type de niveau.
-   - « Développer » par identité remarquable : choix de l’identité et saisie de a et b,
-     symétrique du sélecteur de « Factoriser ». Aujourd’hui « Développer » distribue
-     seulement.
-   - Des identités dont le « a » n’est pas x (I = x⁴ − 25 = (x² − 5)(x² + 5)). Cela lève
-     une restriction jusqu’ici volontaire (identités limitées au degré 2), à confirmer.
-   - À vérifier : que K = −49 − x² + 14x se factorise bien en mettant −1 en facteur,
-     puis en appliquant l’identité à l’intérieur de la parenthèse.
+5. **Identités remarquables avec une puissance de x** : FAIT le 2026-09-25 (commit
+   `6cde151`). « a » peut valoir k·xᵖ, par exemple x⁴ − 25 = (x² − 5)(x² + 5) avec a = x²
+   (niveau g6). L’exercice 4 sert seulement d’inspiration pour des équations de la Grotte.
+   Pas de mode « expression seule », pas de nouvelle fonctionnalité pour « Développer ».
+   Reste à vérifier : le niveau g5 (factoriser par −1, puis appliquer l’identité dans la
+   parenthèse).
 6. **Nouveaux types de niveau :**
    - Niveau « Df seul » (m1, m2) : réussi quand toutes ses colonnes
      « Condition d'existence » sont résolues.
