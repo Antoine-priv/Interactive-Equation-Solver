@@ -144,6 +144,76 @@ function ok(label, cond) {
   ok('from the main chain, undo removes the sign chart', await page.evaluate(() => window.App.History.getSignChart() === null));
   await page.screenshot({ path: `${SCRATCH}/undo_columns_after.png` });
 
+  // ===== Grille du tableau de signes =====
+  await startProduct();
+  await page.evaluate(() => {
+    var H = window.App.History;
+    H.setFocusedSignChartFactor(0);
+    H.selectOp('expr'); H.setExprChainText('-1'); H.confirm();
+    H.toggleTermSelection('left', 1); H.toggleTermSelection('left', 2); H.confirmSimplifySelection();
+    H.toggleTermSelection('right', 0); H.toggleTermSelection('right', 1); H.confirmSimplifySelection();
+    H.setFocusedSignChartFactor(1);
+    H.selectOp('expr'); H.setExprChainText('+2'); H.confirm();
+    H.toggleTermSelection('left', 1); H.toggleTermSelection('left', 2); H.confirmSimplifySelection();
+    H.toggleTermSelection('right', 0); H.toggleTermSelection('right', 1); H.confirmSimplifySelection();
+  });
+  await page.waitForTimeout(120);
+  const grid = () => page.evaluate(() => {
+    var c = window.App.History.getSignChart();
+    return c && { rows: c.tableRows.map(function (r) { return r.rowKind + ':' + r.cells.join(','); }), verified: c.verified };
+  });
+  let g = await grid();
+  ok('table auto-filled with the 2 factor rows', g && g.rows.length === 2);
+  const factor1Steps = await page.evaluate(() => window.App.History.getSignChart().factors[1].engine.getSteps().length);
+
+  await page.evaluate(() => {
+    var H = window.App.History;
+    H.signChartSetCell(0, 0, '-');
+    H.signChartSetCell(0, 1, '0');
+    H.signChartAddRow({ rowKind: 'total' });
+    H.signChartVerify();
+  });
+  await page.waitForTimeout(120);
+  g = await grid();
+  ok('grid actions applied (2 cells, total row, verified)',
+    g.rows.length === 3 && g.rows[0] === 'factor:-,0,,,' && g.verified === true);
+  await page.screenshot({ path: `${SCRATCH}/undo_columns_grid_before.png` });
+
+  await clickUndo();
+  g = await grid();
+  ok('undo 1: "Vérifier" undone', g.verified === false && g.rows.length === 3);
+  await clickUndo();
+  g = await grid();
+  ok('undo 2: total row removed', g.rows.length === 2);
+  await clickUndo();
+  g = await grid();
+  ok('undo 3: last cell cleared', g.rows[0] === 'factor:-,,,,');
+  await clickUndo();
+  g = await grid();
+  ok('undo 4: first cell cleared', g.rows[0] === 'factor:,,,,');
+  ok('factor steps untouched by grid undos',
+    (await page.evaluate(() => window.App.History.getSignChart().factors[1].engine.getSteps().length)) === factor1Steps);
+  await clickUndo();
+  ok('undo 5: grid exhausted, undoes the focused factor\'s last step',
+    (await page.evaluate(() => window.App.History.getSignChart().factors[1].engine.getSteps().length)) === factor1Steps - 1);
+
+  // Depuis la chaîne principale : la grille est aussi défaite avant le tableau lui-même.
+  await page.evaluate(() => {
+    var H = window.App.History;
+    H.setFocusedSignChartFactor(1);
+    H.toggleTermSelection('right', 0); H.toggleTermSelection('right', 1); H.confirmSimplifySelection();
+    H.focusMain();
+    H.signChartSetCell(1, 4, '+');
+  });
+  await page.waitForTimeout(120);
+  g = await grid();
+  ok('table back once the factor is re-solved, rows kept', g && g.rows.length === 2 && g.rows[1] === 'factor:,,,,+');
+  await clickUndo();
+  g = await grid();
+  ok('from the main chain, undo first clears the grid cell', g && g.rows[1] === 'factor:,,,,');
+  await clickUndo();
+  ok('then the sign chart itself is removed', await page.evaluate(() => window.App.History.getSignChart() === null));
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;

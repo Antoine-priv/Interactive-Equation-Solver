@@ -2226,6 +2226,18 @@
         notify();
         return true;
       }
+      // Actions sur la grille du tableau de signes (rangées, cases, "Vérifier") : toujours
+      // postérieures à la résolution de ses facteurs et du domaine dont il dépend, donc
+      // défaites en premier depuis ces contextes-là — et depuis la chaîne principale tant
+      // qu'aucune étape n'y a été ajoutée après la création du tableau.
+      var chartIsLatest = signChart && (
+        focusedSignChartFactor !== null ||
+        (focusedDomain !== null ? focusedDomain < signChart.domainCount : signChart.atStep >= leaf.getSteps().length));
+      if (chartIsLatest && signChart.gridHistory.length > 0) {
+        popSignChartGridSnapshot();
+        notify();
+        return true;
+      }
       if (domainConditions && focusedDomain !== null) {
         // Tableau de signes construit APRÈS ce domaine (il en exigeait la résolution, voir
         // signChartDomainReady) : retiré d'abord, avant de défaire quoi que ce soit ici.
@@ -2565,7 +2577,7 @@
         eng.subscribe(function () { signChartAutoFillRows(); notify(); });
         return { id: i, kind: f.kind, capturedSide: Expr.cloneSide(f.terms), exponent: f.exponent, engine: eng };
       });
-      signChart = { factors: factors, constantSign: extracted.constantSign, tableRows: [], verified: false,
+      signChart = { factors: factors, constantSign: extracted.constantSign, tableRows: [], verified: false, gridHistory: [],
         atStep: leaf.getSteps().length, domainCount: domainConditions ? domainConditions.length : 0 };
       focusedSignChartFactor = null;
       notify();
@@ -2586,7 +2598,7 @@
     function signChartAutoFillRows() {
       if (!signChart || signChart.tableRows.length > 0) return;
       if (!getSignChartColumns()) return;
-      signChart.factors.forEach(function (f, i) { signChartAddRow({ rowKind: 'factor', factorIndex: i }); });
+      signChart.factors.forEach(function (f, i) { addSignChartRow({ rowKind: 'factor', factorIndex: i }, false); });
     }
 
     // Coefficient du terme degré 1 d'un facteur linéaire déjà extrait par
@@ -2705,6 +2717,29 @@
     // échouer tout ajout de rangée/remplissage de case tant qu'un facteur restait focalisé
     // après l'avoir résolu (bug rapporté : "rien ne se passe").
     function signChartAddRow(row) {
+      return addSignChartRow(row, true);
+    }
+
+    // Retour (voir undo plus haut) sur la grille du tableau : une copie de tableRows/
+    // verified est empilée AVANT chaque action de l'élève (ajout de rangée, case, "Vérifier")
+    // — jamais avant le pré-remplissage automatique (signChartAutoFillRows), qui n'est pas
+    // une action de l'élève.
+    function pushSignChartGridSnapshot() {
+      signChart.gridHistory.push({
+        verified: signChart.verified,
+        tableRows: signChart.tableRows.map(function (r) {
+          return { rowKind: r.rowKind, factorIndex: r.factorIndex, withPower: r.withPower, cells: r.cells.slice(), dirty: r.dirty.slice() };
+        })
+      });
+    }
+
+    function popSignChartGridSnapshot() {
+      var snap = signChart.gridHistory.pop();
+      signChart.tableRows = snap.tableRows;
+      signChart.verified = snap.verified;
+    }
+
+    function addSignChartRow(row, recordUndo) {
       if (!signChart) return false;
       var cols = getSignChartColumns();
       if (!cols) return false;
@@ -2718,6 +2753,7 @@
           return r.rowKind === 'factor' && r.factorIndex === row.factorIndex && !!r.withPower === !!row.withPower;
         });
       if (exists) return false;
+      if (recordUndo) pushSignChartGridSnapshot();
       signChart.tableRows.push({
         rowKind: row.rowKind,
         factorIndex: row.rowKind === 'factor' ? row.factorIndex : undefined,
@@ -2749,6 +2785,10 @@
       if (!row || !cols || !cols[colIndex]) return false;
       var allowed = cols[colIndex].type === 'boundary' ? ['0', 'undef'] : ['+', '-'];
       if (value !== null && allowed.indexOf(value) === -1) return false;
+      // Même valeur ET déjà retouchée depuis le dernier "Vérifier" : rien ne change, pas
+      // d'étape de retour vide (sinon, reposer la même valeur la décolore, voir dirty).
+      if (row.cells[colIndex] === value && row.dirty[colIndex]) return false;
+      pushSignChartGridSnapshot();
       row.cells[colIndex] = value;
       row.dirty[colIndex] = true;
       notify();
@@ -2783,6 +2823,7 @@
       if (!signChart) return false;
       var hasTotal = signChart.tableRows.some(function (r) { return r.rowKind === 'total'; });
       if (!hasTotal) return false;
+      pushSignChartGridSnapshot();
       signChart.verified = true;
       signChart.tableRows.forEach(function (row) {
         row.dirty = row.dirty.map(function () { return false; });
