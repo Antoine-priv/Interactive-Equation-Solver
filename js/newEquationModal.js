@@ -53,7 +53,11 @@
       box.classList.remove('modal-vanish');
       overlay.hidden = false;
       manualError.textContent = '';
-      App.MathKeypad.setActiveField(manualInputSlot, { onEnter: submitManual, onEscape: close }, equationToLatex(App.History.lastEquation(), App.History.getCurrentOperator()));
+      // Toujours l'équation INITIALE (première étape de la chaîne principale, jamais
+      // déléguée à une colonne focalisée), pas l'étape courante : la modale sert à
+      // repartir de l'énoncé, éventuellement corrigé, pas de là où l'élève en est.
+      var first = App.History.getOwnSteps()[0];
+      App.MathKeypad.setActiveField(manualInputSlot, { onEnter: submitManual, onEscape: close }, equationToLatex(first.equation, first.operator));
       if (prefersReducedMotion) return;
       // Fondu d'entrée du fond (même classe que la fermeture, voir .modal-overlay-hiding
       // dans style.css) : posée puis retirée après un reflow forcé pour que le navigateur

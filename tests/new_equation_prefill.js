@@ -15,7 +15,7 @@ function ok(label, cond) {
   page.on('console', (m) => { if (m.type() === 'error') errs.push('[console.error] ' + m.text()); });
   await page.goto(FILE);
 
-  // 1) Opening "+" pre-fills the manual field with the CURRENT equation (not blank).
+  // 1) Opening "+" pre-fills the manual field with the loaded equation (not blank).
   await page.evaluate((eq) => { window.App.History.startNewEquation(window.App.Parser.parseEquation(eq)); }, '3x+5=2x-1');
   await page.waitForTimeout(80);
   await page.click('#newEquationBtn');
@@ -35,13 +35,31 @@ function ok(label, cond) {
   ok('field reflects the latest current equation on reopen', latex === '5x=10');
   ok('does not still show the previous equation', latex !== '3x + 5=2x - 1');
 
+  await page.click('#modalClose');
+  await page.waitForTimeout(260);
+
+  // 2b) After a step has been confirmed, the field shows the INITIAL equation (first step
+  // of the main chain), never the current one — operator included for an inequality.
+  await page.evaluate(() => {
+    const H = window.App.History;
+    H.startNewEquation(window.App.Parser.parseEquation('3x+5=2x-1'), { operator: '>' });
+    H.getLeaf().pushStep({ left: [{ coeff: 1, pow: 1 }], right: [{ coeff: -6, pow: 0 }] }, '-2x-5');
+  });
+  await page.waitForTimeout(80);
+  const stepCount = await page.evaluate(() => window.App.History.getSteps().length);
+  ok('a second step exists before reopening', stepCount === 2);
+  await page.click('#newEquationBtn');
+  await page.waitForTimeout(80);
+  latex = await page.evaluate(() => window.App.MathKeypad.getLatex());
+  ok('field shows the initial equation, not the current step', latex === '3x + 5>2x - 1');
+
   await page.screenshot({ path: `${SCRATCH}/new_equation_prefill.png` });
 
   // 3) Manual entry of "x(x+a)=b" (a FactorGroup whose factor is x itself, coeff 1/pow 1
   // — not just a numeric coefficient, see App.Expr.factorNodes/"Facteur commun" already
   // producing this shape) must be accepted directly through the modal's submit path, not
   // only via the internal API — see VAR_FACTOR_RE in parser.js. Modal is already open
-  // from step 2 above (never closed) : reuse it rather than reopening.
+  // from step 2b above (never closed) : reuse it rather than reopening.
   await page.evaluate(() => window.App.MathKeypad.setLatex('x(x-5)=12'));
   await page.waitForTimeout(80);
   await page.click('#manualSubmit');

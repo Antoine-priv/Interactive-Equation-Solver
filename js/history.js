@@ -2015,9 +2015,7 @@
       getPending: function () { return pending; },
       lastEquation: lastEquation,
       // Opérateur en vigueur pour CE moteur ('\geq'/'\leq'/'<'/'>', ou null pour "="
-      // implicite) — voir la déclaration de `currentOperator` plus haut. Sert à
-      // newEquationModal.js pour réafficher la bonne relation en rouvrant la modale sur
-      // l'équation en cours d'édition (equationToLatex).
+      // implicite) — voir la déclaration de `currentOperator` plus haut.
       getCurrentOperator: function () { return currentOperator; },
       pushStep: pushStep,
       pushAsymmetricStep: pushAsymmetricStep,
