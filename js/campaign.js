@@ -149,6 +149,7 @@
   function startLevel(id) {
     var level = App.Levels.get(id);
     if (!level || !App.Progress.isAvailable(level)) return false;
+    pendingUnlock = null;
     run = { level: level, part: 0, undos: 0, hints: 0, hintIdx: 0, won: false, message: null, priorSteps: 0, verdictKey: null };
     if (level.daily) run.dailyEq = App.Campaign.dailyEquation();
     hideWin();
@@ -235,6 +236,7 @@
       result = App.Progress.recordWin(run.level.id, { stars: stars, steps: steps });
     }
     run.result = result;
+    if (result && !run.level.daily) pendingUnlock = { from: run.level.id, unlocked: result.unlocked };
     renderBar();
     applyKeyLocks();
     App.Toolbar.render();
@@ -300,9 +302,21 @@
     toastEl._t = setTimeout(function () { toastEl.classList.remove('show'); }, 2400);
   }
 
+  // Après une réussite, la prochaine ouverture de la carte (bouton de la carte de
+  // réussite OU bouton carte en haut à gauche) joue l'animation de déblocage, une fois.
+  var pendingUnlock = null;
+
   function openMap(extra) {
     var opts = extra || {};
-    if (!opts.focus && run) opts.focus = run.level.id;
+    if (pendingUnlock) {
+      opts.from = pendingUnlock.from;
+      opts.unlocked = pendingUnlock.unlocked;
+      if (!opts.focus) opts.focus = pendingUnlock.unlocked.length ? pendingUnlock.unlocked[0] : pendingUnlock.from;
+      pendingUnlock = null;
+    }
+    // Niveau en cours pas encore réussi : la carte se centre dessus ; sinon sur le
+    // prochain niveau à faire (choix par défaut de la carte).
+    if (!opts.focus && run && !run.won) opts.focus = run.level.id;
     App.Map.open(opts);
   }
 
@@ -358,10 +372,8 @@
     winEl.querySelector('[data-win-close]').addEventListener('click', hideWin);
     winEl.querySelector('[data-win-replay]').addEventListener('click', function () { if (run) startLevel(run.level.id); });
     winEl.querySelector('[data-win-map]').addEventListener('click', function () {
-      var res = run && run.result;
-      var from = run && run.level.id;
       hideWin();
-      App.Map.open({ from: from, focus: res && res.unlocked.length ? res.unlocked[0] : from, unlocked: res ? res.unlocked : [] });
+      openMap();
     });
 
     // Toute autre nouvelle équation ("+", générateur…) quitte le niveau.
@@ -411,6 +423,29 @@
       say('Fichier enregistré dans tes téléchargements.', 'ok');
     });
     document.getElementById('progressImport').addEventListener('click', function () { fileInput.click(); });
+    // Réinitialiser : un second clic confirme (pas de boîte de dialogue native).
+    var resetBtn = document.getElementById('progressReset');
+    var armed = null;
+    resetBtn.addEventListener('click', function () {
+      if (!armed) {
+        resetBtn.textContent = 'Confirmer : tout effacer';
+        resetBtn.classList.add('danger');
+        armed = setTimeout(function () {
+          armed = null;
+          resetBtn.textContent = 'Réinitialiser la progression';
+          resetBtn.classList.remove('danger');
+        }, 4000);
+        return;
+      }
+      clearTimeout(armed);
+      armed = null;
+      resetBtn.textContent = 'Réinitialiser la progression';
+      resetBtn.classList.remove('danger');
+      exitLevel();
+      pendingUnlock = null;
+      App.Progress.reset();
+      say('Progression effacée.', 'ok');
+    });
     fileInput.addEventListener('change', function () {
       var f = fileInput.files && fileInput.files[0];
       if (!f) return;

@@ -86,9 +86,13 @@ function ok(label, cond) {
   ok('progress saved in localStorage', won.saved && won.saved.levels.t1 && won.saved.levels.t1.stars === 3);
   await page.screenshot({ path: SCRATCH + '/campaign_level_won.png' });
 
-  // --- Retour à la carte : T2 vient de s'ouvrir ---
-  await page.click('[data-win-map]');
+  // --- Retour à la carte par le bouton carte (pas celui de la fenêtre) : l'animation joue ---
+  await page.click('#mapBtn');
+  await page.waitForTimeout(100);
+  ok('opening the map with the map button plays the unlock animation', await page.evaluate(() =>
+    !!document.querySelector('.map-edge.draw-in[data-edge="t1-t2"]')));
   await page.waitForTimeout(1600);
+  await page.screenshot({ path: SCRATCH + '/campaign_map_after.png' });
   const after = await page.evaluate(() => ({
     t1: document.querySelector('[data-level="t1"]').getAttribute('class'),
     t2: document.querySelector('[data-level="t2"]').getAttribute('class'),
@@ -96,7 +100,20 @@ function ok(label, cond) {
   }));
   ok('T1 shown as done, T2 now open', /done/.test(after.t1) && /open/.test(after.t2) && !/locked/.test(after.t2));
   ok('star total updated', after.stars === '3');
-  await page.screenshot({ path: SCRATCH + '/campaign_map_after.png' });
+  const pos = await page.evaluate(() => {
+    var n = document.querySelector('[data-level="t2"] .map-node-body').getBoundingClientRect();
+    var c = document.querySelector('.map-card').getBoundingClientRect();
+    return { n: n.toJSON(), c: c.toJSON() };
+  });
+  const cx = pos.n.x + pos.n.width / 2, cy = pos.n.y + pos.n.height / 2;
+  ok('level card floats next to its node', (pos.c.left > cx && pos.c.left - cx < 80 || cx > pos.c.right && cx - pos.c.right < 80) &&
+    cy > pos.c.top && cy < pos.c.bottom);
+  await page.evaluate(() => window.App.Map.close());
+  await page.click('#mapBtn');
+  await page.waitForTimeout(100);
+  ok('the animation plays only once', await page.evaluate(() => !document.querySelector('.map-edge.draw-in')));
+  ok('reopening after a win focuses the next level to play', await page.evaluate(() =>
+    document.querySelector('.map-card-title').textContent === 'Ajouter'));
 
   // --- Un "Annuler" enlève la 2e étoile ; "Mode libre" quitte la campagne ---
   await page.evaluate(() => window.App.Campaign.startLevel('t2'));
@@ -132,6 +149,14 @@ function ok(label, cond) {
   await page.waitForTimeout(200);
   ok('a foreign file is refused', /n'est pas/.test(await page.textContent('#progressNote')) &&
     await page.evaluate(() => window.App.Progress.stars('t1')) === 3);
+
+  // --- Réinitialisation (réglages, second clic pour confirmer) ---
+  await page.click('#progressReset');
+  ok('first click only asks for confirmation', await page.evaluate(() => window.App.Progress.stars('t1')) === 3 &&
+    /Confirmer/.test(await page.textContent('#progressReset')));
+  await page.click('#progressReset');
+  ok('second click resets the progress', await page.evaluate(() => window.App.Progress.totalStars() === 0 &&
+    !JSON.parse(localStorage.getItem('equations-progress')).levels.t1));
 
   ok('no page errors', errs.length === 0);
   if (errs.length) console.log(errs.join('\n'));

@@ -2666,9 +2666,8 @@ button {
 }
 .map-card {
   position: absolute;
-  right: 22px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: 0;
+  top: 0;
   width: 290px;
   background: var(--surface);
   border-radius: var(--radius-lg);
@@ -2900,3 +2899,16 @@ body.in-level #history { padding-top: 150px; }
 .map-banner span { font-size: 20px; font-weight: 700; }
 .map-banner.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
 @media (prefers-reduced-motion: reduce) { .map-banner { transition-duration: 0.01ms; } }
+
+/* Fiche flottante d'un niveau (voir positionCard dans map.js) : petite pointe vers le nœud */
+.map-card::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--card-arrow-y, 40px) - 8px);
+  left: -8px;
+  border: 8px solid transparent;
+  border-left: 0;
+  border-right-color: var(--surface);
+}
+.map-card.on-left::before { left: auto; right: -8px; border-right: 0; border-left: 8px solid var(--surface); }
+.map-pill.danger { background: var(--danger); color: #fff; }

@@ -43,6 +43,27 @@
 
   function applyView() {
     world.setAttribute('transform', 'translate(' + view.x + ' ' + view.y + ') scale(' + view.s + ')');
+    positionCard();
+  }
+
+  // La fiche du niveau flotte à côté de son nœud (à droite, ou à gauche si la place
+  // manque), et le suit quand la carte bouge.
+  function positionCard() {
+    if (!card || card.hidden) return;
+    var l = App.Levels.get(selectedId);
+    if (!l) return;
+    var w = viewport.clientWidth, h = viewport.clientHeight;
+    var cw = card.offsetWidth, ch = card.offsetHeight;
+    var nx = view.x + l.x * view.s, ny = view.y + l.y * view.s;
+    var gap = 28 * Math.max(0.8, view.s);
+    var right = nx + gap + cw <= w - 12;
+    var left = right ? nx + gap : nx - gap - cw;
+    left = Math.max(12, Math.min(w - cw - 12, left));
+    var top = Math.max(74, Math.min(h - ch - 12, ny - ch / 2));
+    card.style.left = left + 'px';
+    card.style.top = top + 'px';
+    card.classList.toggle('on-left', !right);
+    card.style.setProperty('--card-arrow-y', Math.max(18, Math.min(ch - 18, ny - top)) + 'px');
   }
 
   function fitScale() {
@@ -276,6 +297,7 @@
       actions.appendChild(play);
     }
     card.hidden = false;
+    positionCard();
   }
 
   function renderBar() {
