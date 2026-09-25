@@ -2630,7 +2630,12 @@
       var extracted = detectSignChartFactors(leaf.lastEquation());
       var factors = extracted.factors.map(function (f, i) {
         var eng = createBranchable();
-        eng.init({ left: Expr.cloneSide(f.terms), right: [{ coeff: 0, pow: 0 }] }, { operator: '>' });
+        // Une racine carrée s'affiche telle quelle, "√(radicand) > 0" (retour utilisateur :
+        // la racine, jamais son seul contenu), même si elle est toujours positive sur son
+        // domaine — l'élève l'élève au carré ("(‥)²", les deux membres étant positifs, voir
+        // canSquareBothSides) pour retrouver "radicand > 0". `capturedSide` reste le radicand.
+        var studied = f.sqrt ? [{ sign: 1, radicand: Expr.cloneSide(f.terms) }] : Expr.cloneSide(f.terms);
+        eng.init({ left: studied, right: [{ coeff: 0, pow: 0 }] }, { operator: '>' });
         // Dès que CE facteur (et donc, potentiellement, le dernier restant) devient
         // résolu, tente le pré-remplissage (voir signChartAutoFillRows plus bas) avant de
         // notifier normalement — se déclenche naturellement une seule fois, exactement
