@@ -2875,3 +2875,28 @@ body.in-level #history { padding-top: 150px; }
   #coachRing { animation: none; }
   #coachRing, .coach-bubble { transition: none; }
 }
+
+/* Carte : défi du jour et bannière "Nouvelle région" */
+.map-pill.daily { background: var(--warning-soft); color: var(--warning); }
+.map-pill[hidden] { display: none; }
+.map-banner {
+  position: absolute;
+  left: 50%;
+  top: 110px;
+  transform: translate(-50%, 0) scale(0.9);
+  opacity: 0;
+  pointer-events: none;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+  padding: 16px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.3, 1.4, 0.5, 1);
+}
+.map-banner b { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); }
+.map-banner span { font-size: 20px; font-weight: 700; }
+.map-banner.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
+@media (prefers-reduced-motion: reduce) { .map-banner { transition-duration: 0.01ms; } }

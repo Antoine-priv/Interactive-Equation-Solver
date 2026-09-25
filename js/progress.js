@@ -121,6 +121,14 @@
     return { earnedBadges: earned, unlocked: unlocked, improved: improved };
   }
 
+  // Badge hors réussite de niveau (ex. "Cartographe" au premier défi du jour).
+  function awardBadge(id) {
+    if (!id || !App.Levels.badge(id) || state.badges.indexOf(id) !== -1) return false;
+    state.badges.push(id);
+    save();
+    return true;
+  }
+
   // Défi du jour réussi : série de jours consécutifs.
   function recordDaily() {
     var d = today();
@@ -175,6 +183,7 @@
     knownFeatures: knownFeatures,
     recordWin: recordWin,
     recordDaily: recordDaily,
+    awardBadge: awardBadge,
     dailyDoneToday: dailyDoneToday,
     dailyStreak: function () { return state.daily ? state.daily.streak : 0; },
     badges: function () { return state.badges.slice(); },

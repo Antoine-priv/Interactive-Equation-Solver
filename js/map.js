@@ -182,12 +182,25 @@
       var tok = world.querySelector('.map-token');
       if (tok && target) tok.setAttribute('transform', 'translate(' + target.x + ' ' + target.y + ')');
       world.querySelectorAll('.map-zone.fogged').forEach(function (z) {
-        if (App.Levels.ZONES.some(function (zz) { return zz.id === z.getAttribute('data-zone') && zoneOpen(zz); })) {
+        var zone = App.Levels.ZONES.filter(function (zz) { return zz.id === z.getAttribute('data-zone'); })[0];
+        if (zone && zoneOpen(zone)) {
           z.classList.remove('fogged');
           z.classList.add('revealed');
+          showBanner('Nouvelle région', zone.name + ' · ' + zone.sub);
         }
       });
     }, 1250 * delay);
+  }
+
+  function showBanner(title, text) {
+    var b = overlay.querySelector('.map-banner');
+    b.querySelector('b').textContent = title;
+    b.querySelector('span').textContent = text;
+    b.classList.remove('show');
+    void b.offsetWidth;
+    b.classList.add('show');
+    clearTimeout(b._t);
+    b._t = setTimeout(function () { b.classList.remove('show'); }, 2600);
   }
 
   // ---- Carte d'un niveau (au clic sur un nœud) ----
@@ -267,6 +280,10 @@
 
   function renderBar() {
     var P = App.Progress;
+    var top = App.Levels.LEVELS.filter(function (l) { return l.daily; })[0];
+    var daily = overlay.querySelector('[data-map-daily]');
+    daily.hidden = !(top && P.isAvailable(top));
+    daily.textContent = P.dailyDoneToday() ? 'Défi du jour ✓' : 'Défi du jour';
     overlay.querySelector('[data-map-stars]').textContent = P.totalStars();
     overlay.querySelector('[data-map-max]').textContent = P.maxStars();
     overlay.querySelector('[data-map-badges]').textContent = P.badges().length;
@@ -382,6 +399,11 @@
       close();
       App.Progress.setLastScreen('free');
       if (options && options.onFree) options.onFree();
+    });
+    overlay.querySelector('[data-map-daily]').addEventListener('click', function () {
+      var top = App.Levels.LEVELS.filter(function (l) { return l.daily; })[0];
+      select(top.id);
+      centerOn(top.x, top.y);
     });
     overlay.querySelector('[data-map-badges-btn]').addEventListener('click', function () {
       renderBadges();

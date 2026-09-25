@@ -230,6 +230,7 @@
     var result = null;
     if (run.level.daily) {
       App.Progress.recordDaily();
+      result = { earnedBadges: App.Progress.awardBadge(run.level.badge) ? [run.level.badge] : [], unlocked: [] };
     } else {
       result = App.Progress.recordWin(run.level.id, { stars: stars, steps: steps });
     }
@@ -303,6 +304,34 @@
     var opts = extra || {};
     if (!opts.focus && run) opts.focus = run.level.id;
     App.Map.open(opts);
+  }
+
+  // ---- Défi du jour ----
+  // Une équation tirée par le générateur (toutes les formes), avec un hasard dont la
+  // graine est la date : la même pour tout le monde ce jour-là, sans réseau.
+  function seededRandom(seedText) {
+    var h = 1779033703 ^ seedText.length;
+    for (var i = 0; i < seedText.length; i++) {
+      h = Math.imul(h ^ seedText.charCodeAt(i), 3432918353);
+      h = (h << 13) | (h >>> 19);
+    }
+    var a = h >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function dailyEquation(dateText) {
+    var raw = Math.random;
+    Math.random = seededRandom('equations-' + (dateText || App.Progress.today()));
+    try {
+      return App.Generator.generateEquation();
+    } finally {
+      Math.random = raw;
+    }
   }
 
   // ---- Initialisation ----
@@ -417,7 +446,6 @@
     rangesEqual: rangesEqual,
     current: function () { return run ? { id: run.level.id, part: run.part, undos: run.undos, hints: run.hints, won: run.won, message: run.message } : null; },
     showHint: showHint,
-    // Remplacé par le défi du jour (voir plus bas, étape 4) ; par défaut une équation générée.
-    dailyEquation: function () { return App.Generator.generateEquation(); }
+    dailyEquation: dailyEquation
   };
 })(window.App = window.App || {});
