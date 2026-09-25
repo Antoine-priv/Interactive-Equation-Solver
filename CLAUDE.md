@@ -29,7 +29,8 @@ in `(function (App) { ... })(window.App = window.App || {});` IIFEs.
 - Script load order in `index.html` matters and mirrors the dependency graph: `expression.js`
   → `equation.js` → `inequality.js` → `parser.js` → `generator.js` → `history.js` →
   `canvas.js` → `zoom.js` → `render.js` → `arrows.js` → `toolbar.js` → `mathKeypad.js` →
-  `keyboard.js` → `newEquationModal.js` → `theme.js` → `settings.js` → `main.js`.
+  `keyboard.js` → `newEquationModal.js` → `theme.js` → `settings.js` → `map.js` → `coach.js` →
+  `campaign.js` → `main.js`, with `levels.js` → `progress.js` right after `generator.js`.
 - No lint/build commands exist for this project. A regression test suite does exist (see
   below) — run the targeted test after any change to `js/*.js`.
 
@@ -212,6 +213,23 @@ thumbs follow the pointer continuously and snap to the nearest integer on releas
 (`generator.js`) whose `tags` are all enabled and whose `deg` range intersects the slider,
 and returns `null` when none match. A new generator form must be added to `FORMS` with
 its tags and degree.
+
+## Campaign (`js/levels.js`, `progress.js`, `map.js`, `coach.js`, `campaign.js`)
+
+"La Carte des équations" (spec: `docs/gamification/plan.md`). `App.Levels` is pure data:
+regions, levels (`latex`, expected `sol` as `App.Ineq` ranges — or `domain` for a Df-only
+level, `parts`, `requireDomain`, `par`, `feat`, `hints`) and badges. `App.Progress` saves
+stars/badges/daily streak in `localStorage` (`equations-progress`), only on a win, with
+export/import from the settings. `App.Map` is the full-screen SVG map (`#mapOverlay`).
+`App.Campaign` runs a level on the normal canvas: it wins when
+`App.Render.finalSolutionRanges()` (the displayed "S=...", domain included) equals the
+expected set; `stepCount()` counts confirmed steps and splits over the whole engine tree,
+never a "Simplifier" step; undo/hints cap the stars; actions not yet introduced are hidden
+(`isOpLocked`, read by `toolbar.js`; keypad keys via `body.campaign-lock-key-*`).
+`App.Coach` shows the Port tutorial bubbles. The map auto-opens on first launch except
+under automation (`navigator.webdriver`), so the existing tests keep starting on the
+canvas. `tests/campaign_reference.js` holds a scripted reference solution per level; its
+step counts are the levels' `par`.
 
 ## Constraints to preserve
 
