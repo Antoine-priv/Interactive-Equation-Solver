@@ -342,3 +342,21 @@ Maquette : `maquette.html`, dans ce dossier.
 ## Questions ouvertes
 
 Aucune pour l’instant.
+
+## État de la mise en œuvre (2026-09-25)
+
+Fait : catalogue (`js/levels.js`), sauvegarde et export/import (`js/progress.js`), carte
+(`js/map.js`), déroulé d'un niveau avec étoiles, indices, boutons masqués et badges
+(`js/campaign.js`), coach du Port (`js/coach.js`), animations, défi du jour. Tests :
+`tests/campaign_*.js`. Les seuils ★★★ viennent de `tests/campaign_reference.js`.
+
+Corrigé en chemin : parenthèse seule signée dans le parseur (`−(x+4)`), arrondi
+(`x/3 × 3` donnait `0,999999x`), `0 × (expression)` qui ne se simplifiait jamais en 0.
+
+Niveaux encore impossibles à finir dans l'app, en attente de décision :
+- r4 (`x² = −4`) et g6 (colonne `x² + 5 = 0`) : l'étape 2 de « Racine carrée » refuse un
+  nombre négatif sans conclure S = ∅. gB dépend de g6.
+- mB (`(x − 6)√(x − 8) = 0`) : « Produit nul » est indisponible sur une équation qui porte
+  déjà une condition d'existence (restriction v1). L'Observatoire dépend de mB.
+- oB : impossible d'entrer dans un facteur d'un produit placé au dénominateur pour
+  factoriser x² − 4. La variante `(x − 2)(x + 2)` se résout.
