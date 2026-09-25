@@ -198,6 +198,8 @@
     // forme compatible, retombe sur un tirage libre plutôt que de démarrer à vide.
     var startEq = App.Generator.generateEquation(App.Settings.generatorOptions()) || App.Generator.generateEquation();
     App.History.init(startEq, startEq.operator ? { operator: startEq.operator } : undefined);
+    App.Campaign.init();
+    App.Campaign.boot();
 
     window.addEventListener('resize', function () {
       App.Render.renderAll();

@@ -193,6 +193,30 @@
     return [].concat.apply([], br.map(leafChainEngines));
   }
 
+  // Ensemble-solution final de l'équation en cours, tel que l'affichent les lignes
+  // "S=..." (voir renderAll) : tableau de signes, sinon chaîne principale ou réunion des
+  // colonnes "Produit nul", toujours restreint au domaine. null tant qu'il n'est pas
+  // encore affiché. Utilisé par la campagne (voir campaign.js) pour valider un niveau.
+  function finalSolutionRanges() {
+    var Hist = App.History, Ineq = App.Ineq;
+    if (Hist.getSignChart()) return Hist.signChartSolutionRanges();
+    var domain = domainRanges(Hist.getDomainConditions());
+    if (!domain) return null;
+    var branches = Hist.getBranches();
+    if (!branches) {
+      var main = Hist.getLeaf();
+      var set = Ineq.solutionRanges(main.lastEquation(), main.getCurrentOperator());
+      return set && Ineq.intersectRanges(set, domain);
+    }
+    var leaves = [].concat.apply([], branches.map(leafChainEngines));
+    var sets = leaves.map(function (le) {
+      var own = le.getLeaf ? le.getLeaf() : le;
+      return Ineq.solutionRanges(own.lastEquation(), own.getCurrentOperator());
+    });
+    if (sets.some(function (x) { return x === null; })) return null;
+    return Ineq.intersectRanges(Ineq.unionRanges([].concat.apply([], sets)), domain);
+  }
+
   // Ligne "S=..." finale (même habillage que le résumé de "Produit nul"/"Df=...").
   function createSolutionSetEl(ranges) {
     var el = document.createElement('div');
@@ -3448,6 +3472,8 @@
 
   App.Render = {
     renderAll: renderAll,
+    finalSolutionRanges: finalSolutionRanges,
+    domainRanges: domainRanges,
     formatOpLabel: formatOpLabel,
     panToDomainColumn: panToDomainColumn,
     panToSignChart: panToSignChart,

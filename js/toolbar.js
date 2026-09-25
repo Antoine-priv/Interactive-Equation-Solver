@@ -756,6 +756,8 @@
       else if (op === 'existence') unusable = !info.canExistenceCondition;
       else if (op === 'signchart') unusable = !info.canSignChart;
       else unusable = false;
+      // Campagne : une action pas encore présentée reste masquée (voir campaign.js).
+      if (App.Campaign && App.Campaign.isOpLocked(op)) unusable = true;
       // Délibérément PAS de "si un autre mode est engagé, cache/grise ce bouton" ici :
       // unusable ne dépend que de la sélection courante (info.canX), jamais de
       // pending.opType — un clic sur un bouton ('Opération'/'Factoriser') qui engage un
