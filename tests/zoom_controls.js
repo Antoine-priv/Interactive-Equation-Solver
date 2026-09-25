@@ -110,7 +110,7 @@ function approx(a, b, eps) {
   // sinon un bouton resté désactivé après un appel bas niveau à App.Canvas.zoomAt (comme
   // celui juste avant) refuserait tout clic natif ultérieur dans ce test, alors qu'un
   // vrai utilisateur ne passe JAMAIS par cette API bas niveau (seul App.Zoom le fait).
-  await page.evaluate(() => { window.App.Canvas.set(0, 0); window.App.Canvas.zoomAt(1); window.App.Zoom.wheelZoom(0, 0, 0); });
+  await page.evaluate(() => { window.App.Canvas.set(0, 0); window.App.Canvas.zoomAt(1); window.App.Zoom.wheelZoom(0); });
   await page.waitForTimeout(100);
 
   // 7) La fenêtre d'action flottante (#opButtons, voir positionPanel dans toolbar.js) reste
@@ -163,7 +163,7 @@ function approx(a, b, eps) {
   // sinon un bouton resté désactivé après un appel bas niveau à App.Canvas.zoomAt (comme
   // celui juste avant) refuserait tout clic natif ultérieur dans ce test, alors qu'un
   // vrai utilisateur ne passe JAMAIS par cette API bas niveau (seul App.Zoom le fait).
-  await page.evaluate(() => { window.App.Canvas.set(0, 0); window.App.Canvas.zoomAt(1); window.App.Zoom.wheelZoom(0, 0, 0); });
+  await page.evaluate(() => { window.App.Canvas.set(0, 0); window.App.Canvas.zoomAt(1); window.App.Zoom.wheelZoom(0); });
   await page.waitForTimeout(100);
   const anchorCheck = await page.evaluate(() => {
     var scroller = document.getElementById('historyScroll');
@@ -209,9 +209,10 @@ function approx(a, b, eps) {
 
   const cursorAnchorCheck = await page.evaluate(() => {
     var before = { x: window.App.Canvas.getX(), y: window.App.Canvas.getY(), s: window.App.Canvas.getScale() };
-    var cursor = { x: 180, y: 260 }; // point volontairement hors du centre du viewport
+    var scroller = document.getElementById('historyScroll');
+    var cursor = { x: scroller.clientWidth / 2, y: scroller.clientHeight / 2 }; // centre du viewport
     var localAtCursor = { x: before.x + cursor.x / before.s, y: before.y + cursor.y / before.s };
-    window.App.Zoom.wheelZoom(-200, cursor.x, cursor.y);
+    window.App.Zoom.wheelZoom(-200);
     var after = { x: window.App.Canvas.getX(), y: window.App.Canvas.getY(), s: window.App.Canvas.getScale() };
     return {
       screenX: after.s * (localAtCursor.x - after.x),
@@ -219,7 +220,7 @@ function approx(a, b, eps) {
       cursor: cursor
     };
   });
-  ok('le zoom (Ctrl+molette, centré sur le curseur) garde ce point immobile a l\'écran (x=' +
+  ok('le zoom (Ctrl+molette, centré sur le viewport, pas sur le curseur) garde le centre immobile a l\'écran (x=' +
     cursorAnchorCheck.screenX.toFixed(2) + ' vs ' + cursorAnchorCheck.cursor.x + ', y=' + cursorAnchorCheck.screenY.toFixed(2) + ' vs ' + cursorAnchorCheck.cursor.y + ')',
     approx(cursorAnchorCheck.screenX, cursorAnchorCheck.cursor.x, 1) && approx(cursorAnchorCheck.screenY, cursorAnchorCheck.cursor.y, 1));
 
@@ -229,7 +230,7 @@ function approx(a, b, eps) {
   // sinon un bouton resté désactivé après un appel bas niveau à App.Canvas.zoomAt (comme
   // celui juste avant) refuserait tout clic natif ultérieur dans ce test, alors qu'un
   // vrai utilisateur ne passe JAMAIS par cette API bas niveau (seul App.Zoom le fait).
-  await page.evaluate(() => { window.App.Canvas.set(0, 0); window.App.Canvas.zoomAt(1); window.App.Zoom.wheelZoom(0, 0, 0); });
+  await page.evaluate(() => { window.App.Canvas.set(0, 0); window.App.Canvas.zoomAt(1); window.App.Zoom.wheelZoom(0); });
   await page.waitForTimeout(100);
 
   // 9) L'equation reste utilisable une fois zoomee : cliquer un terme le selectionne toujours,

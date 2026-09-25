@@ -161,7 +161,7 @@ applied as `transform: scale(...) translate(...)` on `#canvasLayer` (scale first
 screen-space delta between two points inside `#canvasLayer` equals `scale` times the
 equivalent *local* delta). `App.Zoom` (`js/zoom.js`) drives it from the two floating
 magnifying-glass buttons (`#zoomInBtn`/`#zoomOutBtn`, centered on the viewport, animated)
-and from Ctrl+wheel (`initCanvasPan` in `main.js`, centered on the cursor, instant — see
+and from Ctrl+wheel (`initCanvasPan` in `main.js`, also centered on the viewport — deliberately not on the cursor — instant — see
 `wheelZoom`). Because `getBoundingClientRect()` is always real screen space regardless of
 this scale, any code that turns a rect-derived screen delta into a *local* pixel value
 (`style.left`/`top` on a descendant of `#canvasLayer`, or an SVG path's `d`) must divide

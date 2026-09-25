@@ -2,7 +2,7 @@
    (voir canvas.js) en centrant le zoom sur le milieu du viewport, avec une petite
    animation (comme App.Canvas.scrollTo({behavior:'smooth'})). Ctrl+molette (voir
    initCanvasPan dans main.js) passe directement par wheelZoom ci-dessous plutôt que par
-   ces boutons : centré sur le curseur, jamais animé (pour suivre la molette au pixel près,
+   ces boutons : centré lui aussi sur le milieu du viewport, mais jamais animé (geste continu,
    comme un vrai zoom continu). */
 (function (App) {
   'use strict';
@@ -67,15 +67,12 @@
       }
       refreshButtons();
     },
-    // Ctrl+molette (voir initCanvasPan dans main.js) : `screenX`/`screenY` sont les
-    // coordonnées du curseur relatives au coin haut-gauche de #historyScroll, transmises
-    // telles quelles à App.Canvas.zoomAt pour garder le point survolé immobile à l'écran.
+    // Ctrl+molette/pincement trackpad (voir initCanvasPan dans main.js) : centré sur le
+    // milieu du viewport, comme les boutons loupe — PAS sur le curseur (choix explicite).
     // Jamais animé (contrairement aux boutons) : un geste continu doit rester instantané,
     // une transition CSS entre chaque évènement 'wheel' accumulerait un retard croissant.
-    wheelZoom: function (deltaY, screenX, screenY) {
-      var factor = Math.pow(WHEEL_RATE, -deltaY);
-      App.Canvas.zoomAt(App.Canvas.getScale() * factor, screenX, screenY);
-      refreshButtons();
+    wheelZoom: function (deltaY) {
+      zoomByFactor(Math.pow(WHEEL_RATE, -deltaY));
     }
   };
 

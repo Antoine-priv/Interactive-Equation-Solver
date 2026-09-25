@@ -135,8 +135,7 @@
     scroller.addEventListener('wheel', function (e) {
       if (e.ctrlKey) {
         e.preventDefault();
-        var rect = scroller.getBoundingClientRect();
-        App.Zoom.wheelZoom(e.deltaY, e.clientX - rect.left, e.clientY - rect.top);
+        App.Zoom.wheelZoom(e.deltaY);
         return;
       }
       var row = e.target.closest('.eq-row');

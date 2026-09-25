@@ -137,7 +137,7 @@
     // pour que ce même point local reste au même endroit à l'écran est
     // `offset + écran * (1/ancienneÉchelle - 1/nouvelleÉchelle)`. `screenX`/`screenY`
     // optionnels : par défaut, le centre du viewport (zoom "sur place" déclenché par un
-    // bouton plutôt que par la molette sous le curseur).
+    // bouton ou par Ctrl+molette).
     zoomAt: function (newScale, screenX, screenY, opts) {
       opts = opts || {};
       newScale = clampScale(newScale);
