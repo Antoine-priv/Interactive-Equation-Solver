@@ -779,6 +779,7 @@
     });
     var zeroed = false;
     var nonZero = [];
+    var unwrapAlone = false;
     indices.forEach(function (i) {
       var n = side[i];
       if (!n) return;
@@ -795,6 +796,20 @@
         zeroed = true;
         var den = s.factorTerms ? s.factorTerms : [s.factor];
         if (sideHasVariable(den)) nonZero.push(cloneSide(den));
+        return;
+      }
+      // Facteur commun au numérateur et au dénominateur (ex. "(x+3)(x+1)/(x+3)") : il
+      // s'annule, sous réserve qu'il ne soit pas nul — gardée dans `nonZero` comme pour
+      // une fraction de numérateur nul ci-dessus ("si (x+3)≠0").
+      var cq = cancelCommonQuotientFactor(s);
+      if (cq) {
+        // Seule sur son membre, "(x+1)" (parenthèse de facteur 1) s'écrit simplement "x+1".
+        var cn = cq.node;
+        unwrapAlone = side.length === 1 && isFactorGroup(cn) && !cn.isDivision && cn.sign === 1 &&
+          cn.factor.coeff === 1 && cn.factor.pow === 0;
+        out[i] = cn;
+        acted.push(i);
+        cq.cancelled.forEach(function (f) { if (sideHasVariable(f)) nonZero.push(cloneSide(f)); });
         return;
       }
       if (JSON.stringify(s) !== JSON.stringify(n)) { out[i] = s; acted.push(i); }
@@ -823,9 +838,57 @@
     // Les simplifications intérieures ne changent pas la longueur du membre : les indices
     // des termes simples restent valides pour simplifyNodes.
     if (flat.length >= 2 || zeroed) out = simplifyNodes(out, flat);
+    if (unwrapAlone) out = cloneSide(out[0].innerTerms);
     var res = { side: out, terms: terms };
     if (nonZero.length) res.nonZero = nonZero;
     return res;
+  }
+
+  // Annule les facteurs communs au numérateur et au dénominateur d'une fraction à
+  // dénominateur-expression (isExpressionQuotient), décomposés comme des opérandes de
+  // multiplication (voir operandFactors) : "(3x-2)(x+5)/((4-x)(3x-2))" -> "(x+5)/(4-x)".
+  // Un facteur opposé ("x-3" face à "3-x") s'annule aussi, en changeant le signe. Renvoie
+  // { node, cancelled } (cancelled = bases annulées, pour la réserve "≠0"), ou null s'il
+  // n'y a aucun facteur commun.
+  function cancelCommonQuotientFactor(node) {
+    if (!isExpressionQuotient(node)) return null;
+    var num = operandFactors(node.innerTerms), den = operandFactors(node.factorTerms);
+    var numF = num.factors.map(cloneFactor), denF = den.factors.map(cloneFactor);
+    var sign = node.sign * num.sign * den.sign;
+    var cancelled = [];
+    denF.forEach(function (d) {
+      var negD = d.terms.map(function (t) { return scaleNode(t, -1); });
+      for (var k = 0; k < numF.length && d.exponent > 0; k++) {
+        var nf = numF[k];
+        if (nf.exponent === 0) continue;
+        var opposite = !sidesEquivalent(nf.terms, d.terms);
+        if (opposite && !sidesEquivalent(nf.terms, negD)) continue;
+        var m = Math.min(nf.exponent, d.exponent);
+        nf.exponent -= m;
+        d.exponent -= m;
+        if (opposite && m % 2 === 1) sign = -sign;
+        cancelled.push(cloneSide(d.terms));
+      }
+    });
+    if (!cancelled.length) return null;
+    function buildSide(factors) {
+      factors = factors.filter(function (f) { return f.exponent > 0; });
+      if (!factors.length) return null;
+      if (factors.length === 1 && factors[0].exponent === 1) return cloneSide(factors[0].terms);
+      return [{ sign: 1, factors: factors }];
+    }
+    var numSide = buildSide(numF) || [{ coeff: 1, pow: 0 }];
+    var denSide = buildSide(denF);
+    var result;
+    if (!denSide) {
+      result = numSide.length === 1 ? scaleNode(numSide[0], sign)
+        : { sign: sign, factor: { coeff: 1, pow: 0 }, innerTerms: numSide };
+    } else if (denSide.length === 1 && !isGroup(denSide[0]) && denSide[0].pow === 0) {
+      result = { sign: sign, factor: denSide[0], innerTerms: numSide, isDivision: true };
+    } else {
+      result = { sign: sign, factorTerms: denSide, innerTerms: numSide, isDivision: true };
+    }
+    return { node: result, cancelled: cancelled };
   }
 
   function isZeroNumeratorQuotient(node) {
