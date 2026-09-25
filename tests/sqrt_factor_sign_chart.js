@@ -121,6 +121,18 @@ function ok(label, cond) {
     JSON.stringify(factors) === JSON.stringify([
       { kind: 'den', sqrt: false, side: LIN(-6) }, { kind: 'den', sqrt: true, side: LIN(2) },
       { kind: 'num', sqrt: false, side: LIN(8) }, { kind: 'num', sqrt: false, side: LIN(-4) }]));
+  // La colonne de la racine affiche la racine elle-même ("√(x+2) > 0"), pas son radicand,
+  // et se résout en élevant au carré.
+  const sqrtCol = await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.setFocusedSignChartFactor(1);
+    var r = { start: window.App.Expr.sideLatex(Hist.lastEquation().left), canSquare: Hist.canSquareBothSides() };
+    Hist.focusMain();
+    return r;
+  });
+  ok('√ factor column starts at "√(x+2) > 0" and can be squared',
+    sqrtCol.start === '\\sqrt{x + 2}' && sqrtCol.canSquare === true);
+  if (sqrtCol.start !== '\\sqrt{x + 2}') console.log('  got:', sqrtCol.start);
   await page.evaluate(() => {
     var Hist = window.App.History;
     function solve(chain) {
@@ -130,7 +142,11 @@ function ok(label, cond) {
       Hist.toggleTermSelection('right', 0); Hist.toggleTermSelection('right', 1);
       Hist.confirmSimplifySelection();
     }
-    ['+6', '-2', '-8', '+4'].forEach(function (c, i) { Hist.setFocusedSignChartFactor(i); solve(c); });
+    ['+6', '-2', '-8', '+4'].forEach(function (c, i) {
+      Hist.setFocusedSignChartFactor(i);
+      if (i === 1) Hist.confirmSquareBothSides(); // "√(x+2) > 0" -> "x+2 > 0"
+      solve(c);
+    });
     Hist.focusMain();
   });
   await page.waitForTimeout(150);
@@ -179,6 +195,19 @@ function ok(label, cond) {
   await page.waitForTimeout(100);
   ok('an undefined interval cell is hatched',
     await page.evaluate(() => !!document.querySelector('.sign-chart-cell-hatched')));
+  // Colonne de bord "-∞" : hachures seulement entre "-∞" et -8 (collées côté -8, même
+  // largeur qu'un intervalle du milieu), jamais jusqu'au bord gauche de la table.
+  const edgeHatch = await page.evaluate(() => {
+    var edge = document.querySelector('.sign-chart-data-cell[data-sign-chart-row="1"][data-sign-chart-col="0"]');
+    var mid = document.querySelector('.sign-chart-data-cell[data-sign-chart-row="1"][data-sign-chart-col="2"]');
+    var cs = getComputedStyle(edge);
+    return { size: cs.backgroundSize, pos: cs.backgroundPosition, repeat: cs.backgroundRepeat,
+      edgeW: edge.offsetWidth, midW: mid.offsetWidth, hatched: edge.classList.contains('sign-chart-cell-hatched') };
+  });
+  ok('-∞ edge hatching covers only the part between -∞ and -8',
+    edgeHatch.hatched && edgeHatch.size === edgeHatch.midW + 'px 100%' && edgeHatch.pos === '100% 0%' &&
+    edgeHatch.repeat === 'no-repeat' && edgeHatch.edgeW > edgeHatch.midW);
+  if (!(edgeHatch.size === edgeHatch.midW + 'px 100%')) console.log('  edge hatch:', JSON.stringify(edgeHatch));
   // Popup d'une case intervalle : "Non défini" offert en plus de +/− (racine présente).
   await page.click('.sign-chart-target[data-sign-chart-row="0"][data-sign-chart-col="4"]', { force: true });
   await page.waitForTimeout(100);
@@ -233,7 +262,7 @@ function ok(label, cond) {
     Hist.signChartAction();
     // Ordre de parcours : x-1 puis √(x+2).
     Hist.setFocusedSignChartFactor(0); solve('+1');
-    Hist.setFocusedSignChartFactor(1); solve('-2');
+    Hist.setFocusedSignChartFactor(1); Hist.confirmSquareBothSides(); solve('-2');
     Hist.focusMain();
     Hist.signChartAddRow({ rowKind: 'total' });
     var t = Hist.getSignChart().tableRows.length - 1;

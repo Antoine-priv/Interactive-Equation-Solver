@@ -2587,6 +2587,15 @@
           // restant cliquable à sa taille normale — jamais le double trait d'une frontière.
           var hatched = value === 'undef' && col.type === 'interval';
           if (hatched) cell.classList.add('sign-chart-cell-hatched');
+          // Colonne de bord (retour utilisateur) : hachures seulement ENTRE "-∞"/"+∞" et la
+          // première/dernière valeur, jamais jusqu'au bord de la table — même retrait
+          // (BOUNDARY_W/2) depuis "∞" que depuis une valeur, soit exactement la largeur
+          // d'un intervalle du milieu, collée côté frontière.
+          if (hatched && isEdgeInterval) {
+            cell.style.backgroundSize = MIDDLE_INTERVAL_W + 'px 100%';
+            cell.style.backgroundPosition = colIndex === 0 ? 'right top' : 'left top';
+            cell.style.backgroundRepeat = 'no-repeat';
+          }
           target.className = 'sign-chart-target' + (value === null ? ' sign-chart-target-empty' : '') +
             (value === 'undef' && !hatched ? ' sign-chart-target-undef' : '');
           if (value !== null) {
