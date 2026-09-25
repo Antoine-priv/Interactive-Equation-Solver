@@ -2319,6 +2319,14 @@ button {
   outline-offset: 4px;
   border-radius: 6px;
 }
+/* Pas de survol des termes du membre d'arrivée : le terme lâché ne remplace aucun d'eux,
+   l'opération l'ajoute à la FIN du membre — surligner celui sous le curseur le suggérerait. */
+.side.drag-cross-target .term:hover,
+.side.drag-cross-target .factor-slot:hover,
+.side.drag-cross-target .coeff-slot:hover,
+.side.drag-cross-target .draggable-term:hover { background: none; }
+.side.drag-cross-target .term.selected:hover,
+.side.drag-cross-target .factor-slot.selected:hover { background: #fde68a; }
 .drag-cross-badge {
   position: absolute;
   left: 50%;
