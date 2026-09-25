@@ -19,7 +19,6 @@
     gen_fraction: true,
     gen_sqrt: true,
     gen_factoring: true,
-    gen_identities: true,
     gen_produitNul: true,
     gen_domain: true,
     gen_signChart: true,
@@ -125,9 +124,41 @@
   }
 
   // Interrupteurs input[data-setting] d'une fenêtre : `data-requires` (clés séparées par
-  // des espaces) désactive l'interrupteur tant qu'AUCUNE de ces clés n'est activée (ex.
-  // "Tableau de signes" n'a de sens qu'avec les inéquations) — sa valeur mémorisée est
-  // conservée, simplement grisée.
+  // des espaces) REPLIE la ligne entière (voir .settings-row-collapsed dans style.css)
+  // tant qu'AUCUNE de ces clés n'est activée (ex. "Tableau de signes" n'a de sens qu'avec
+  // les inéquations) — sa valeur mémorisée est conservée, juste hors d'atteinte.
+  // max-height animé depuis/vers la hauteur RÉELLE de la ligne (pas une borne fixe
+  // arbitraire, qui laisserait un temps mort au début du repli), puis relâché une fois
+  // déplié pour ne pas brider un libellé qui passerait sur deux lignes.
+  function setRowCollapsed(row, collapsed) {
+    if (row.classList.contains('settings-row-collapsed') === collapsed) {
+      if (collapsed) row.style.maxHeight = '0px';
+      return;
+    }
+    row.setAttribute('aria-hidden', collapsed ? 'true' : 'false');
+    if (row.offsetParent === null) {
+      // Fenêtre fermée (rafraîchie avant l'ouverture) : pas d'animation.
+      row.classList.toggle('settings-row-collapsed', collapsed);
+      row.style.maxHeight = collapsed ? '0px' : '';
+      return;
+    }
+    if (collapsed) {
+      row.style.maxHeight = row.offsetHeight + 'px';
+      void row.offsetHeight;
+      row.classList.add('settings-row-collapsed');
+      row.style.maxHeight = '0px';
+    } else {
+      row.classList.remove('settings-row-collapsed');
+      var cs = getComputedStyle(row);
+      row.style.maxHeight = (row.scrollHeight + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)) + 'px';
+      row.addEventListener('transitionend', function done(e) {
+        if (e.propertyName !== 'max-height') return;
+        row.removeEventListener('transitionend', done);
+        if (!row.classList.contains('settings-row-collapsed')) row.style.maxHeight = '';
+      });
+    }
+  }
+
   function bindToggles(overlay, onChange) {
     var toggles = overlay.querySelectorAll('input[data-setting]');
     function refresh() {
@@ -136,7 +167,7 @@
         var requires = input.getAttribute('data-requires');
         var enabled = !requires || requires.split(' ').some(function (k) { return !!get(k); });
         input.disabled = !enabled;
-        input.closest('.settings-row').classList.toggle('settings-row-disabled', !enabled);
+        setRowCollapsed(input.closest('.settings-row'), !enabled);
       });
     }
     Array.prototype.forEach.call(toggles, function (input) {
@@ -149,43 +180,113 @@
     return refresh;
   }
 
-  // Double curseur min/max du degré : deux <input type=range> superposés (voir
-  // .degree-range dans style.css), jamais croisés — le curseur déplacé bute sur l'autre.
+  // Double curseur min/max du degré (voir .degree-range dans style.css) : poignées
+  // maison plutôt que deux <input type=range> natifs, qui sautent d'un entier à l'autre —
+  // ici la poignée suit la souris en continu, puis glisse (transition CSS) jusqu'à
+  // l'entier le plus proche au relâchement. Les poignées ne se croisent jamais.
   function bindDegreeRange(overlay, onChange) {
-    var minInput = overlay.querySelector('input[data-degree="min"]');
-    var maxInput = overlay.querySelector('input[data-degree="max"]');
-    var fill = overlay.querySelector('.degree-range-fill');
-    var label = overlay.querySelector('.degree-range-value');
+    var range = overlay.querySelector('.degree-range');
+    var track = range.querySelector('.degree-range-track');
+    var fill = range.querySelector('.degree-range-fill');
+    var thumbs = {
+      min: range.querySelector('[data-degree="min"]'),
+      max: range.querySelector('[data-degree="max"]')
+    };
+    var KEYS = { min: 'genMinDegree', max: 'genMaxDegree' };
     var lo = App.Generator.MIN_DEGREE, hi = App.Generator.MAX_DEGREE;
-    [minInput, maxInput].forEach(function (input) {
-      input.min = lo; input.max = hi; input.step = 1;
-    });
+    var pos = { min: lo, max: hi };
+    var active = null;       // poignée en cours de glisser ('min'/'max'), ou null
+    var undecided = false;   // poignées superposées : sens choisi au premier mouvement
+    var startX = 0;
 
+    function frac(v) { return (v - lo) / (hi - lo); }
     function paint() {
-      var a = +minInput.value, b = +maxInput.value;
-      fill.style.left = ((a - lo) / (hi - lo) * 100) + '%';
-      fill.style.right = ((hi - b) / (hi - lo) * 100) + '%';
-      label.textContent = a === b ? 'Degré ' + a : 'Degré ' + a + ' à ' + b;
-      // Deux curseurs sur la même valeur : celui du haut doit rester attrapable dans le
-      // sens où il peut encore bouger (tout à droite, seul "min" peut encore reculer).
-      minInput.classList.toggle('degree-thumb-top', a === b && a === hi);
+      ['min', 'max'].forEach(function (k) {
+        thumbs[k].style.left = 'calc(11px + (100% - 22px) * ' + frac(pos[k]) + ')';
+        thumbs[k].setAttribute('aria-valuenow', Math.round(pos[k]));
+        thumbs[k].setAttribute('aria-valuemin', lo);
+        thumbs[k].setAttribute('aria-valuemax', hi);
+      });
+      fill.style.left = (frac(pos.min) * 100) + '%';
+      fill.style.right = ((1 - frac(pos.max)) * 100) + '%';
+      // Superposées tout à droite, seule "min" peut encore bouger : elle passe dessus.
+      thumbs.min.style.zIndex = pos.min >= hi ? 2 : 1;
+    }
+    function commit(k) {
+      pos[k] = Math.round(pos[k]);
+      paint();
+      if (get(KEYS[k]) !== pos[k]) {
+        set(KEYS[k], pos[k]);
+        if (onChange) onChange();
+      }
+    }
+    function valueAt(clientX) {
+      var r = track.getBoundingClientRect();
+      var f = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+      return lo + f * (hi - lo);
+    }
+    function moveTo(k, v) {
+      pos[k] = k === 'min' ? Math.min(v, pos.max) : Math.max(v, pos.min);
+      paint();
     }
     function refresh() {
-      minInput.value = get('genMinDegree');
-      maxInput.value = get('genMaxDegree');
+      pos.min = get('genMinDegree');
+      pos.max = get('genMaxDegree');
       paint();
     }
-    minInput.addEventListener('input', function () {
-      if (+minInput.value > +maxInput.value) minInput.value = maxInput.value;
-      set('genMinDegree', +minInput.value);
-      paint();
-      if (onChange) onChange();
+
+    range.addEventListener('pointerdown', function (e) {
+      if (e.button !== 0) return;
+      var v = valueAt(e.clientX);
+      var dMin = Math.abs(v - pos.min), dMax = Math.abs(v - pos.max);
+      var onThumb = e.target.closest('.degree-thumb');
+      undecided = false;
+      if (pos.min === pos.max && (onThumb || dMin === dMax)) {
+        // Poignées superposées : impossible de savoir laquelle est visée avant de bouger.
+        if (v > pos.max + 0.05) active = 'max';
+        else if (v < pos.min - 0.05) active = 'min';
+        else { active = 'max'; undecided = true; }
+      } else if (onThumb) {
+        active = onThumb.getAttribute('data-degree');
+      } else {
+        active = dMin < dMax ? 'min' : 'max';
+      }
+      startX = e.clientX;
+      range.setPointerCapture(e.pointerId);
+      thumbs[active].focus();
+      range.classList.add('degree-range-dragging');
+      if (!undecided && !onThumb) moveTo(active, v);
+      e.preventDefault();
     });
-    maxInput.addEventListener('input', function () {
-      if (+maxInput.value < +minInput.value) maxInput.value = minInput.value;
-      set('genMaxDegree', +maxInput.value);
-      paint();
-      if (onChange) onChange();
+    range.addEventListener('pointermove', function (e) {
+      if (!active) return;
+      if (undecided) {
+        if (Math.abs(e.clientX - startX) < 2) return;
+        active = e.clientX < startX ? 'min' : 'max';
+        thumbs[active].focus();
+        undecided = false;
+      }
+      moveTo(active, valueAt(e.clientX));
+    });
+    function release() {
+      if (!active) return;
+      range.classList.remove('degree-range-dragging');
+      commit(active);
+      active = null;
+      undecided = false;
+    }
+    range.addEventListener('pointerup', release);
+    range.addEventListener('pointercancel', release);
+
+    ['min', 'max'].forEach(function (k) {
+      thumbs[k].addEventListener('keydown', function (e) {
+        var step = { ArrowLeft: -1, ArrowDown: -1, ArrowRight: 1, ArrowUp: 1 }[e.key];
+        var v = step ? pos[k] + step : e.key === 'Home' ? lo : e.key === 'End' ? hi : null;
+        if (v === null) return;
+        e.preventDefault();
+        moveTo(k, Math.min(hi, Math.max(lo, v)));
+        commit(k);
+      });
     });
     return refresh;
   }

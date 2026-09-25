@@ -117,16 +117,9 @@
     <div class="settings-group-title">Méthodes de résolution</div>
     <div class="settings-list">
       <label class="settings-row">
-        <span class="settings-label">Factorisation par un facteur commun</span>
+        <span class="settings-label">Factorisation (facteur commun, identités remarquables)</span>
         <span class="ios-switch">
           <input type="checkbox" role="switch" data-setting="gen_factoring" />
-          <span class="ios-switch-track"></span>
-        </span>
-      </label>
-      <label class="settings-row">
-        <span class="settings-label">Identités remarquables</span>
-        <span class="ios-switch">
-          <input type="checkbox" role="switch" data-setting="gen_identities" />
           <span class="ios-switch-track"></span>
         </span>
       </label>
@@ -154,11 +147,10 @@
     </div>
     <div class="settings-group-title">Degré de l'équation</div>
     <div class="degree-range-block">
-      <div class="degree-range-value"></div>
       <div class="degree-range">
         <div class="degree-range-track"><div class="degree-range-fill"></div></div>
-        <input type="range" data-degree="min" aria-label="Degré minimal" />
-        <input type="range" data-degree="max" aria-label="Degré maximal" />
+        <div class="degree-thumb" data-degree="min" tabindex="0" role="slider" aria-label="Degré minimal"></div>
+        <div class="degree-thumb" data-degree="max" tabindex="0" role="slider" aria-label="Degré maximal"></div>
       </div>
       <div class="degree-range-ticks"><span>1</span><span>2</span><span>3</span></div>
     </div>

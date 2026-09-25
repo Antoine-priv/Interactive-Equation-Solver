@@ -86,8 +86,11 @@ function ok(label, cond) {
 
   // --- Inéquations désactivées : plus aucune inéquation, "Tableau de signes" grisé ---
   await toggle('gen_inequality');
-  ok('"Tableau de signes" désactivé sans les inéquations', await page.evaluate(() =>
-    document.querySelector('#generatorOverlay input[data-setting="gen_signChart"]').disabled));
+  await page.waitForTimeout(350);
+  ok('"Tableau de signes" replié (et non grisé) sans les inéquations', await page.evaluate(() => {
+    var row = document.querySelector('#generatorOverlay input[data-setting="gen_signChart"]').closest('.settings-row');
+    return row.classList.contains('settings-row-collapsed') && row.getBoundingClientRect().height < 2;
+  }));
   let s = await sample(400);
   ok('aucune inéquation générée (' + s.ineq + ')', s.ineq === 0 && s.nulls === 0);
   ok('réglage mémorisé en local', await page.evaluate(() =>
@@ -96,37 +99,79 @@ function ok(label, cond) {
   // --- Fractions + racines désactivées : ni quotient ni √, domaine grisé ---
   await toggle('gen_fraction');
   await toggle('gen_sqrt');
-  ok('"Domaine de définition" désactivé sans fractions ni racines', await page.evaluate(() =>
-    document.querySelector('#generatorOverlay input[data-setting="gen_domain"]').disabled));
+  ok('"Domaine de définition" replié sans fractions ni racines', await page.evaluate(() =>
+    document.querySelector('#generatorOverlay input[data-setting="gen_domain"]').closest('.settings-row').classList.contains('settings-row-collapsed')));
   s = await sample(400);
   ok('ni fraction ni racine générée (' + s.fraction + ', ' + s.sqrt + ')', s.fraction === 0 && s.sqrt === 0 && s.nulls === 0);
   await toggle('gen_inequality');
   await toggle('gen_fraction');
   await toggle('gen_sqrt');
+  await page.waitForTimeout(350);
+  ok('"Tableau de signes" réapparaît avec les inéquations', await page.evaluate(() =>
+    document.querySelector('#generatorOverlay input[data-setting="gen_signChart"]').closest('.settings-row').getBoundingClientRect().height > 20));
+
+  // --- Factorisation coupée : plus d'identité remarquable ni de facteur commun ---
+  await toggle('gen_factoring');
+  const factorCheck = await page.evaluate(() => {
+    for (var i = 0; i < 400; i++) {
+      var eq = window.App.Generator.generateEquation(window.App.Settings.generatorOptions());
+      var all = eq.left.concat(eq.right);
+      // Trinôme identité (x² et constante au premier niveau, = 0) ou facteur commun.
+      if (all.some(function (n) { return n.factor && !n.isDivision; })) return false;
+      if (!eq.operator && eq.left.length >= 2 && eq.left.some(function (n) { return n.pow === 2; }) && eq.right.length === 1 && eq.right[0].coeff === 0) return false;
+    }
+    return true;
+  });
+  ok('sans factorisation : ni identité remarquable ni facteur commun', factorCheck);
+  await toggle('gen_factoring');
 
   // --- Double curseur : les poignées ne se croisent pas ---
-  await page.focus('#generatorOverlay input[data-degree="max"]');
+  await page.focus('#generatorOverlay [data-degree="max"]');
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowLeft');
-  await page.focus('#generatorOverlay input[data-degree="min"]');
+  await page.focus('#generatorOverlay [data-degree="min"]');
   await page.keyboard.press('ArrowRight');
   let deg = await page.evaluate(() => [window.App.Settings.get('genMinDegree'), window.App.Settings.get('genMaxDegree')]);
   ok('degré max ramené à 1, min bloqué à 1 (' + deg + ')', deg[0] === 1 && deg[1] === 1);
-  ok('libellé "Degré 1"', (await page.textContent('#generatorOverlay .degree-range-value')) === 'Degré 1');
   s = await sample(400);
   ok('degré 1 seulement : aucun x² ni produit (' + s.maxPow + ', ' + s.product + ')', s.maxPow <= 1 && s.product === 0 && s.nulls === 0);
 
-  await page.focus('#generatorOverlay input[data-degree="max"]');
+  await page.focus('#generatorOverlay [data-degree="max"]');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
-  await page.focus('#generatorOverlay input[data-degree="min"]');
+  await page.focus('#generatorOverlay [data-degree="min"]');
   await page.keyboard.press('ArrowRight');
   await page.keyboard.press('ArrowRight');
   deg = await page.evaluate(() => [window.App.Settings.get('genMinDegree'), window.App.Settings.get('genMaxDegree')]);
   ok('degré 3 seulement (' + deg + ')', deg[0] === 3 && deg[1] === 3);
   s = await sample(400);
   ok('degré 3 seulement : chaque tirage est un produit de degré 3', s.allDeg3 && s.nulls === 0);
+
+  // --- Souris : la poignée suit le curseur en continu, puis se cale sur l'entier le plus proche ---
+  await page.focus('#generatorOverlay [data-degree="min"]');
+  await page.keyboard.press('Home');
+  const tr = await page.locator('#generatorOverlay .degree-range-track').boundingBox();
+  const ty = tr.y + tr.height / 2;
+  const thumbCenter = (k) => page.evaluate((key) => {
+    var r = document.querySelector('#generatorOverlay [data-degree="' + key + '"]').getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }, k);
+  await page.waitForTimeout(300);
+  let c = await thumbCenter('min');
+  ok('poignée min centrée sur le début de la piste', Math.abs(c.x - tr.x) < 1 && Math.abs(c.y - ty) < 1);
+  await page.mouse.move(c.x, c.y);
+  await page.mouse.down();
+  await page.mouse.move(tr.x + tr.width * 0.4, ty, { steps: 6 });
+  c = await thumbCenter('min');
+  ok('pendant le glisser, la poignée suit la souris (pas de saut à un entier)', Math.abs(c.x - (tr.x + tr.width * 0.4)) < 1.5);
+  await page.mouse.up();
+  await page.waitForTimeout(350);
+  c = await thumbCenter('min');
+  deg = await page.evaluate(() => [window.App.Settings.get('genMinDegree'), window.App.Settings.get('genMaxDegree')]);
+  ok('au relâchement, calée sur l\'entier le plus proche (2) (' + deg + ')', deg[0] === 2 && Math.abs(c.x - (tr.x + tr.width / 2)) < 1);
+  await page.focus('#generatorOverlay [data-degree="min"]');
+  await page.keyboard.press('End');
 
   // --- Aucune forme compatible : message dans la fenêtre et au clic sur "Générer" ---
   await toggle('gen_produitNul');

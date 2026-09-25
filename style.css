@@ -2147,7 +2147,7 @@ button {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
   transition: transform 0.2s ease;
 }
-.ios-switch input:checked + .ios-switch-track { background: #34c759; }
+.ios-switch input:checked + .ios-switch-track { background: var(--accent); }
 .ios-switch input:checked + .ios-switch-track::after { transform: translateX(20px); }
 .ios-switch input:focus-visible + .ios-switch-track { box-shadow: 0 0 0 3px var(--accent-soft-border); }
 @media (prefers-reduced-motion: reduce) {
@@ -2168,14 +2168,41 @@ button {
   letter-spacing: 0.04em;
 }
 .settings-group-title + .settings-list { margin-top: 4px; }
-.settings-row-disabled { opacity: 0.45; cursor: default; }
-.settings-row-disabled .ios-switch input { cursor: default; }
+/* Fenêtre jamais plus haute que l'écran : défile au-delà (voir aussi le padding réduit
+   des lignes, pour qu'elle tienne d'ordinaire sans défiler). */
+#generatorOverlay .modal-box {
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding-top: 26px;
+  padding-bottom: 22px;
+}
+#generatorOverlay .settings-row { padding: 9px 0; }
+#generatorOverlay .settings-group-title { margin-top: 16px; }
 
-.degree-range-block { margin-top: 10px; }
-.degree-range-value { font-size: 0.95rem; margin-bottom: 10px; }
+/* Ligne repliée tant que son prérequis est coupé (data-requires, voir bindToggles dans
+   settings.js) : hauteur, marges, bordure et opacité animées ensemble jusqu'à zéro. */
+.settings-row {
+  transition: max-height 0.25s ease, padding 0.25s ease, opacity 0.2s ease, border-color 0.25s ease;
+}
+#generatorOverlay .settings-row.settings-row-collapsed,
+.settings-row.settings-row-collapsed {
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  overflow: hidden;
+  border-top-color: transparent;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-row { transition: none; }
+}
+
+.degree-range-block { margin-top: 12px; }
 .degree-range {
   position: relative;
-  height: 24px;
+  height: 26px;
+  touch-action: none;
+  cursor: pointer;
 }
 .degree-range-track {
   position: absolute;
@@ -2194,45 +2221,32 @@ button {
   border-radius: 999px;
   background: var(--accent);
 }
-/* Deux curseurs natifs superposés : seules leurs poignées captent la souris (piste
-   transparente et `pointer-events: none`), pour que chacune reste attrapable. */
-.degree-range input[type="range"] {
+/* Poignée : disque blanc cerclé de bleu, centré sur sa position par translate(-50%,-50%).
+   Glisse vers l'entier le plus proche au relâchement (transition de left) ; suit la
+   souris sans retard pendant le glisser (.degree-range-dragging). */
+.degree-thumb {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  margin: 0;
-  background: none;
-  pointer-events: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-.degree-range input[type="range"].degree-thumb-top { z-index: 1; }
-.degree-range input[type="range"]::-webkit-slider-runnable-track { background: none; height: 24px; }
-.degree-range input[type="range"]::-moz-range-track { background: none; }
-.degree-range input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  pointer-events: auto;
+  top: 50%;
   width: 22px;
   height: 22px;
-  margin-top: 1px;
+  box-sizing: border-box;
   border-radius: 50%;
+  border: 2px solid var(--accent);
   background: #fff;
-  box-shadow: 0 0 0 1.5px var(--accent), 0 2px 4px rgba(0, 0, 0, 0.25);
-  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  transition: left 0.22s cubic-bezier(0.22, 1, 0.36, 1), transform 0.15s ease, box-shadow 0.15s ease;
 }
-.degree-range input[type="range"]::-moz-range-thumb {
-  pointer-events: auto;
-  width: 22px;
-  height: 22px;
-  border: none;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 0 1.5px var(--accent), 0 2px 4px rgba(0, 0, 0, 0.25);
-  cursor: pointer;
+.degree-range-fill { transition: left 0.22s cubic-bezier(0.22, 1, 0.36, 1), right 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+.degree-range-dragging .degree-thumb,
+.degree-range-dragging .degree-range-fill { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.degree-thumb:hover,
+.degree-thumb:focus-visible { box-shadow: 0 0 0 4px var(--accent-soft-border), 0 2px 4px rgba(0, 0, 0, 0.2); outline: none; }
+.degree-range-dragging .degree-thumb:focus { transform: translate(-50%, -50%) scale(1.12); }
+@media (prefers-reduced-motion: reduce) {
+  .degree-thumb, .degree-range-fill { transition: none; }
 }
-.degree-range input[type="range"]:focus-visible { outline: none; }
-.degree-range input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-soft-border); }
 .degree-range-ticks {
   display: flex;
   justify-content: space-between;
@@ -2257,12 +2271,12 @@ button {
   justify-content: center;
   border-radius: var(--radius-sm);
   opacity: 0;
-  transition: opacity 0.15s ease, background 0.15s ease, transform 0.3s ease;
+  transition: opacity 0.15s ease, transform 0.3s ease;
 }
 .gen-options-gear svg { width: 18px; height: 18px; }
 #randomGenerate:hover .gen-options-gear,
 #randomGenerate:focus-visible .gen-options-gear { opacity: 1; }
-.gen-options-gear:hover { background: rgba(255, 255, 255, 0.2); transform: rotate(45deg); }
+.gen-options-gear:hover { transform: rotate(45deg); }
 @media (prefers-reduced-motion: reduce) {
   .gen-options-gear { transition: none; }
   .gen-options-gear:hover { transform: none; }

@@ -482,14 +482,14 @@
   //
   // `opts` (optionnel, voir generateEquation plus bas) restreint ces ingrédients aux
   // options de génération : pas de dénominateur en x sans "fractions" ET "domaine de
-  // définition", pas de trinôme à factoriser sans "identités remarquables", et un nombre
+  // définition", pas de trinôme à factoriser sans "factorisation", et un nombre
   // de facteurs (donc un degré, 2 ou 3) compris dans l'intervalle de degrés autorisé.
   function generateSignChartInequality(opts) {
     var allow = (opts && opts.allow) || {};
     var minDeg = opts ? opts.minDegree : 1;
     var maxDeg = opts ? opts.maxDegree : 3;
     var canDenominator = !opts || (allow.fraction && allow.domain);
-    var canFactoring = (!opts || allow.identities) && minDeg <= 2 && maxDeg >= 2;
+    var canFactoring = (!opts || allow.factoring) && minDeg <= 2 && maxDeg >= 2;
     var canTwoRoots = minDeg <= 2 && maxDeg >= 2;
     var canThreeRoots = minDeg <= 3 && maxDeg >= 3;
     var operator = App.Ineq.OPERATORS[randInt(0, App.Ineq.OPERATORS.length - 1)];
@@ -560,28 +560,28 @@
   var FORMS = [
     { gen: generateLinearEquation, tags: [], deg: [1, 1] },
     { gen: generateSimplifyFirstLinear, tags: [], deg: [1, 1] },
-    { gen: generateFactorableQuadratic, tags: ['identities', 'produitNul'], deg: [2, 2] },
+    { gen: generateFactorableQuadratic, tags: ['factoring', 'produitNul'], deg: [2, 2] },
     { gen: generateSquareRootEquation, tags: ['sqrt'], deg: [2, 2] },
     { gen: generateProductEquation, tags: ['produitNul'], deg: [2, 2] },
     { gen: generateGroupedCommonFactor, tags: ['factoring'], deg: [1, 1] },
-    { gen: generateSquareMinusConstant, tags: ['identities', 'produitNul'], deg: [2, 2] },
-    { gen: generateDiffOfTwoSquaredExpr, tags: ['identities', 'produitNul'], deg: [2, 2] },
+    { gen: generateSquareMinusConstant, tags: ['factoring', 'produitNul'], deg: [2, 2] },
+    { gen: generateDiffOfTwoSquaredExpr, tags: ['factoring', 'produitNul'], deg: [2, 2] },
     { gen: generateTripleProductEquation, tags: ['produitNul'], deg: [3, 3] },
-    { gen: generateUnfactoredQuadraticProduct, tags: ['identities', 'produitNul'], deg: [3, 3] },
+    { gen: generateUnfactoredQuadraticProduct, tags: ['factoring', 'produitNul'], deg: [3, 3] },
     { gen: generateSquaredLinearTimesLinear, tags: ['produitNul'], deg: [3, 3] },
     { gen: generateFractionEquation, tags: ['fraction'], deg: [1, 1] },
     { gen: generateVariableDenominatorEquation, tags: ['fraction', 'domain'], deg: [1, 1] },
-    { gen: generateFactorableDenominatorEquation, tags: ['fraction', 'domain', 'identities', 'produitNul'], deg: [2, 2] },
+    { gen: generateFactorableDenominatorEquation, tags: ['fraction', 'domain', 'factoring', 'produitNul'], deg: [2, 2] },
     { gen: generateVariableRadicandEquation, tags: ['sqrt', 'domain'], deg: [1, 1] },
     { gen: generateVariableRadicandQuadraticEquation, tags: ['sqrt'], deg: [2, 2] },
-    { gen: generateIdentityPlusProduct, tags: ['identities', 'produitNul'], deg: [2, 2] },
-    { gen: generateTrinomialMinusSquareGroup, tags: ['identities', 'produitNul'], deg: [2, 2] },
+    { gen: generateIdentityPlusProduct, tags: ['factoring', 'produitNul'], deg: [2, 2] },
+    { gen: generateTrinomialMinusSquareGroup, tags: ['factoring', 'produitNul'], deg: [2, 2] },
     { gen: generateLinearInequality, tags: ['inequality'], deg: [1, 1] },
     { gen: generateSignChartInequality, tags: ['inequality', 'signChart'], deg: [2, 3] }
   ];
 
   // Options de génération reconnues (voir App.Settings.generatorOptions dans settings.js).
-  var TAGS = ['inequality', 'fraction', 'sqrt', 'factoring', 'identities', 'produitNul', 'domain', 'signChart'];
+  var TAGS = ['inequality', 'fraction', 'sqrt', 'factoring', 'factoring', 'produitNul', 'domain', 'signChart'];
   var MIN_DEGREE = 1;
   var MAX_DEGREE = 3;
 
