@@ -264,8 +264,7 @@ const S = {
 };
 
 // Niveaux qu'on sait impossibles à finir avec l'app actuelle (voir le compte rendu).
-const BLOCKED = { r4: 'x² = −4 : l\'app refuse la racine d\'un nombre négatif sans conclure S = ∅',
-  g6: 'x² + 5 = 0 : même impasse que r4',
+const BLOCKED = {
   mB: 'Produit nul indisponible sur une équation qui porte déjà une condition d\'existence (restriction v1)',
   oB: 'x² − 4 ne se factorise pas dans un produit au dénominateur ; la variante (x − 2)(x + 2) se résout (script oB)' };
 

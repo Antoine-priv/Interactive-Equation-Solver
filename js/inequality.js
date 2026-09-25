@@ -69,6 +69,9 @@
   // -> R, "0<5" -> R...). null tant qu'elle n'est sous aucune de ces formes.
   function solutionRanges(eq, operator) {
     var Eq = App.Equation;
+    // Conclusion "aucune solution" (racine carrée d'un nombre négatif, voir
+    // noSolutionResult dans history.js).
+    if (eq.noSolution) return [];
     if (Eq.isSolved(eq)) {
       var r = Eq.solvedValue(eq);
       if (!operator) return [point(r)];

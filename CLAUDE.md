@@ -81,7 +81,9 @@ Equations are `{ left: Side, right: Side }`. A `Side` is `Array<Node>`. A `Node`
   the other side, which may still read `√(...)`/`-√(...)` afterward — hence `sign:-1` on the
   negated branch, via `Expr.multiplySide`/`scaleNode` (`mode: 'split'`); selecting both does
   both at once, as before (`mode: 'both'`) — see `squareRootSimplifyAction`/
-  `computeSquareRootSimplify` in `history.js`. Drillable exactly once
+  `computeSquareRootSimplify` in `history.js`. A negative constant is not an error: it
+  concludes "no solution" with a last line of the unwrapped radicands flagged
+  `equation.noSolution` (`noSolutionResult`), which `App.Ineq.solutionRanges` reads as S = ∅. Drillable exactly once
   (`pending.drilled.part === 'sqrt'`, mirroring the `'den'` quotient-denominator case above)
   to freely simplify/factor/expand the radicand before resolving it.
 

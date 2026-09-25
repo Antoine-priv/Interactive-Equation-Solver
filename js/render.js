@@ -405,6 +405,10 @@
 
   function formatOpLabel(desc) {
     if (!desc) return null;
+    // Racine carrée d'un nombre négatif (voir noSolutionResult dans history.js).
+    if (desc.type === 'simplify' && desc.noSolution) {
+      return '\\text{impossible : un carré n\'est jamais négatif}';
+    }
     if (desc.type === 'simplify') {
       if (!desc.terms || desc.terms.length === 0) return '\\text{simplifier}';
       var simplifiedLatex = desc.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');

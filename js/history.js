@@ -3181,10 +3181,23 @@
     // rigoureusement équivalents, ex. l'autre membre valant déjà 0, voir
     // Expr.sidesEquivalent — même principe que la déduplication de Produit nul), ou
     // { equations: [eqPos, eqNeg] } (± scindé).
+    // Racine carrée d'un nombre négatif : l'équation n'a pas de solution (un carré n'est
+    // jamais négatif). Plutôt qu'une erreur, une dernière ligne "(radicandes)" marquée
+    // `noSolution` (voir App.Ineq.solutionRanges, qui y lit S = ∅).
+    function noSolutionResult(eq) {
+      var out = {};
+      ['left', 'right'].forEach(function (side) {
+        var s = eq[side];
+        out[side] = s.length === 1 && Expr.isSqrtGroup(s[0]) && s[0].sign > 0 ? Expr.cloneSide(s[0].radicand) : Expr.cloneSide(s);
+      });
+      out.noSolution = true;
+      return { equations: [out], noSolution: true };
+    }
+
     function computeSquareRootSimplify(eq, action) {
       if (action.mode === 'calc') {
         var infoC = detectSquareRootSide(eq[action.side]);
-        if (infoC.constant < 0) return { error: true };
+        if (infoC.constant < 0) return noSolutionResult(eq);
         var rootValC = Expr.roundClean(Math.sqrt(infoC.constant)) * infoC.resultSign;
         var outEq = Eq.cloneEquation(eq);
         outEq[action.side] = [{ coeff: rootValC, pow: 0 }];
@@ -3213,7 +3226,7 @@
       var constSide = squareSide === 'left' ? 'right' : 'left';
       var infoSq = squareSide === 'left' ? leftInfoB : rightInfoB;
       var infoCn = constSide === 'left' ? leftInfoB : rightInfoB;
-      if (infoCn.constant < 0) return { error: true };
+      if (infoCn.constant < 0) return noSolutionResult(eq);
       var rootValB = Expr.roundClean(Math.sqrt(infoCn.constant)) * infoCn.resultSign;
       var eqPosB = {}, eqNegB = {};
       eqPosB[squareSide] = Expr.cloneSide(infoSq.base); eqPosB[constSide] = [{ coeff: rootValB, pow: 0 }];
@@ -3298,6 +3311,10 @@
         return false;
       }
       var equations = result.equations;
+      if (result.noSolution) {
+        leaf.pushStep(equations[0], { type: 'simplify', noSolution: true });
+        return true;
+      }
       if (equations.length === 1) {
         if (action.mode === 'calc') {
           // Ne touche qu'UN SEUL membre : une seule flèche étiquetée, l'autre muette (voir

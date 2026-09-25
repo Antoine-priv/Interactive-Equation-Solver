@@ -61,32 +61,41 @@ function findSqrtKey(page) {
   const simplifyAvailable = await simplifyBtn.evaluate((el) => !el.disabled && !el.closest('.op-row').hidden);
   ok('"Simplifier" becomes available once both sides are selected', simplifyAvailable);
 
-  // Étape 2 (simplifier) : échoue, l'équation est déjà enveloppée et son radicand est
-  // reconnaissable (carré parfait / constante nue), mais la constante est négative.
+  // Étape 2 (simplifier) : la constante est négative, un carré ne l'est jamais — la
+  // résolution se conclut par S = ∅ (plus d'erreur), sur une ligne "(x+3)² = −9".
   await simplifyBtn.click();
-  await page.waitForTimeout(120);
+  await page.waitForTimeout(150);
 
-  const afterFail = await page.evaluate(() => ({
-    branches: window.App.History.getBranches(),
-    panelErrorText: (document.querySelector('#controlPanel .panel-error') || {}).textContent || null
-  }));
-  ok('exact red error message shown in the floating panel', afterFail.panelErrorText === 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.');
-  ok('no branches created (confirm rejected)', afterFail.branches === null);
-
+  const after = await page.evaluate(() => {
+    var H = window.App.History, last = H.getSteps().slice(-1)[0];
+    var fin = document.querySelector('.final-solution-set');
+    return {
+      branches: H.getBranches(),
+      eq: last.equation,
+      desc: last.opLeft,
+      error: H.getPending().error,
+      finalText: fin ? fin.textContent : null,
+      labels: Array.from(document.querySelectorAll('[class*="label"]')).map((e) => e.textContent).join(' | '),
+      ranges: window.App.Render.finalSolutionRanges()
+    };
+  });
+  ok('no error, no branches', !after.error && after.branches === null);
+  ok('last line is (x+3)² = −9, marked without solution', after.eq.noSolution === true &&
+    JSON.stringify(after.eq.right) === JSON.stringify([{ coeff: -9, pow: 0 }]) && !!after.eq.left[0].factors);
+  ok('arrow says a square is never negative', after.desc && after.desc.noSolution && /jamais négatif/.test(after.labels));
+  ok('S = ∅ is shown', /∅/.test(after.finalText || '') && JSON.stringify(after.ranges) === '[]');
   await page.screenshot({ path: `${SCRATCH}/sqrt_negative_disabled.png` });
 
-  // "Simplifier" stays clickable (no permanent disabling à la sqrtFailed) : a retry just
-  // reproduces the same error rather than getting silently stuck.
-  const stillAvailable = await simplifyBtn.evaluate((el) => !el.disabled && !el.closest('.op-row').hidden);
-  ok('"Simplifier" remains clickable after failing (no permanent lock)', stillAvailable);
-  await simplifyBtn.click();
+  // Même conclusion en ne sélectionnant que le côté constant.
+  await page.evaluate(() => {
+    var H = window.App.History;
+    H.undo();
+    H.toggleTermSelection('right', 0);
+    H.confirmSquareRoot();
+  });
   await page.waitForTimeout(120);
-  const afterRetry = await page.evaluate(() => ({
-    branches: window.App.History.getBranches(),
-    panelErrorText: (document.querySelector('#controlPanel .panel-error') || {}).textContent || null
-  }));
-  ok('retrying reproduces the same error, still no branches', afterRetry.branches === null &&
-    afterRetry.panelErrorText === 'Impossible d\'appliquer la racine carrée d\'un nombre négatif.');
+  ok('selecting only the constant side also concludes S = ∅', await page.evaluate(() =>
+    JSON.stringify(window.App.Render.finalSolutionRanges()) === '[]'));
 
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
