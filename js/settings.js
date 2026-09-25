@@ -19,6 +19,7 @@
     gen_fraction: true,
     gen_sqrt: true,
     gen_factoring: true,
+    gen_identities: true,
     gen_produitNul: true,
     gen_domain: true,
     gen_signChart: true,
@@ -76,7 +77,7 @@
   // Ouverture/fermeture animées d'une fenêtre .modal-overlay (même animation que la modale
   // "Nouvelle équation", voir open()/close() dans newEquationModal.js pour le détail des
   // reflows forcés), Échap et clic sur le fond compris. `onOpen` rafraîchit son contenu.
-  function bindModal(overlay, closeBtn, onOpen) {
+  function bindModal(overlay, closeBtn, onOpen, onShown) {
     var box = overlay.querySelector('.modal-box');
     var closeTimer = null;
 
@@ -86,6 +87,7 @@
       box.classList.remove('modal-vanish');
       if (onOpen) onOpen();
       overlay.hidden = false;
+      if (onShown) onShown(box);
       if (prefersReducedMotion) return;
       overlay.classList.add('modal-overlay-hiding');
       void overlay.offsetWidth;
@@ -127,6 +129,23 @@
   // des espaces) REPLIE la ligne entière (voir .settings-row-collapsed dans style.css)
   // tant qu'AUCUNE de ces clés n'est activée (ex. "Tableau de signes" n'a de sens qu'avec
   // les inéquations) — sa valeur mémorisée est conservée, juste hors d'atteinte.
+  // Hauteur naturelle (dépliée) d'une ligne, mesurée transitions coupées : lue en plein
+  // repli/dépli, le padding (lui aussi animé) fausserait la cible et ferait "sauter" la
+  // ligne au relâchement final du max-height.
+  function naturalRowHeight(row) {
+    var wasCollapsed = row.classList.contains('settings-row-collapsed');
+    var prevMax = row.style.maxHeight;
+    row.classList.add('settings-no-anim');
+    row.classList.remove('settings-row-collapsed');
+    row.style.maxHeight = '';
+    var h = row.offsetHeight;
+    if (wasCollapsed) row.classList.add('settings-row-collapsed');
+    row.style.maxHeight = prevMax;
+    void row.offsetHeight;
+    row.classList.remove('settings-no-anim');
+    return h;
+  }
+
   // max-height animé depuis/vers la hauteur RÉELLE de la ligne (pas une borne fixe
   // arbitraire, qui laisserait un temps mort au début du repli), puis relâché une fois
   // déplié pour ne pas brider un libellé qui passerait sur deux lignes.
@@ -148,15 +167,37 @@
       row.classList.add('settings-row-collapsed');
       row.style.maxHeight = '0px';
     } else {
+      var target = naturalRowHeight(row);
       row.classList.remove('settings-row-collapsed');
-      var cs = getComputedStyle(row);
-      row.style.maxHeight = (row.scrollHeight + parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)) + 'px';
+      row.style.maxHeight = target + 'px';
       row.addEventListener('transitionend', function done(e) {
         if (e.propertyName !== 'max-height') return;
         row.removeEventListener('transitionend', done);
         if (!row.classList.contains('settings-row-collapsed')) row.style.maxHeight = '';
       });
     }
+  }
+
+  // Hauteur de la fenêtre figée sur celle qu'elle aurait TOUTES lignes dépliées : replier/
+  // déplier une ligne (ou afficher le message "aucune équation") ne la redimensionne
+  // jamais — l'espace libéré reste en bas. Toujours plafonnée par max-height (défilement).
+  function lockBoxHeight(box) {
+    var rows = box.querySelectorAll('.settings-row-collapsed');
+    box.style.height = '';
+    box.classList.add('settings-no-anim');
+    Array.prototype.forEach.call(rows, function (row) {
+      row.classList.remove('settings-row-collapsed');
+      row.dataset.prevMax = row.style.maxHeight;
+      row.style.maxHeight = '';
+    });
+    var h = box.offsetHeight;
+    Array.prototype.forEach.call(rows, function (row) {
+      row.classList.add('settings-row-collapsed');
+      row.style.maxHeight = row.dataset.prevMax;
+    });
+    void box.offsetHeight;
+    box.classList.remove('settings-no-anim');
+    box.style.height = h + 'px';
   }
 
   function bindToggles(overlay, onChange) {
@@ -307,7 +348,7 @@
       refreshToggles();
       refreshDegrees();
       refreshHint();
-    });
+    }, lockBoxHeight);
   }
 
   function openGeneratorOptions() {

@@ -84,7 +84,10 @@ function ok(label, cond) {
   ok('tous les interrupteurs activés par défaut', await page.evaluate(() =>
     Array.prototype.every.call(document.querySelectorAll('#generatorOverlay input[data-setting]'), (i) => i.checked)));
 
-  // --- Inéquations désactivées : plus aucune inéquation, "Tableau de signes" grisé ---
+  const boxHeight = () => page.evaluate(() => document.querySelector('#generatorOverlay .modal-box').getBoundingClientRect().height);
+  const initialBoxHeight = await boxHeight();
+
+  // --- Inéquations désactivées : plus aucune inéquation, "Tableau de signes" replié ---
   await toggle('gen_inequality');
   await page.waitForTimeout(350);
   ok('"Tableau de signes" replié (et non grisé) sans les inéquations', await page.evaluate(() => {
@@ -103,27 +106,48 @@ function ok(label, cond) {
     document.querySelector('#generatorOverlay input[data-setting="gen_domain"]').closest('.settings-row').classList.contains('settings-row-collapsed')));
   s = await sample(400);
   ok('ni fraction ni racine générée (' + s.fraction + ', ' + s.sqrt + ')', s.fraction === 0 && s.sqrt === 0 && s.nulls === 0);
+  ok('la fenêtre garde sa hauteur quand des lignes se replient', Math.abs((await boxHeight()) - initialBoxHeight) < 0.5);
+  // Dépli : la cible du max-height animé doit être la hauteur finale réelle de la ligne
+  // (sinon la ligne "saute" à la fin de l'animation, quand le max-height est relâché).
   await toggle('gen_inequality');
+  const expandTarget = await page.evaluate(() => parseFloat(
+    document.querySelector('#generatorOverlay input[data-setting="gen_signChart"]').closest('.settings-row').style.maxHeight));
   await toggle('gen_fraction');
   await toggle('gen_sqrt');
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(450);
+  const finalRowHeight = await page.evaluate(() =>
+    document.querySelector('#generatorOverlay input[data-setting="gen_signChart"]').closest('.settings-row').getBoundingClientRect().height);
+  ok('dépli sans secousse finale (cible ' + expandTarget + ' = hauteur finale ' + finalRowHeight + ')', Math.abs(expandTarget - finalRowHeight) < 0.5);
+  ok('la fenêtre garde sa hauteur quand les lignes réapparaissent', Math.abs((await boxHeight()) - initialBoxHeight) < 0.5);
   ok('"Tableau de signes" réapparaît avec les inéquations', await page.evaluate(() =>
     document.querySelector('#generatorOverlay input[data-setting="gen_signChart"]').closest('.settings-row').getBoundingClientRect().height > 20));
 
-  // --- Factorisation coupée : plus d'identité remarquable ni de facteur commun ---
-  await toggle('gen_factoring');
-  const factorCheck = await page.evaluate(() => {
-    for (var i = 0; i < 400; i++) {
+  // --- Identités coupées (factorisation active) : facteur commun seulement ---
+  const factorStats = () => page.evaluate(() => {
+    var out = { common: 0, identity: 0 };
+    for (var i = 0; i < 600; i++) {
       var eq = window.App.Generator.generateEquation(window.App.Settings.generatorOptions());
       var all = eq.left.concat(eq.right);
-      // Trinôme identité (x² et constante au premier niveau, = 0) ou facteur commun.
-      if (all.some(function (n) { return n.factor && !n.isDivision; })) return false;
-      if (!eq.operator && eq.left.length >= 2 && eq.left.some(function (n) { return n.pow === 2; }) && eq.right.length === 1 && eq.right[0].coeff === 0) return false;
+      if (all.some(function (n) { return n.factor && !n.isDivision; })) out.common++;
+      // Trinôme identité (x² et autre terme au premier niveau, = 0).
+      if (!eq.operator && eq.left.length >= 2 && eq.left.some(function (n) { return n.pow === 2; }) && eq.right.length === 1 && eq.right[0].coeff === 0) out.identity++;
     }
-    return true;
+    return out;
   });
-  ok('sans factorisation : ni identité remarquable ni facteur commun', factorCheck);
+  await toggle('gen_identities');
+  let fs = await factorStats();
+  ok('sans identités : aucune identité, facteur commun toujours tiré (' + JSON.stringify(fs) + ')', fs.identity === 0 && fs.common > 0);
+  await toggle('gen_identities');
+
+  // --- Factorisation coupée : "Identités remarquables" replié, ni l'un ni l'autre tiré ---
   await toggle('gen_factoring');
+  await page.waitForTimeout(350);
+  ok('"Identités remarquables" replié sans factorisation', await page.evaluate(() =>
+    document.querySelector('#generatorOverlay input[data-setting="gen_identities"]').closest('.settings-row').classList.contains('settings-row-collapsed')));
+  fs = await factorStats();
+  ok('sans factorisation : ni identité remarquable ni facteur commun (' + JSON.stringify(fs) + ')', fs.identity === 0 && fs.common === 0);
+  await toggle('gen_factoring');
+  await page.waitForTimeout(350);
 
   // --- Double curseur : les poignées ne se croisent pas ---
   await page.focus('#generatorOverlay [data-degree="max"]');
@@ -178,6 +202,7 @@ function ok(label, cond) {
   await toggle('gen_inequality');
   const hint = await page.textContent('#generatorEmpty');
   ok('message "aucune équation" affiché (' + hint + ')', /Aucune équation/.test(hint));
+  ok('la fenêtre garde sa hauteur avec le message', Math.abs((await boxHeight()) - initialBoxHeight) < 0.5);
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
   ok('Échap ferme la fenêtre d\'options mais pas "Nouvelle équation"', await page.evaluate(() =>

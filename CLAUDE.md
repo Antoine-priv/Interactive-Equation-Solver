@@ -204,9 +204,9 @@ non-negative constant side directly (`wrapBothInSqrt` in `history.js`: `(x+3)²=
 
 The same file also drives the "Options de génération" window (`#generatorOverlay`, opened
 from the gear shown on hover inside the "Générer aléatoirement" button of the new-equation
-modal): `gen_<tag>` switches (tags in `App.Generator.TAGS`, "factoring" covering remarkable
-identities too; `data-requires` collapses a switch's row, animated, while none of the listed
-keys is on) plus a custom min/max degree double slider (`genMinDegree`/`genMaxDegree`, 1–3,
+modal): `gen_<tag>` switches (tags in `App.Generator.TAGS`; identity forms require both
+"factoring" and "identities"; `data-requires` collapses a switch's row, animated, while none
+of the listed keys is on — the box height is locked on open, see `lockBoxHeight`) plus a custom min/max degree double slider (`genMinDegree`/`genMaxDegree`, 1–3,
 thumbs follow the pointer continuously and snap to the nearest integer on release). `App.Settings.generatorOptions()` feeds
 `App.Generator.generateEquation(opts)`, which only draws from the `FORMS` catalog entries
 (`generator.js`) whose `tags` are all enabled and whose `deg` range intersects the slider,

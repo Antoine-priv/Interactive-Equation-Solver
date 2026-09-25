@@ -2196,6 +2196,9 @@ button {
 @media (prefers-reduced-motion: reduce) {
   .settings-row { transition: none; }
 }
+.settings-no-anim, .settings-no-anim * { transition: none !important; }
+/* Place réservée au message "aucune équation" (voir lockBoxHeight dans settings.js). */
+#generatorEmpty { min-height: 1.3em; }
 
 .degree-range-block { margin-top: 12px; }
 .degree-range {
@@ -2241,8 +2244,7 @@ button {
 .degree-range-fill { transition: left 0.22s cubic-bezier(0.22, 1, 0.36, 1), right 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
 .degree-range-dragging .degree-thumb,
 .degree-range-dragging .degree-range-fill { transition: transform 0.15s ease, box-shadow 0.15s ease; }
-.degree-thumb:hover,
-.degree-thumb:focus-visible { box-shadow: 0 0 0 4px var(--accent-soft-border), 0 2px 4px rgba(0, 0, 0, 0.2); outline: none; }
+.degree-thumb:focus { outline: none; }
 .degree-range-dragging .degree-thumb:focus { transform: translate(-50%, -50%) scale(1.12); }
 @media (prefers-reduced-motion: reduce) {
   .degree-thumb, .degree-range-fill { transition: none; }

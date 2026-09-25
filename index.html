@@ -117,9 +117,16 @@
     <div class="settings-group-title">Méthodes de résolution</div>
     <div class="settings-list">
       <label class="settings-row">
-        <span class="settings-label">Factorisation (facteur commun, identités remarquables)</span>
+        <span class="settings-label">Factorisation</span>
         <span class="ios-switch">
           <input type="checkbox" role="switch" data-setting="gen_factoring" />
+          <span class="ios-switch-track"></span>
+        </span>
+      </label>
+      <label class="settings-row">
+        <span class="settings-label">Identités remarquables</span>
+        <span class="ios-switch">
+          <input type="checkbox" role="switch" data-setting="gen_identities" data-requires="gen_factoring" />
           <span class="ios-switch-track"></span>
         </span>
       </label>
