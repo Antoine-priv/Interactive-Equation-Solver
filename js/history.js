@@ -2341,18 +2341,28 @@
         if (zSide.length !== 1 || Expr.isGroup(zSide[0]) || zSide[0].pow !== 0 || Expr.roundClean(zSide[0].coeff) !== 0) return null;
         var node = pSide[0];
         var allFactors;
-        if (Expr.isProductGroup(node)) {
-          // Comme pour le facteur numérique d'un FactorGroup ci-dessous (ex. "2" dans
-          // "2(x-5)=0"), un facteur purement constant (ex. "-1" dans "(x+1)(-1)=0", produit
-          // par "×(-1)" — voir wrapSideInProduct/operandFactors) ne dépend jamais de x et ne
-          // peut donc jamais s'annuler : pas de branche "-1=0" vide de sens.
-          allFactors = Expr.flattenProductFactors(node).filter(function (f) {
+        // Comme pour le facteur numérique d'un FactorGroup ci-dessous (ex. "2" dans
+        // "2(x-5)=0"), un facteur purement constant (ex. "-1" dans "(x+1)(-1)=0", produit
+        // par "×(-1)" — voir wrapSideInProduct/operandFactors) ne dépend jamais de x et ne
+        // peut donc jamais s'annuler : pas de branche "-1=0" vide de sens.
+        function productFactors(prod) {
+          return Expr.flattenProductFactors(prod).filter(function (f) {
             return !(f.length === 1 && !Expr.isGroup(f[0]) && f[0].pow === 0);
           });
+        }
+        if (Expr.isProductGroup(node)) {
+          allFactors = productFactors(node);
         } else if (Expr.isFactorGroup(node) && !node.isDivision) {
           allFactors = [];
           if (node.factor.pow !== 0) allFactors.push([node.factor]);
-          allFactors.push(node.innerTerms);
+          // "-((x-7)²)=0" (facteur -1 puis identité appliquée DANS la parenthèse) : le
+          // produit intérieur se décompose en ses propres facteurs, comme s'il était seul,
+          // plutôt que de donner une branche "(x-7)²=0" qui n'a fait que retirer le signe.
+          if (node.innerTerms.length === 1 && Expr.isProductGroup(node.innerTerms[0])) {
+            allFactors = allFactors.concat(productFactors(node.innerTerms[0]));
+          } else {
+            allFactors.push(node.innerTerms);
+          }
         } else {
           return null;
         }
