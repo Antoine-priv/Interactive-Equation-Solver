@@ -47,6 +47,26 @@ function ok(label, cond) {
 
   await page.screenshot({ path: `${SCRATCH}/paren3_after_confirm.png` });
 
+  // Un membre réduit à un nombre négatif multiplié par une expression : le signe remonte
+  // sur le produit, pour afficher "-4(x-1)" et non "(-4)(x-1)".
+  await page.evaluate(() => {
+    window.App.History.startNewEquation(window.App.Parser.parseLatexEquation('\\frac{8}{x-1}=-4'));
+    window.App.History.selectOp('expr');
+    window.App.History.setExprChainText('\\times(x-1)');
+    window.App.History.confirm();
+  });
+  await page.waitForTimeout(150);
+  const negStep = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0]);
+  console.log('equation apres ×(x-1):', JSON.stringify(negStep.equation));
+  ok('left side cancels to 8', JSON.stringify(negStep.equation.left) === JSON.stringify([{ coeff: 8, pow: 0 }]));
+  ok('right side is -4(x-1): sign pulled out of the leading factor',
+    JSON.stringify(negStep.equation.right) === JSON.stringify([{ sign: -1, factors: [
+      { terms: [{ coeff: 4, pow: 0 }], exponent: 1 },
+      { terms: [{ coeff: 1, pow: 1 }, { coeff: -1, pow: 0 }], exponent: 1 }] }]));
+  const negLatex = await page.evaluate(() => window.App.Expr.nodeLatex(
+    window.App.History.getSteps().slice(-1)[0].equation.right[0], true));
+  ok('renders as -4(x-1), no parenthesized (-4)', /^-4\\left\(/.test(negLatex));
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;

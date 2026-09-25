@@ -619,7 +619,17 @@
     }
     var base = operandFactors(side);
     var add = operandFactors(multiplierTerms);
-    return [{ sign: base.sign * add.sign, factors: canonicalizeFactors(base.factors.concat(add.factors)) }];
+    var sign = base.sign * add.sign;
+    var factors = canonicalizeFactors(base.factors.concat(add.factors));
+    // Premier facteur = un seul terme négatif (ex. "-4" multiplié par "(x-1)") : son signe
+    // remonte sur le ProductGroup, pour afficher "-4(x-1)" plutôt que "(-4)(x-1)" (voir
+    // groupSlotLatex, qui parenthèse tout facteur rendu avec un "-" en tête).
+    var first = factors[0];
+    if (first.exponent === 1 && first.terms.length === 1 && !isGroup(first.terms[0]) && first.terms[0].coeff < 0) {
+      factors[0] = { terms: [{ coeff: -first.terms[0].coeff, pow: first.terms[0].pow }], exponent: 1 };
+      sign = -sign;
+    }
+    return [{ sign: sign, factors: factors }];
   }
 
   // Fusionne (simplifie) les noeuds aux indices `indices`. La sélection peut mélanger des
