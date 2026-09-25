@@ -154,7 +154,7 @@
 | m5 | Le faux ami | `(x + 3)(x + 1)/(x + 3) = 0` | −3 annule le numérateur mais est interdite | 4 | m4 | Badge « Chasseur d'interdits » · Piège : Écrire S = {−3 ; −1} au lieu de S = {−1}. Le niveau exige la condition d'existence avant de valider. |
 | m6 | Le faux ami caché | `(x² − 9)/(x + 3) = 0` | Le même piège, après factorisation | 5 | m5 | Piège : Même valeur interdite, moins visible. |
 | m7 | Racine d'expression | `√(x + 2) = 3` | Radicande ≥ 0 | 3 | m6 |  |
-| m8 | Les jumeaux | `√x = 0   et   1/√(1/x) = 0` | Même expression après simplification, domaines différents : [0 ; +∞[ contre ]0 ; +∞[ | 4 | m7 | Piège : La première donne S = {0}, la seconde S = ∅. · **À développer :** Condition d'existence d'un radicande qui est lui-même un quotient (√(1/x)). |
+| m8 | Les jumeaux | `√x = 0   et   √x·√x/√x = 0` | La 2e se simplifie en √x = 0 (si √x ≠ 0) : même forme, mais domaines différents, [0 ; +∞[ contre ]0 ; +∞[ | 4 | m7 | Piège : La première donne S = {0}, la seconde S = ∅. · Source : Inspiré de √x et 1/√(1/x) |
 | mB | Épreuve du Marais | `(x − 6)√(x − 8) = 0` | Produit nul et domaine | 4 | m8 | Épreuve · Piège : x = 6 est hors du domaine. |
 
 ### La Citadelle — Tableau de signes
@@ -206,8 +206,9 @@ est accepté tel quel par le tableau de signes (`Expr.extractSignChartFactors`).
    3 − x) se simplifie aussi, en changeant le signe. Niveaux m5 et o2. Le parcours
    complet de o1 (factoriser f et g dans la fraction, puis simplifier) reste à dérouler
    dans l'app.
-3. **Condition d'existence d'un radicande qui est un quotient** (`√(1/x)`, m8) : à faire,
-   la méthode reste à choisir (voir les questions ouvertes).
+3. **√(1/x)** : abandonné le 2026-09-25, sans évolution de l’app. Le niveau m8 compare
+   √x = 0 et √x·√x/√x = 0. La 2e se simplifie en √x = 0 (« si √x ≠ 0 »), mais son
+   domaine est x > 0, donc S = ∅. Vérifié dans l’app (test `tests/sqrt_twin_domains.js`).
 4. **Identités remarquables avec une puissance de x** : FAIT le 2026-09-25 (commit
    `6cde151`). « a » peut valoir k·xᵖ, par exemple x⁴ − 25 = (x² − 5)(x² + 5) avec a = x²
    (niveau g6). L’exercice 4 sert seulement d’inspiration pour des équations de la Grotte.
@@ -334,13 +335,10 @@ Maquette : `maquette.html`, dans ce dossier.
 - Quitter un niveau en cours le fait recommencer.
 - Les seuils ★★★ viennent d'une solution de référence enregistrée pour chaque niveau.
 
+- m8 : la variante √x·√x/√x garde la même forme que √x une fois simplifiée.
+- Problème en plusieurs parties : chaque partie repart de la forme simplifiée obtenue à la
+  partie précédente.
+
 ## Questions ouvertes
 
-1. √(1/x) (m8) : quelle méthode pour « 1/x > 0 » dans une colonne « Condition
-   d'existence » ?
-   - Autoriser le tableau de signes dans cette colonne (fidèle à la méthode du lycée,
-     mais c'est le plus gros chantier).
-   - Remplacer g par x/√x, qui se simplifie aussi en √x, avec Df = ]0 ; +∞[ contre
-     [0 ; +∞[ : déjà possible avec l'app actuelle.
-2. Problème en plusieurs parties (o1 → o3) : chaque partie repart-elle de h(x) tel que
-   donné, ou de la forme simplifiée obtenue dans la partie précédente ?
+Aucune pour l’instant.

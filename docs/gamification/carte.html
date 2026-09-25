@@ -244,7 +244,7 @@ pre{background:var(--surface);border:1px solid var(--border);border-radius:14px;
     <div class="grid">
       <div class="card"><h3>Facteur de signe constant</h3><p>Le tableau de signes n'accepte que des facteurs de degré 1 au plus. Il faut une ligne « x² + 1 : toujours + » pour l'exercice 23 question 2. Le numérateur y est donné déjà factorisé : pas de factorisation de trinôme.</p></div>
       <div class="card"><h3>Simplifier un quotient</h3><p>« Simplifier » ne supprime pas encore un facteur commun au numérateur et au dénominateur. Pour l'exercice 24, il faut passer de h à (x + 5)/(4 − x) en gardant x ≠ 2/3 visible, comme le « si (…) ≠ 0 » actuel.</p></div>
-      <div class="card"><h3>Racine d'un quotient</h3><p>La condition d'existence ne traite que des radicandes linéaires. √(1/x) demande de chaîner deux conditions (x ≠ 0 et 1/x ≥ 0) pour le problème des jumeaux.</p></div>
+
       <div class="card"><h3>Problèmes « Df seul » et en plusieurs parties</h3><p>Un niveau « Df » est réussi quand toutes ses colonnes « Condition d'existence » sont résolues, sans équation à finir. Un problème en plusieurs parties partage l'énoncé f, g, h entre plusieurs nœuds.</p></div>
 
     </div>
@@ -320,7 +320,7 @@ var N = [
  {id:'m5',x:1295,y:220,z:'marais',req:['m4'],t:'Le faux ami',eq:'(x + 3)(x + 1)/(x + 3) = 0',learn:'−3 annule le numérateur mais est interdite',par:4,badge:'Chasseur d\'interdits',trap:'Écrire S = {−3 ; −1} au lieu de S = {−1}. Le niveau exige la condition d\'existence avant de valider.'},
  {id:'m6',x:1210,y:235,z:'marais',req:['m5'],t:'Le faux ami caché',eq:'(x² − 9)/(x + 3) = 0',learn:'Le même piège, après factorisation',par:5,trap:'Même valeur interdite, moins visible.'},
  {id:'m7',x:1170,y:310,z:'marais',req:['m6'],t:'Racine d\'expression',eq:'√(x + 2) = 3',learn:'Radicande ≥ 0',par:3},
- {id:'m8',x:1260,y:330,z:'marais',req:['m7'],t:'Les jumeaux',eq:'√x = 0   et   1/√(1/x) = 0',learn:'Même expression après simplification, domaines différents : [0 ; +∞[ contre ]0 ; +∞[',par:4,trap:'La première donne S = {0}, la seconde S = ∅.',app:'Condition d\'existence d\'un radicande qui est lui-même un quotient (√(1/x)).'},
+ {id:'m8',x:1260,y:330,z:'marais',req:['m7'],t:'Les jumeaux',eq:'√x = 0   et   √x·√x/√x = 0',learn:'La 2e se simplifie en √x = 0 (si √x ≠ 0) : même forme, mais domaines différents, [0 ; +∞[ contre ]0 ; +∞[',par:4,src:'Inspiré de √x et 1/√(1/x)',trap:'La première donne S = {0}, la seconde S = ∅.'},
  {id:'mB',x:1350,y:300,z:'marais',req:['m8'],t:'Épreuve du Marais',eq:'(x − 6)√(x − 8) = 0',learn:'Produit nul et domaine',par:4,boss:1,trap:'x = 6 est hors du domaine.'},
 
  {id:'s1',x:1250,y:430,z:'cit',req:['iB','pB'],t:'Signe d\'un produit',eq:'(x − 1)(x + 3) > 0',learn:'Lire un tableau de signes',feat:'« Tableau de signes »',par:3},
