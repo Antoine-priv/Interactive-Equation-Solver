@@ -777,6 +777,8 @@
         }
       }
     });
+    var zeroed = false;
+    var nonZero = [];
     indices.forEach(function (i) {
       var n = side[i];
       if (!n) return;
@@ -784,6 +786,17 @@
       if (!isGroup(n)) { flat.push(i); return; }
       if (opts && opts.inner === false) return;
       var s = simplifyInsideGroup(n);
+      // Fraction de numérateur nul (ex. "0/(x+5)", éventuellement une fois l'intérieur
+      // simplifié) : vaut 0, à condition que son dénominateur ne s'annule pas — réserve
+      // gardée dans `nonZero` (dénominateurs dépendant de x) pour l'étiquette.
+      if (isZeroNumeratorQuotient(s)) {
+        out[i] = { coeff: 0, pow: 0 };
+        flat.push(i);
+        zeroed = true;
+        var den = s.factorTerms ? s.factorTerms : [s.factor];
+        if (sideHasVariable(den)) nonZero.push(cloneSide(den));
+        return;
+      }
       if (JSON.stringify(s) !== JSON.stringify(n)) { out[i] = s; acted.push(i); }
     });
     var partialDesc = null;
@@ -800,15 +813,33 @@
           : { sign: 1, factors: picked } };
       }
     }
-    if (flat.length < 2) flat = [];
+    // Un "0" issu d'une fraction nulle passe aussi par simplifyNodes, même seul : il y
+    // disparaît s'il reste autre chose sur le membre.
+    if (flat.length < 2 && !zeroed) flat = [];
     if (flat.length === 0 && acted.length === 0 && !partialDesc) return null;
     var descIdx = flat.concat(acted).sort(function (a, b) { return a - b; });
     var terms = descIdx.map(function (i) { return side[i]; });
     if (partialDesc) terms.push(partialDesc.node);
     // Les simplifications intérieures ne changent pas la longueur du membre : les indices
     // des termes simples restent valides pour simplifyNodes.
-    if (flat.length >= 2) out = simplifyNodes(out, flat);
-    return { side: out, terms: terms };
+    if (flat.length >= 2 || zeroed) out = simplifyNodes(out, flat);
+    var res = { side: out, terms: terms };
+    if (nonZero.length) res.nonZero = nonZero;
+    return res;
+  }
+
+  function isZeroNumeratorQuotient(node) {
+    return isFactorGroup(node) && !!node.isDivision && node.innerTerms.length === 1 &&
+      !isGroup(node.innerTerms[0]) && roundClean(node.innerTerms[0].coeff) === 0;
+  }
+
+  // Descripteur d'étape "Simplifier" (voir formatOpLabel dans render.js) d'un résultat de
+  // simplifySelection : `nonZero` (dénominateurs supposés non nuls) rend l'étiquette
+  // conditionnelle, "si (…)≠0".
+  function simplifyOpDesc(res) {
+    var desc = { type: 'simplify', terms: res.terms };
+    if (res.nonZero) desc.nonZero = res.nonZero;
+    return desc;
   }
 
   // Facteur commun quand la sélection est déjà DES FactorGroup numériques (ex.
@@ -1765,6 +1796,7 @@
     simplifyNodes: simplifyNodes,
     simplifyInsideGroup: simplifyInsideGroup,
     simplifySelection: simplifySelection,
+    simplifyOpDesc: simplifyOpDesc,
     factorNodes: factorNodes,
     factorRemarkableIdentityChoice: factorRemarkableIdentityChoice,
     factorDifferenceOfSquaresFromGroup: factorDifferenceOfSquaresFromGroup,

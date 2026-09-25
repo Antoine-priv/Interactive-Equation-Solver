@@ -328,8 +328,13 @@
   function isZeroRiskOp(op) {
     return (op.symbol === '×' || op.symbol === '÷') && !!op.terms && Expr.sideHasVariable(op.terms);
   }
-  function descHasZeroRisk(desc) {
+  function exprHasZeroRisk(desc) {
     return !!desc && desc.type === 'expr' && !!desc.ops && desc.ops.some(isZeroRiskOp);
+  }
+  // Aussi "Simplifier" une fraction de numérateur nul dont le dénominateur dépend de x
+  // (desc.nonZero, voir Expr.simplifySelection) : étiquette orange, "si (…)≠0".
+  function descHasZeroRisk(desc) {
+    return exprHasZeroRisk(desc) || (!!desc && desc.type === 'simplify' && !!desc.nonZero);
   }
 
   // Corps LaTeX de la réserve ("valide si (x)≠0", potentiellement plusieurs conditions
@@ -348,7 +353,7 @@
   }
 
   function exprRiskyConditionsLatex(desc) {
-    if (!descHasZeroRisk(desc)) return null;
+    if (!exprHasZeroRisk(desc)) return null;
     var riskyOperands = [];
     desc.ops.forEach(function (op) {
       if (!isZeroRiskOp(op)) return;
@@ -367,7 +372,14 @@
     if (desc.type === 'simplify') {
       if (!desc.terms || desc.terms.length === 0) return '\\text{simplifier}';
       var simplifiedLatex = desc.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
-      return '\\text{simplifier }' + simplifiedLatex;
+      var nonZeroLatex = '';
+      if (desc.nonZero) {
+        nonZeroLatex = '\\text{ si }' + desc.nonZero.map(function (den) {
+          var denLatex = den.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
+          return (isSelfDelimitedOperand(den) ? denLatex : '\\left(' + denLatex + '\\right)') + '\\neq0';
+        }).join('\\text{ et }');
+      }
+      return '\\text{simplifier }' + simplifiedLatex + nonZeroLatex;
     }
     if (desc.type === 'expand') {
       var bodyExp = expandDescBody(desc);

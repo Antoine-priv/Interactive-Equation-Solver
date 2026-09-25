@@ -1325,14 +1325,14 @@
         if (!innerRes && !otherRes) return false;
         if (innerRes) {
           outD[d.side] = applyDrilledArray(eq, d, innerRes.side)[d.side];
-          innerOpDesc = { type: 'simplify', terms: innerRes.terms };
+          innerOpDesc = Expr.simplifyOpDesc(innerRes);
         }
         // L'autre membre se simplifie indépendamment, dans la MÊME étape (voir
         // computeSelectionInfo dans toolbar.js) — exactement comme applySimplifyBoth le
         // fait déjà pour une sélection libre gauche+droite classique.
         if (otherRes) {
           outD[otherSide] = otherRes.side;
-          otherOpDesc = { type: 'simplify', terms: otherRes.terms };
+          otherOpDesc = Expr.simplifyOpDesc(otherRes);
         }
         var stepD = { equation: outD, opLeft: null, opRight: null };
         stepD[d.side === 'left' ? 'opLeft' : 'opRight'] = innerOpDesc;
@@ -1728,11 +1728,11 @@
             var otherResPrev = Expr.simplifySelection(last[otherSidePrev], otherIndicesPrev);
             if (innerResPrev) {
               eqPrevD[dPrev.side] = applyDrilledArray(last, dPrev, innerResPrev.side)[dPrev.side];
-              innerDescPrev = { type: 'simplify', terms: innerResPrev.terms };
+              innerDescPrev = Expr.simplifyOpDesc(innerResPrev);
             }
             if (otherResPrev) {
               eqPrevD[otherSidePrev] = otherResPrev.side;
-              otherDescPrev = { type: 'simplify', terms: otherResPrev.terms };
+              otherDescPrev = Expr.simplifyOpDesc(otherResPrev);
             }
             var stepPrevD = { equation: eqPrevD, opLeft: null, opRight: null };
             stepPrevD[dPrev.side === 'left' ? 'opLeft' : 'opRight'] = innerDescPrev;

@@ -85,7 +85,9 @@ Equations are `{ left: Side, right: Side }`. A `Side` is `Array<Node>`. A `Node`
   to freely simplify/factor/expand the radicand before resolving it.
 
 `Expr.isGroup(node)` is `isFactorGroup || isProductGroup || isSqrtGroup`; group nodes can't be
-directly simplified/factored (must be expanded first). All mutating operations on a `Side`
+directly simplified/factored (must be expanded first) — except a quotient whose numerator
+is 0, which "Simplifier" turns into 0 (`Expr.simplifySelection`; an x-dependent denominator
+is kept in the step's `desc.nonZero`, rendered as an orange "si (…)≠0" label). All mutating operations on a `Side`
 live in `expression.js` and return new arrays (never mutate in place — always clone via `cloneNode`/`cloneSide`).
 
 ## History engine (`js/history.js`)

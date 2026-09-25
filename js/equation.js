@@ -64,12 +64,12 @@
     var left = Expr.simplifySelection(eq.left, leftIndices || [], factorSel && factorSel.left);
     if (left) {
       out.left = left.side;
-      opLeft = { type: 'simplify', terms: left.terms };
+      opLeft = Expr.simplifyOpDesc(left);
     }
     var right = Expr.simplifySelection(eq.right, rightIndices || [], factorSel && factorSel.right);
     if (right) {
       out.right = right.side;
-      opRight = { type: 'simplify', terms: right.terms };
+      opRight = Expr.simplifyOpDesc(right);
     }
     return { equation: out, opLeft: opLeft, opRight: opRight };
   }
