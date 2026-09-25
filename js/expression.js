@@ -148,8 +148,13 @@
   }
 
   // Arrondit pour éviter les artefacts de flottants (0.1+0.2 etc.)
+  // Garde 9 décimales, pour qu'un tiers multiplié par 3 redonne 1 (arrondir à 6 décimales
+  // stockait 1/3 en 0,333333, et ×3 donnait 0,999999). Une valeur à moins de 5·10⁻⁹ d'un
+  // nombre à 6 décimales est ramenée à ce nombre (0,999999999 -> 1).
   function roundClean(n) {
-    return Math.round(n * 1e6) / 1e6;
+    var r9 = Math.round(n * 1e9) / 1e9;
+    var r6 = Math.round(n * 1e6) / 1e6;
+    return Math.abs(r9 - r6) < 5e-9 ? r6 : r9;
   }
 
   // Nombre minimal de décimales (0 à 6) nécessaires pour représenter `n` exactement.
