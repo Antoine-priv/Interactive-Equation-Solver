@@ -11,8 +11,7 @@
   }
 
   function isModalOpen() {
-    var overlay = document.getElementById('modalOverlay');
-    return overlay && !overlay.hidden;
+    return !!document.querySelector('.modal-overlay:not([hidden])');
   }
 
   function init() {

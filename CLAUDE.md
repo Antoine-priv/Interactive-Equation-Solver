@@ -29,7 +29,7 @@ in `(function (App) { ... })(window.App = window.App || {});` IIFEs.
 - Script load order in `index.html` matters and mirrors the dependency graph: `expression.js`
   → `equation.js` → `inequality.js` → `parser.js` → `generator.js` → `history.js` →
   `canvas.js` → `zoom.js` → `render.js` → `arrows.js` → `toolbar.js` → `mathKeypad.js` →
-  `keyboard.js` → `newEquationModal.js` → `theme.js` → `main.js`.
+  `keyboard.js` → `newEquationModal.js` → `theme.js` → `settings.js` → `main.js`.
 - No lint/build commands exist for this project. A regression test suite does exist (see
   below) — run the targeted test after any change to `js/*.js`.
 
@@ -184,6 +184,16 @@ A GeoGebra/Desmos-style math input backed by MathLive.
 ## Theming
 
 CSS custom properties on `:root`, redefined for dark mode both via `@media (prefers-color-scheme: dark)` and via `:root[data-theme="dark"]`. `js/theme.js` persists the explicit choice to `localStorage` and applies it synchronously.
+
+## Settings (`js/settings.js`)
+
+Gear button (`#settingsBtn`, top-right, right of the theme toggle) opens `#settingsOverlay`,
+one row per boolean setting with an iOS-style switch (`input[data-setting="<key>"]`).
+`App.Settings.get/set` persists to `localStorage` (`equations-settings`), defaults in
+`DEFAULTS`. `autoSimplify` ("Toujours simplifier après une opération", off by default):
+`commitExprOps` (keypad Opération and drag-across) pushes an extra `autoSimplified` step
+simplifying every non-group term of each side (`pushAutoSimplifyStep`); `undo()` pops it
+together with its Opération step.
 
 ## Constraints to preserve
 

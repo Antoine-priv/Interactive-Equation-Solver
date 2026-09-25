@@ -158,11 +158,13 @@ button {
 #undoBtn:active:not(:disabled) { transform: translateY(0); }
 #undoBtn:disabled { opacity: 0.4; cursor: default; }
 
-/* ---- Bouton flottant clair/sombre, en haut à droite ---- */
-#themeToggleBtn {
+/* ---- Boutons flottants clair/sombre et réglages (engrenage), en haut à droite ----
+   Même écart que #newEquationBtn/#undoBtn à gauche : l'engrenage tout à droite, la
+   bascule de thème juste à sa gauche. */
+#themeToggleBtn, #settingsBtn {
   position: fixed;
   top: 22px;
-  right: 22px;
+  right: 78px;
   width: 44px;
   height: 44px;
   border-radius: var(--radius-sm);
@@ -177,8 +179,9 @@ button {
   transition: background 0.15s ease, color 0.15s ease, transform 0.1s ease;
   z-index: 30;
 }
-#themeToggleBtn:hover { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
-#themeToggleBtn:active { transform: translateY(0); }
+#settingsBtn { right: 22px; }
+#themeToggleBtn:hover, #settingsBtn:hover { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
+#themeToggleBtn:active, #settingsBtn:active { transform: translateY(0); }
 
 /* ---- Boutons flottants zoom avant/arrière (loupe), en bas à droite ----
    Même gabarit/langage visuel que #undoBtn (surface neutre) : deux actions secondaires
@@ -2097,6 +2100,66 @@ button {
   transition: background 0.15s ease, color 0.15s ease;
 }
 .modal-close:hover { background: var(--accent-soft) !important; color: var(--accent) !important; }
+
+/* ---- Modale "Réglages" (voir js/settings.js) : une ligne par paramètre, libellé à
+   gauche, interrupteur style iOS à droite. ---- */
+.settings-list {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  cursor: pointer;
+}
+.settings-row + .settings-row { border-top: 1px solid var(--border); }
+.settings-label { font-size: 0.95rem; }
+
+.ios-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 51px;
+  height: 31px;
+}
+.ios-switch input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 1;
+}
+.ios-switch-track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: var(--border);
+  transition: background 0.2s ease;
+}
+.ios-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s ease;
+}
+.ios-switch input:checked + .ios-switch-track { background: #34c759; }
+.ios-switch input:checked + .ios-switch-track::after { transform: translateX(20px); }
+.ios-switch input:focus-visible + .ios-switch-track { box-shadow: 0 0 0 3px var(--accent-soft-border); }
+@media (prefers-reduced-motion: reduce) {
+  .ios-switch-track, .ios-switch-track::after { transition: none; }
+}
 
 /* ---- Clavier mathématique unifié (js/mathKeypad.js) ---- */
 .math-keypad-panel {

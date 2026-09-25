@@ -189,6 +189,7 @@
     App.Keyboard.init();
     App.Modal.init();
     App.Theme.init();
+    App.Settings.init();
     App.Render.init();
     initUndoButton();
     initDrillDismissal();
