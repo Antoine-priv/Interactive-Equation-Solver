@@ -198,7 +198,9 @@ one row per boolean setting with an iOS-style switch (`input[data-setting="<key>
 `DEFAULTS`. `autoSimplify` ("Toujours simplifier après une opération", off by default):
 `commitExprOps` (keypad Opération and drag-across) simplifies every non-group term of each
 side of the result (`autoSimplify`) within the SAME step — one arrow labelled with the
-operation, no visible "Simplifier" step.
+operation, no visible "Simplifier" step. It also makes "Racine carrée" step 1 compute a
+non-negative constant side directly (`wrapBothInSqrt` in `history.js`: `(x+3)²=9` →
+`√((x+3)²)=3`).
 
 ## Constraints to preserve
 

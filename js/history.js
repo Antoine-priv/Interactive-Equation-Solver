@@ -3186,6 +3186,23 @@
       return { equations: [eqPosB, eqNegB] };
     }
 
+    // Étape 1 de "Racine carrée" (voir confirmSquareRoot/previewSquareRoot) : enveloppe
+    // les deux membres dans "√(...)". Réglage "Toujours simplifier après une opération"
+    // (voir autoSimplify) : le membre constant non négatif est calculé dans la MÊME étape
+    // ("(x+3)²=9" -> "√((x+3)²)=3") — une constante négative reste "√(-9)", l'erreur
+    // n'apparaissant qu'à l'étape 2 comme sans le réglage.
+    function wrapBothInSqrt(eq) {
+      var out = { left: Expr.wrapSideInSqrt(eq.left), right: Expr.wrapSideInSqrt(eq.right) };
+      if (!(App.Settings && App.Settings.get('autoSimplify'))) return out;
+      ['left', 'right'].forEach(function (side) {
+        var info = detectSquareRootSide(out[side]);
+        if (info && info.kind === 'constant' && info.constant >= 0) {
+          out[side] = [{ coeff: Expr.roundClean(Math.sqrt(info.constant)) * info.resultSign, pow: 0 }];
+        }
+      });
+      return out;
+    }
+
     // Aperçu en lecture seule pour "Racine carrée" (voir previewProduitNul ci-dessus pour
     // le même principe côté "Produit nul") : les mêmes équations que confirmSquareRoot
     // produirait, sans rien modifier. À l'étape 1 (envelopper), une SEULE équation (jamais
@@ -3197,9 +3214,7 @@
     function previewSquareRoot() {
       if (activeChild()) return activeChild().previewSquareRoot();
       var eq = leaf.lastEquation();
-      if (detectSquareRootUnwrapped(eq)) {
-        return [{ left: Expr.wrapSideInSqrt(eq.left), right: Expr.wrapSideInSqrt(eq.right) }];
-      }
+      if (detectSquareRootUnwrapped(eq)) return [wrapBothInSqrt(eq)];
       var action = squareRootSimplifyAction(eq, leaf.getPending());
       if (!action) return null;
       var result = computeSquareRootSimplify(eq, action);
@@ -3225,8 +3240,7 @@
       // bas) pour y simplifier/factoriser/développer, puis sélectionner un membre (ou les
       // deux) et cliquer "Simplifier" pour l'étape 2.
       if (detectSquareRootUnwrapped(eq)) {
-        var wrapped = { left: Expr.wrapSideInSqrt(eq.left), right: Expr.wrapSideInSqrt(eq.right) };
-        leaf.pushStep(wrapped, { type: 'sqrt' });
+        leaf.pushStep(wrapBothInSqrt(eq), { type: 'sqrt' });
         return true;
       }
       // Étape 2 : voir squareRootSimplifyAction pour le détail des 3 modes ('calc'/'split'
