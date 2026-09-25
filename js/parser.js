@@ -348,8 +348,12 @@
           pos = curPosB;
           continue;
         }
-        if (factorsB.length < 2 && factorsB[0].exponent < 2) {
-          throw new Error('Un groupe entre parenthèses doit être suivi d\'un second facteur "(...)" ou d\'un carré "^2".');
+        // Une parenthèse seule, éventuellement signée ("-(x+4)", "9-(-x^2)") : la même
+        // chose que "1(x+4)", un FactorGroup de facteur 1 (affiché "(x+4)").
+        if (factorsB.length === 1 && factorsB[0].exponent === 1) {
+          nodes.push({ sign: sign, factor: { coeff: 1, pow: 0 }, innerTerms: factorsB[0].terms });
+          pos = curPosB;
+          continue;
         }
         nodes.push({ sign: sign, factors: App.Expr.canonicalizeFactors(factorsB) });
         pos = curPosB;
