@@ -734,6 +734,19 @@
     return c;
   }
 
+  // Clé de comparaison d'un groupe multiplié par `s` (±1) : le signe est reporté dans le
+  // coefficient d'un FactorGroup numérique, pour que "-2(x+1)" se reconnaisse que son
+  // signe soit porté par `sign` ou par le facteur.
+  function signedGroupKey(node, s) {
+    var c = cloneNode(node);
+    c.sign = (c.sign || 1) * s;
+    if (isFactorGroup(c) && c.factor && !c.factorTerms) {
+      c.factor = { coeff: roundClean(c.factor.coeff * c.sign), pow: c.factor.pow };
+      c.sign = 1;
+    }
+    return JSON.stringify(c);
+  }
+
   // "Simplifier" sur une sélection libre d'un membre : les termes simples sélectionnés
   // (au moins 2) fusionnent comme avant (simplifyNodes), et chaque GROUPE sélectionné se
   // simplifie de l'intérieur (simplifyInsideGroup) — un groupe dont l'intérieur est déjà
@@ -741,14 +754,35 @@
   // pending.selectedFactors) ne simplifie que ces facteurs-là d'un produit. Renvoie
   // { side, terms } (terms = noeuds effectivement simplifiés, pour l'étiquette), ou null
   // s'il n'y a rien à simplifier.
-  function simplifySelection(side, indices, factorSel) {
+  //
+  // Deux groupes sélectionnés strictement opposés (ex. "2(x+1)-2(x+1)", typiquement après
+  // avoir glissé un groupe de l'autre côté du "=") s'annulent : chacun devient un "0" qui
+  // fusionne avec les termes simples (simplifyNodes le fait disparaître, ou garde un "0"
+  // si le membre n'a plus rien d'autre). `opts.inner === false` ne simplifie pas
+  // l'intérieur des groupes (voir autoSimplify dans history.js).
+  function simplifySelection(side, indices, factorSel, opts) {
     var out = cloneSide(side);
     var acted = [];
     var flat = [];
+    var cancelled = {};
+    indices.forEach(function (i) {
+      var n = side[i];
+      if (!n || !isGroup(n) || cancelled[i]) return;
+      var negKey = signedGroupKey(n, -1);
+      for (var k = 0; k < indices.length; k++) {
+        var j = indices[k];
+        if (j !== i && !cancelled[j] && side[j] && isGroup(side[j]) && signedGroupKey(side[j], 1) === negKey) {
+          cancelled[i] = cancelled[j] = true;
+          return;
+        }
+      }
+    });
     indices.forEach(function (i) {
       var n = side[i];
       if (!n) return;
+      if (cancelled[i]) { out[i] = { coeff: 0, pow: 0 }; flat.push(i); return; }
       if (!isGroup(n)) { flat.push(i); return; }
+      if (opts && opts.inner === false) return;
       var s = simplifyInsideGroup(n);
       if (JSON.stringify(s) !== JSON.stringify(n)) { out[i] = s; acted.push(i); }
     });

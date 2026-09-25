@@ -71,9 +71,16 @@ function ok(label, cond) {
   await start('3x+5=11');
   const seen = await dragTo(lastRowSel() + ' .side[data-side="left"] .term[data-index="1"]', 'right', () => ({
     target: !!document.querySelector('.side[data-side="right"].drag-cross-target'),
-    badge: !!document.querySelector('.drag-ghost .drag-cross-badge .katex')
+    badge: !!document.querySelector('.drag-ghost .drag-cross-badge .katex'),
+    // Le terme du membre d'arrivée sous le curseur ne se surligne pas : le terme lâché ne
+    // le remplace pas, il s'ajoute à la fin du membre.
+    hovered: Array.prototype.map.call(document.querySelectorAll('.side[data-side="right"].drag-cross-target :hover'),
+      function (el) { return getComputedStyle(el).backgroundColor; })
   }));
   ok('crossing highlights the target side', seen.target);
+  ok('a term of the target side is under the cursor', seen.hovered.length > 0);
+  ok('hovered terms of the target side are not highlighted',
+    seen.hovered.every(function (c) { return c === 'rgba(0, 0, 0, 0)' || c === 'transparent'; }));
   ok('crossing shows the operation badge on the ghost', seen.badge);
   let s = await state();
   ok('new step pushed', s.n === 2);
@@ -187,6 +194,15 @@ function ok(label, cond) {
   await dragTo(lastRowSel() + ' .side[data-side="left"] .factor-slot[data-drag-id="0"]', 'right');
   s = await state();
   ok('inequality: dividing by an expression is refused', s.n === 1 && !!s.error);
+
+  // --- 7. "Toujours simplifier" : un groupe glissé de l'autre côté s'annule sur son membre ---
+  await page.evaluate(() => window.App.Settings.set('autoSimplify', true));
+  await start('2(-5x+14+2)=3+6x');
+  await dragTo(lastRowSel() + ' .side[data-side="left"] .term[data-index="0"]', 'right');
+  s = await state();
+  ok('auto-simplify: dragged group cancels out, its side becomes 0', s.n === 2 &&
+    JSON.stringify(s.left) === JSON.stringify([T(0, 0)]) && s.right.length === 3 && s.right[2].sign === -1);
+  await page.evaluate(() => window.App.Settings.set('autoSimplify', false));
 
   ok('no page errors', errs.length === 0);
   if (errs.length) console.log(errs.join('\n'));

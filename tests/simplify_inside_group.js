@@ -98,6 +98,15 @@ function ok(label, cond) {
   await page.waitForTimeout(150);
   ok('drilled simplify still works', await lastLeft() === JSON.stringify([{ sign: 1, factor: { coeff: 3, pow: 0 }, innerTerms: [{ coeff: 1, pow: 1 }, { coeff: -3, pow: 0 }] }]));
 
+  // 7) Deux groupes opposés sélectionnés s'annulent.
+  await start('2(x+1)-2(x+1)=3');
+  await select('left', 0);
+  await select('left', 1);
+  ok('opposite groups: Simplifier enabled', await canSimplify());
+  await page.click('button[data-op="simplify"]');
+  await page.waitForTimeout(150);
+  ok('opposite groups cancel to 0', await lastLeft() === JSON.stringify([{ coeff: 0, pow: 0 }]));
+
   ok('no page errors', errs.length === 0);
   if (errs.length) console.log(errs.join('\n'));
   await browser.close();

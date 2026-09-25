@@ -1141,26 +1141,22 @@
 
     // Réglage "Toujours simplifier après une opération" (voir App.Settings, settings.js) :
     // le résultat de l'étape "Opération" est directement simplifié, dans la MÊME étape (une
-    // seule flèche, étiquetée par l'opération) — sans étape "Simplifier" visible. Porte sur
-    // TOUS les termes simples (non groupés) de chaque membre, exactement ce que produirait
-    // leur sélection manuelle suivie d'un clic sur "Simplifier" (applySimplifyBoth).
+    // seule flèche, étiquetée par l'opération) — sans étape "Simplifier" visible.
     function autoSimplify(eq) {
-      function simplifiableIndices(side) {
-        var idx = [];
-        side.forEach(function (n, i) { if (!Expr.isGroup(n)) idx.push(i); });
-        if (idx.length < 2) return null;
-        var simplified;
+      // Tous les noeuds du membre : les termes simples fusionnent, et deux groupes opposés
+      // (ex. "2(x+1)-2(x+1)" après avoir glissé le groupe de l'autre côté) s'annulent —
+      // l'intérieur des groupes, lui, reste tel quel (inner:false).
+      function simplifySide(side) {
+        var idx = side.map(function (n, i) { return i; });
+        var res;
         try {
-          simplified = Expr.simplifyNodes(side, idx);
+          res = Expr.simplifySelection(side, idx, null, { inner: false });
         } catch (e) {
-          return null;
+          return side;
         }
-        return JSON.stringify(simplified) === JSON.stringify(side) ? null : idx;
+        return res ? res.side : side;
       }
-      var leftIdx = simplifiableIndices(eq.left);
-      var rightIdx = simplifiableIndices(eq.right);
-      if (!leftIdx && !rightIdx) return eq;
-      return Eq.applySimplifyBoth(eq, leftIdx, rightIdx).equation;
+      return { left: simplifySide(eq.left), right: simplifySide(eq.right) };
     }
 
     function confirm() {
