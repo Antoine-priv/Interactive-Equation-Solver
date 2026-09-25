@@ -52,17 +52,20 @@
   // sur une hitbox réduite (voir shrinkRect) : un léger chevauchement de fond entre deux
   // étiquettes est toléré, pas un chevauchement de texte.
   function avoidLabelCollisions(el, placedLabels, equationRects, ownTopRect, ownBotRect) {
-    var margin = 4;
     // el.style.top est en repère LOCAL (non mis à l'échelle, voir computeSideGeometry),
     // alors que tous les rectangles ci-dessous (getBoundingClientRect) sont en repère
     // ÉCRAN (affecté par le zoom App.Canvas, voir canvas.js) : chaque décalage calculé à
     // partir d'eux doit donc repasser en local (/scale) avant de s'ajouter à
-    // parseFloat(el.style.top).
+    // parseFloat(el.style.top) — et, inversement, les marges/insets (distances LOCALES)
+    // passer en écran (× scale) avant d'être comparés à ces rectangles.
     var scale = App.Canvas.getScale();
+    var margin = 4 * scale;
+    var insetX = LABEL_HITBOX_INSET_X * scale;
+    var insetY = LABEL_HITBOX_INSET_Y * scale;
     var guard;
     for (guard = 0; guard < 12; guard++) {
       var rect = el.getBoundingClientRect();
-      var hitbox = shrinkRect(rect, LABEL_HITBOX_INSET_X, LABEL_HITBOX_INSET_Y);
+      var hitbox = shrinkRect(rect, insetX, insetY);
       var eqCollision = findCollision(rect, equationRects, margin);
       var labelCollision = eqCollision ? null : findCollision(hitbox, placedLabels.map(function (p) { return p.hitbox; }), margin);
       var collided = eqCollision || labelCollision;
@@ -108,7 +111,7 @@
       }
     }
     var finalRect = el.getBoundingClientRect();
-    placedLabels.push({ full: finalRect, hitbox: shrinkRect(finalRect, LABEL_HITBOX_INSET_X, LABEL_HITBOX_INSET_Y) });
+    placedLabels.push({ full: finalRect, hitbox: shrinkRect(finalRect, insetX, insetY) });
   }
 
   // Géométrie partagée entre le tracé du chemin (path) et le positionnement d'une
@@ -119,8 +122,16 @@
   function computeSideGeometry(historyRect, topEl, botEl, dir) {
     var topRect = topEl.getBoundingClientRect();
     var botRect = botEl.getBoundingClientRect();
-    var topX = (dir < 0 ? topRect.left : topRect.right) - historyRect.left + dir * TEXT_GAP;
-    var botX = (dir < 0 ? botRect.left : botRect.right) - historyRect.left + dir * TEXT_GAP;
+    // Toutes les constantes en px ci-dessous (TEXT_GAP, bornes du bulge, décalage de
+    // l'étiquette dans computeLabelAnchor) sont des distances LOCALES : elles doivent
+    // passer en repère ÉCRAN (× scale) avant de se mêler aux mesures getBoundingClientRect,
+    // sinon la division finale par l'échelle (voir drawSide) les gonfle/réduit selon le
+    // zoom — et chaque nouveau rendu (ex. choisir +/− dans le "Tableau de signes")
+    // redessine alors les flèches ailleurs qu'avant le zoom.
+    var scale = App.Canvas.getScale();
+    var gap = TEXT_GAP * scale;
+    var topX = (dir < 0 ? topRect.left : topRect.right) - historyRect.left + dir * gap;
+    var botX = (dir < 0 ? botRect.left : botRect.right) - historyRect.left + dir * gap;
     // La base part un peu sous le milieu de la ligne du haut, la pointe vise un peu
     // au-dessus du milieu de la ligne du bas : l'un et l'autre restent à distance du texte.
     var topY = topRect.top + topRect.height * 0.74 - historyRect.top;
@@ -130,7 +141,7 @@
       : Math.min(historyRect.width - topX, historyRect.width - botX);
     // bulge = décalage du point de contrôle ; le renflement visuel réel d'une quadratique
     // symétrique n'est qu'environ la moitié de cette valeur.
-    var bulge = Math.max(34, Math.min(130, available * 1.15)) * dir;
+    var bulge = Math.max(34 * scale, Math.min(130 * scale, available * 1.15)) * dir;
     // Repère ÉCRAN (getBoundingClientRect, affecté par le zoom App.Canvas — voir canvas.js) :
     // ses deux consommateurs (buildPathD/computeLabelAnchor via drawSide/drawMirrorField, où
     // l'élément peint vit dans le repère LOCAL de `history` ; positionLiveField, qui
@@ -143,7 +154,7 @@
   function computeLabelAnchor(geom, dir) {
     var visualBulge = geom.bulge / 2;
     return {
-      extremeX: (geom.topX + geom.botX) / 2 + visualBulge + dir * 14,
+      extremeX: (geom.topX + geom.botX) / 2 + visualBulge + dir * 14 * App.Canvas.getScale(),
       midY: (geom.topY + geom.botY) / 2
     };
   }
@@ -201,7 +212,7 @@
     // Les libellés longs ("développer 3(2x)", "factoriser par 6") peuvent déborder de
     // l'écran (ou, dans une colonne "produit nul", de la colonne elle-même) sur les
     // membres proches du bord ; on les recale une fois leur largeur connue.
-    var margin = 6;
+    var margin = 6 * scale;
     var rect = el.getBoundingClientRect();
     var boundLeft = constrainLabels ? historyRect.left : 0;
     var boundRight = constrainLabels ? historyRect.right : window.innerWidth;
@@ -266,7 +277,7 @@
     pillEl.style.top = ((viewportY - hsRect.top) / scale + scrollTop) + 'px';
 
     // Débordement/collision : même logique que drawSide, appliquée au pavé "live".
-    var margin = 6;
+    var margin = 6 * scale;
     var rect = pillEl.getBoundingClientRect();
     var boundLeft = constrainLabels ? historyRect.left : 0;
     var boundRight = constrainLabels ? historyRect.right : window.innerWidth;
@@ -375,7 +386,7 @@
       window.katex.render(warnLatex, warnEl, { throwOnError: false, trust: true, strict: false });
     }
 
-    var margin = 6;
+    var margin = 6 * scale;
     var rect = el.getBoundingClientRect();
     var boundLeft = constrainLabels ? historyRect.left : 0;
     var boundRight = constrainLabels ? historyRect.right : window.innerWidth;
@@ -413,7 +424,9 @@
   // jamais la vraie scission confirmée (même fonction, réutilisée pour les deux).
   function drawFork(svg, history, historyRect, markerId, fromEl, toEls, labelText, placedLabels, equationRects, grow, growMarkerId) {
     var fromRect = fromEl.getBoundingClientRect();
-    var originY = fromRect.bottom - historyRect.top + 10;
+    // Marges de 10px LOCALES, passées en repère écran (voir computeSideGeometry).
+    var scale = App.Canvas.getScale();
+    var originY = fromRect.bottom - historyRect.top + 10 * scale;
 
     var destinations = toEls.map(function (toEl) {
       var toRect = toEl.getBoundingClientRect();
@@ -421,7 +434,7 @@
         rawX: toRect.left + toRect.width / 2 - historyRect.left,
         width: toRect.width,
         // Marge avant la bordure de la colonne : la pointe du triangle ne doit jamais la toucher.
-        y: toRect.top - historyRect.top - 10
+        y: toRect.top - historyRect.top - 10 * scale
       };
     });
     // Origine centrée horizontalement entre les destinations plutôt que sur le "="
@@ -454,7 +467,6 @@
     // affecté par le zoom App.Canvas) alors que `svg` et `label` vivent tous deux dans le
     // repère LOCAL de `history` (voir drawSide) : division par l'échelle courante à ce
     // point de consommation, pour le chemin comme pour l'étiquette.
-    var scale = App.Canvas.getScale();
     destinations.forEach(function (d) {
       var path = document.createElementNS(SVG_NS, 'path');
       path.setAttribute('d', buildForkBranchD(originX / scale, originY / scale, d.x / scale, d.y / scale));
