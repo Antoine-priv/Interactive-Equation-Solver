@@ -160,6 +160,7 @@
     renderBar();
     applyKeyLocks();
     App.Toolbar.render();
+    App.Coach.start(level.id);
     return true;
   }
 
@@ -167,6 +168,7 @@
     if (!run) return;
     run = null;
     hideWin();
+    App.Coach.stop();
     document.body.classList.remove('in-level');
     renderBar();
     applyKeyLocks();
@@ -236,6 +238,7 @@
     applyKeyLocks();
     App.Toolbar.render();
     showWin(stars, steps, clean, efficient);
+    App.Coach.refresh();
     if (result) {
       result.earnedBadges.forEach(function (b, i) {
         var badge = App.Levels.badge(b);
@@ -314,6 +317,7 @@
     mapBtn.innerHTML = MAP_SVG;
     mapBtn.addEventListener('click', function () { openMap(); });
 
+    App.Coach.init();
     App.Map.init({
       onPlay: function (id) { startLevel(id); },
       onFree: function () { exitLevel(); }

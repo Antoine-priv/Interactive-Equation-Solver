@@ -296,6 +296,7 @@
     opts = opts || {};
     overlay.hidden = false;
     document.body.classList.add('map-open');
+    if (App.Coach) App.Coach.refresh();
     App.Progress.setLastScreen('map');
     badgePanel.hidden = true;
     var focus = App.Levels.get(opts.focus) || (opts.unlocked && opts.unlocked.length && App.Levels.get(opts.unlocked[0])) ||
@@ -313,6 +314,7 @@
     overlay.hidden = true;
     document.body.classList.remove('map-open');
     card.hidden = true;
+    if (App.Coach) App.Coach.refresh();
   }
 
   function isOpen() { return !!overlay && !overlay.hidden; }
