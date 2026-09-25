@@ -112,11 +112,26 @@ function ok(label, cond) {
   ok('undo used: 2 stars', await page.evaluate(() => document.querySelectorAll('#levelWin [data-win-star].on').length) === 2);
 
   await page.evaluate(() => window.App.Campaign.startLevel('t3'));
-  await page.evaluate(() => { document.getElementById('newEquationBtn').click(); });
-  await page.waitForTimeout(100);
   await page.evaluate(() => { window.App.History.startNewEquation(window.App.Parser.parseEquation('x+1=2')); });
   ok('a free equation leaves the level', await page.evaluate(() => window.App.Campaign.current() === null &&
     document.getElementById('levelBar').hidden && !window.App.Campaign.isOpLocked('factor')));
+
+  // --- Export / import de la progression (réglages) ---
+  await page.evaluate(() => { document.getElementById('settingsBtn').click(); });
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#progressExport')]);
+  const exported = JSON.parse(require('fs').readFileSync(await download.path(), 'utf8'));
+  ok('export downloads a JSON file with the progress', /^progression-equations-.*\.json$/.test(download.suggestedFilename()) &&
+    exported.progress && exported.progress.levels.t1.stars === 3);
+  await page.evaluate(() => { localStorage.removeItem('equations-progress'); window.App.Progress.load(); });
+  ok('progress cleared', await page.evaluate(() => window.App.Progress.totalStars()) === 0);
+  await page.setInputFiles('#progressImportFile', { name: 'p.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) });
+  await page.waitForTimeout(200);
+  ok('import restores the progress', await page.evaluate(() => window.App.Progress.stars('t1')) === 3 &&
+    /importée/.test(await page.textContent('#progressNote')));
+  await page.setInputFiles('#progressImportFile', { name: 'x.json', mimeType: 'application/json', buffer: Buffer.from('{"foo":1}') });
+  await page.waitForTimeout(200);
+  ok('a foreign file is refused', /n'est pas/.test(await page.textContent('#progressNote')) &&
+    await page.evaluate(() => window.App.Progress.stars('t1')) === 3);
 
   ok('no page errors', errs.length === 0);
   if (errs.length) console.log(errs.join('\n'));

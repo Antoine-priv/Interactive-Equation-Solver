@@ -309,6 +309,7 @@
     winEl = document.getElementById('levelWin');
     toastEl = document.getElementById('campaignToast');
 
+    initProgressIO();
     var mapBtn = document.getElementById('mapBtn');
     mapBtn.innerHTML = MAP_SVG;
     mapBtn.addEventListener('click', function () { openMap(); });
@@ -357,6 +358,38 @@
       check();
       renderBar();
       applyKeyLocks();
+    });
+  }
+
+  // Réglages : exporter la progression dans un fichier .json, ou la réimporter.
+  function initProgressIO() {
+    var note = document.getElementById('progressNote');
+    var fileInput = document.getElementById('progressImportFile');
+    function say(text, cls) { note.textContent = text; note.className = 'progress-note' + (cls ? ' ' + cls : ''); }
+    document.getElementById('progressExport').addEventListener('click', function () {
+      var blob = new Blob([App.Progress.exportJSON()], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'progression-equations-' + App.Progress.today() + '.json';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
+      say('Fichier enregistré dans tes téléchargements.', 'ok');
+    });
+    document.getElementById('progressImport').addEventListener('click', function () { fileInput.click(); });
+    fileInput.addEventListener('change', function () {
+      var f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      var reader = new FileReader();
+      reader.onload = function () {
+        if (App.Progress.importJSON(String(reader.result))) {
+          say('Progression importée : ' + App.Progress.totalStars() + ' ★.', 'ok');
+        } else {
+          say('Ce fichier n\'est pas une progression de l\'application.', 'err');
+        }
+        fileInput.value = '';
+      };
+      reader.readAsText(f);
     });
   }
 
