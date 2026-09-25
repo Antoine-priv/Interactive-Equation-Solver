@@ -2232,3 +2232,35 @@ button {
 }
 .math-keypad-peek:hover { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
 .math-keypad-peek[hidden] { display: none; }
+
+/* Glisser un terme/facteur PAR-DESSUS le "=" (voir crossTargetSide/setDragCrossing dans
+   render.js) : le membre d'arrivée se surligne, et un badge sous le fantôme annonce
+   l'opération appliquée aux deux membres au lâcher (ex. "−3x", "÷(x+2)"). */
+.side.drag-cross-target {
+  background: var(--accent-soft);
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+.drag-cross-badge {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  margin-top: 6px;
+  padding: 2px 8px;
+  font-size: 0.6em;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+}
+/* Coefficient détachable (le "3" de "3x" seul dans son membre, voir coeffSplitLatex dans
+   render.js) : survolé, seul LUI se teinte (pas le terme entier en même temps), pour
+   montrer qu'on saisit le facteur et non le terme. */
+.coeff-slot {
+  border-radius: 6px;
+  padding: 4px 1px;
+  margin: -4px -1px;
+}
+.coeff-slot:hover { background: var(--accent-soft-border); }
+.term.selectable:not(.selected):has(.coeff-slot:hover) { background: none; }

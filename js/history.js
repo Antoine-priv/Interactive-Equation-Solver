@@ -1090,6 +1090,47 @@
       };
     }
 
+    // Applique une séquence d'opérations "Opération" (+/-/×/÷, symétrique sur les deux
+    // membres) comme nouvelle étape — partagée entre confirm() (chaîne tapée au pavé) et
+    // le glisser-déposer d'un terme/facteur par-dessus le "=" (voir dragAcross). Ne
+    // réinitialise PAS `pending` (à l'appelant de le faire) ; en cas d'échec, pose
+    // pending.error, notifie et renvoie false sans rien pousser.
+    function commitExprOps(eq, ops) {
+      // Mode inégalité (currentOperator non nul, voir sa déclaration plus haut) : ×/÷
+      // par une EXPRESSION (ops[i].terms présent, ex. "×(x+5)") reste hors-champ pour
+      // l'instant — son signe dépend de x, une inversion de sens ne peut pas se décider
+      // aveuglément comme pour un simple nombre (voir CLAUDE.md/le plan). Vérifié AVANT
+      // d'appliquer quoi que ce soit : un rejet clair plutôt qu'un résultat mal posé.
+      if (currentOperator && ops.some(function (op) { return (op.symbol === '×' || op.symbol === '÷') && op.terms; })) {
+        pending.error = 'Multiplier ou diviser par une expression n\'est pas encore pris en charge dans une inégalité.';
+        notify();
+        return false;
+      }
+      var newEqExpr;
+      try {
+        newEqExpr = Eq.applyOpSequence(eq, ops);
+      } catch (eExpr) {
+        pending.error = eExpr.message;
+        notify();
+        return false;
+      }
+      // Chaque ×/÷ par un nombre NÉGATIF (rawValue déjà signé, voir
+      // classifyMulDivOperand) inverse le sens de l'inégalité ; un nombre pair
+      // d'inversions revient au sens de départ (ex. ÷(-2) puis ×(-3) : deux
+      // inversions, sens inchangé) — voir App.Ineq.flipOperator (inequality.js).
+      // N'importe pour une équation normale (currentOperator déjà null, jamais mis à
+      // jour ici).
+      if (currentOperator) {
+        var signFlips = ops.filter(function (op) {
+          return (op.symbol === '×' || op.symbol === '÷') && typeof op.rawValue === 'number' && op.rawValue < 0;
+        }).length;
+        if (signFlips % 2 === 1) currentOperator = Ineq.flipOperator(currentOperator);
+      }
+      var opDescExpr = { type: 'expr', ops: ops };
+      pushRaw({ equation: newEqExpr, opLeft: opDescExpr, opRight: opDescExpr });
+      return true;
+    }
+
     function confirm() {
       var eq = lastEquation();
       var opType = pending.opType;
@@ -1108,38 +1149,7 @@
           notify();
           return false;
         }
-        // Mode inégalité (currentOperator non nul, voir sa déclaration plus haut) : ×/÷
-        // par une EXPRESSION (ops[i].terms présent, ex. "×(x+5)") reste hors-champ pour
-        // l'instant — son signe dépend de x, une inversion de sens ne peut pas se décider
-        // aveuglément comme pour un simple nombre (voir CLAUDE.md/le plan). Vérifié AVANT
-        // d'appliquer quoi que ce soit : un rejet clair plutôt qu'un résultat mal posé.
-        if (currentOperator && ops.some(function (op) { return (op.symbol === '×' || op.symbol === '÷') && op.terms; })) {
-          pending.error = 'Multiplier ou diviser par une expression n\'est pas encore pris en charge dans une inégalité.';
-          notify();
-          return false;
-        }
-        var newEqExpr;
-        try {
-          newEqExpr = Eq.applyOpSequence(eq, ops);
-        } catch (eExpr) {
-          pending.error = eExpr.message;
-          notify();
-          return false;
-        }
-        // Chaque ×/÷ par un nombre NÉGATIF (rawValue déjà signé, voir
-        // classifyMulDivOperand) inverse le sens de l'inégalité ; un nombre pair
-        // d'inversions revient au sens de départ (ex. ÷(-2) puis ×(-3) : deux
-        // inversions, sens inchangé) — voir App.Ineq.flipOperator (inequality.js).
-        // N'importe pour une équation normale (currentOperator déjà null, jamais mis à
-        // jour ici).
-        if (currentOperator) {
-          var signFlips = ops.filter(function (op) {
-            return (op.symbol === '×' || op.symbol === '÷') && typeof op.rawValue === 'number' && op.rawValue < 0;
-          }).length;
-          if (signFlips % 2 === 1) currentOperator = Ineq.flipOperator(currentOperator);
-        }
-        var opDescExpr = { type: 'expr', ops: ops };
-        pushRaw({ equation: newEqExpr, opLeft: opDescExpr, opRight: opDescExpr });
+        if (!commitExprOps(eq, ops)) return false;
       } else if (opType === 'factor') {
         var target = factorTarget(eq);
         if (!target || target.indices.length < 1) {
@@ -1939,6 +1949,58 @@
       notify();
     }
 
+    // Glisser-déposer PAR-DESSUS le "=" (voir updateTermDrag/endTermDrag dans render.js) :
+    // traduit le geste en l'opération "Opération" équivalente, appliquée aux DEUX membres
+    // comme si l'élève l'avait tapée au pavé (même étiquette de flèche, mêmes garde-fous
+    // en inégalité, voir commitExprOps). `spec` :
+    // - { kind: 'term', index } : un terme de premier niveau change de membre -> on
+    //   soustrait ce terme (ou on l'ajoute, s'il était négatif) des deux côtés ;
+    // - { kind: 'factor', index, factorIndex } : un facteur du produit, SEUL noeud de son
+    //   membre -> on divise les deux membres par ce facteur (puissance comprise) ;
+    // - { kind: 'coeff', index } : le coefficient numérique du seul noeud de son membre
+    //   (voir Expr.leadingCoefficient, ex. le "3" de "3x" ou de "3(x+2)") -> ÷ ce nombre.
+    // Renvoie null si le geste n'a pas de sens ici (ex. terme nul, facteur d'un membre à
+    // plusieurs termes).
+    function dragAcrossOps(fromSide, spec) {
+      var arr = lastEquation()[fromSide];
+      var node = arr && arr[spec.index];
+      if (!node) return null;
+      if (spec.kind === 'term') {
+        if (!Expr.isGroup(node) && Expr.roundClean(node.coeff) === 0) return null;
+        var isNeg = Expr.isGroup(node) ? node.sign < 0 : node.coeff < 0;
+        return [{ symbol: isNeg ? '+' : '-', term: negateTerms([node])[0] }];
+      }
+      if (arr.length !== 1) return null;
+      var divisor;
+      if (spec.kind === 'factor') {
+        var f = Expr.isProductGroup(node) ? node.factors[spec.factorIndex] : null;
+        if (!f) return null;
+        divisor = f.exponent === 1
+          ? Expr.cloneSide(f.terms)
+          : [{ sign: 1, factors: [{ terms: Expr.cloneSide(f.terms), exponent: f.exponent }] }];
+      } else if (spec.kind === 'coeff') {
+        var c = Expr.leadingCoefficient(node);
+        if (c === null) return null;
+        divisor = [{ coeff: c, pow: 0 }];
+      } else {
+        return null;
+      }
+      if (divisor.length === 1 && !Expr.isGroup(divisor[0]) && divisor[0].pow === 0) {
+        var v = divisor[0].coeff;
+        if (Expr.roundClean(v) === 0) return null;
+        return [{ symbol: '÷', factor: 1 / v, rawValue: v }];
+      }
+      return [{ symbol: '÷', terms: divisor }];
+    }
+
+    function dragAcross(fromSide, spec) {
+      var ops = dragAcrossOps(fromSide, spec);
+      if (!ops) { notify(); return false; }
+      if (!commitExprOps(lastEquation(), ops)) return false;
+      resetPending();
+      return true;
+    }
+
     return {
       subscribe: function (fn) { listeners.push(fn); },
       init: init,
@@ -1982,6 +2044,8 @@
       setDrilledFactorOrder: setDrilledFactorOrder,
       clickNestedFactor: clickNestedFactor,
       setFactorOrder: setFactorOrder,
+      dragAcrossOps: dragAcrossOps,
+      dragAcross: dragAcross,
       undo: undo
     };
   }
@@ -3056,7 +3120,7 @@
       'confirmExpandFullSelection', 'toggleSquareRootArmed', 'toggleSquareArmed', 'setExprChainText',
       'setFactorTermLatex', 'setIdentityFieldLatex', 'parseOperandTerm', 'confirm',
       'computePreview', 'setSideOrder', 'setInnerOrder', 'setDrilledFactorOrder',
-      'clickNestedFactor', 'setFactorOrder'
+      'clickNestedFactor', 'setFactorOrder', 'dragAcrossOps', 'dragAcross'
     ];
 
     var api = {

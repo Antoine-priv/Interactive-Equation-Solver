@@ -72,7 +72,9 @@ async function dragFactor(page, fromSelector, toX, toY) {
 
   const sibling = await page.$('.eq-row.current .side[data-side="left"] [data-index="1"]');
   const sb = await sibling.boundingBox();
-  await dragFactor(page, '.eq-row.current .side[data-side="left"] [id$="-0-factor-1"]', sb.x + sb.width + 60, sb.y + sb.height / 2);
+  // +20 (pas plus) : juste après le "+5" mais AVANT le milieu du "=" — au-delà, le lâcher
+  // ferait traverser le produit dans l'autre membre (voir drag_across_equal.js).
+  await dragFactor(page, '.eq-row.current .side[data-side="left"] [id$="-0-factor-1"]', sb.x + sb.width + 20, sb.y + sb.height / 2);
   await page.waitForTimeout(50);
 
   const midEscalateText = await page.evaluate(() => document.querySelector('.eq-row.current .side[data-side="left"]').textContent);

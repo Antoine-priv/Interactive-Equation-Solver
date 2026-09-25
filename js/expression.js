@@ -469,6 +469,26 @@
   // entière (voir isExpressionQuotient) — ni distribué, ni développable comme un tout (voir
   // computeExpandTargets), mais numérateur ET dénominateur restent chacun librement
   // manipulables via pending.drilled (part 'den' pour le second, voir history.js).
+  // Coefficient numérique "détachable" d'un noeud (glisser par-dessus le "=" pour diviser
+  // les deux membres par lui, voir dragAcrossOps dans history.js et renderSide dans
+  // render.js) : le "3" de "3x"/"-3x²" (Term de degré >= 1), ou de "3(x+2)"/"-3(x+2)"
+  // (FactorGroup multiplicatif à facteur purement numérique), signe compris. null si
+  // rien à détacher (constante seule, coefficient ±1, fraction, facteur en x...).
+  function leadingCoefficient(node) {
+    var c = null;
+    if (isFactorGroup(node)) {
+      if (node.isDivision || node.factorTerms || !node.factor || node.factor.pow !== 0) return null;
+      c = node.sign * node.factor.coeff;
+    } else if (!isGroup(node)) {
+      if (node.pow < 1) return null;
+      c = node.coeff;
+    } else {
+      return null;
+    }
+    c = roundClean(c);
+    return (c === 0 || Math.abs(c) === 1) ? null : c;
+  }
+
   function wrapSideInQuotient(side, divisorTerms) {
     function foldSign(sign, terms) {
       return sign < 0 ? terms.map(function (t) { return scaleNode(t, -1); }) : cloneSide(terms);
@@ -494,20 +514,30 @@
         // exposant >= 2 (ex. "(x-2)²÷(x-2)" -> "(x-2)"), pas seulement un facteur
         // d'exposant 1 : on compare toujours à la BASE du facteur (factors[i].terms),
         // jamais à la base élevée à sa puissance.
+        // Diviseur lui-même une PUISSANCE d'expression (ex. "÷(x+3)²", produit par le
+        // glisser d'un facteur au carré par-dessus le "=", voir dragAcrossOps dans
+        // history.js) : annule autant de puissances d'un coup, sur la même base.
+        var divBase = divisorTerms, divExp = 1;
+        if (divisorTerms.length === 1 && isProductGroup(divisorTerms[0]) && divisorTerms[0].sign > 0 &&
+            divisorTerms[0].factors.length === 1) {
+          divBase = divisorTerms[0].factors[0].terms;
+          divExp = divisorTerms[0].factors[0].exponent;
+        }
         var matchIdx = -1;
         for (var i = 0; i < node.factors.length; i++) {
-          if (sidesEquivalent(node.factors[i].terms, divisorTerms)) {
+          if (node.factors[i].exponent >= divExp && sidesEquivalent(node.factors[i].terms, divBase)) {
             matchIdx = i;
             break;
           }
         }
         if (matchIdx !== -1) {
           var matched = node.factors[matchIdx];
-          var remaining = matched.exponent === 1
+          var remaining = matched.exponent === divExp
             ? node.factors.filter(function (_, fi) { return fi !== matchIdx; }).map(cloneFactor)
             : node.factors.map(function (f, fi) {
-              return fi === matchIdx ? { terms: cloneSide(f.terms), exponent: f.exponent - 1 } : cloneFactor(f);
+              return fi === matchIdx ? { terms: cloneSide(f.terms), exponent: f.exponent - divExp } : cloneFactor(f);
             });
+          if (remaining.length === 0) return [{ coeff: node.sign, pow: 0 }];
           if (remaining.length === 1 && remaining[0].exponent === 1) {
             return foldSign(node.sign, remaining[0].terms);
           }
@@ -1556,6 +1586,7 @@
   }
 
   App.Expr = {
+    leadingCoefficient: leadingCoefficient,
     isFactorGroup: isFactorGroup,
     isProductGroup: isProductGroup,
     isSqrtGroup: isSqrtGroup,

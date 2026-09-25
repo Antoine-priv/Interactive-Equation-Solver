@@ -104,6 +104,11 @@ Arrows between steps are hand-drawn SVG in `arrows.js`, positioned via `getBound
 each render (`requestAnimationFrame`). Overlay cleanup is scoped to `:scope > svg.arrows-overlay` (never a global id).
 
 Term drag-and-drop is mouse-only (no native HTML5 DnD) and shares its pointer gesture with click-to-select. It is intentionally disabled inside "Produit nul" branch columns (`noDrag`).
+Dropping past the middle of the "=" (`crossTargetSide`/`setDragCrossing` in `render.js`) turns the
+drag into a regular "Opération" step via `dragAcross` (`history.js`, shares `commitExprOps` with
+`confirm()`): a top-level term is subtracted/added on both sides; a factor of a product that is
+alone on its side, or the coefficient of a lone `3x`/`3(x+2)` (`Expr.leadingCoefficient`, rendered
+as its own `.coeff-slot`), divides both sides instead.
 
 ## Infinite canvas (`js/canvas.js`)
 

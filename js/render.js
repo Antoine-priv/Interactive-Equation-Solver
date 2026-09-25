@@ -316,13 +316,22 @@
   // liveWarnLatex dans renderChain), qui l'affiche séparément SOUS le <math-field>
   // éditable plutôt que dans le même texte (impossible d'ajouter du texte figé à
   // l'intérieur d'un champ éditable). Renvoie null si aucune opération à risque.
+  // Opérande ×/÷ lisible sans parenthèses supplémentaires : un seul terme "plat" (ex.
+  // "5x²"), ou une puissance d'expression déjà auto-parenthésée (ex. "(x+3)^2", voir
+  // dragAcrossOps dans history.js) — seule une VRAIE somme a besoin d'être entourée.
+  function isSelfDelimitedOperand(terms) {
+    if (terms.length !== 1) return false;
+    var t = terms[0];
+    return !Expr.isGroup(t) || (Expr.isProductGroup(t) && t.sign > 0 && t.factors.length === 1);
+  }
+
   function exprRiskyConditionsLatex(desc) {
     if (!descHasZeroRisk(desc)) return null;
     var riskyOperands = [];
     desc.ops.forEach(function (op) {
       if (!isZeroRiskOp(op)) return;
       var exprOperandLatex = op.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
-      var isBareMonomial = op.terms.length === 1 && !Expr.isGroup(op.terms[0]);
+      var isBareMonomial = isSelfDelimitedOperand(op.terms);
       riskyOperands.push({ latex: exprOperandLatex, bare: isBareMonomial });
     });
     var conditions = riskyOperands.map(function (r) {
@@ -423,7 +432,7 @@
           // somme risquerait de se confondre avec l'opération suivante de la chaîne (ex.
           // "×(x+5)" vs "×x+5").
           var exprOperandLatex = op.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
-          var isBareMonomial = op.terms.length === 1 && !Expr.isGroup(op.terms[0]);
+          var isBareMonomial = isSelfDelimitedOperand(op.terms);
           return OP_SYMBOL_LATEX[op.symbol] + (isBareMonomial ? exprOperandLatex : '\\left(' + exprOperandLatex + '\\right)');
         }
         if (op.symbol === '×' || op.symbol === '÷') {
@@ -437,11 +446,25 @@
       // rajoutée à la fin, APRÈS la chaîne complète (jamais entre deux opérations : sinon un
       // "+2" venant après un "×(x)" à risque se lirait, à tort, comme collé à la réserve
       // elle-même plutôt qu'à la chaîne — ex. "×(x) valide si (x)≠0+2").
-      var riskyConditions = exprRiskyConditionsLatex(desc);
+      // `desc.noRiskNote` : badge compact du glisser par-dessus le "=" (voir
+      // setDragCrossing), qui n'annonce que l'opération — la réserve reste sur la flèche.
+      var riskyConditions = desc.noRiskNote ? null : exprRiskyConditionsLatex(desc);
       if (riskyConditions) chainLatex += '\\ ' + riskyConditions;
       return chainLatex;
     }
     return null;
+  }
+
+  // Même rendu que Expr.nodeLatex(node, true) pour un noeud à coefficient détachable
+  // (voir Expr.leadingCoefficient), mais avec le coefficient (signe compris) isolé dans
+  // son propre \htmlId `coeffId` : "\htmlId{..}{-3}x^{2}", "\htmlId{..}{3}\left(x+2\right)".
+  function coeffSplitLatex(node, coeffId) {
+    var c = Expr.leadingCoefficient(node);
+    var coeffLatex = (c < 0 ? '-' : '') + Expr.formatNumberLatex(c);
+    var rest = Expr.isFactorGroup(node)
+      ? '\\left(' + Expr.innerTermsLatex(node.innerTerms) + '\\right)'
+      : Expr.termLatexBody({ coeff: 1, pow: node.pow });
+    return '\\htmlId{' + coeffId + '}{' + coeffLatex + '}' + rest;
   }
 
   function escId(id) {
@@ -781,6 +804,16 @@
       return coords.x >= r.left && coords.x <= r.right && coords.y >= r.top && coords.y <= r.bottom;
     }
 
+    // Coefficient "détachable" (voir Expr.leadingCoefficient) : le glisser par-dessus le
+    // "=" divise les deux membres par lui — seulement quand ce noeud est SEUL dans son
+    // membre (sinon diviser le membre entier n'aurait rien à voir avec CE coefficient) et
+    // en sélection libre (options.draggable). Rendu avec son propre \htmlId pour être
+    // saisissable à part du reste du terme (voir coeffSplitLatex/le câblage plus bas).
+    function canDragCoeffAcross(node) {
+      return !!(options && options.draggable && !drilled && side.length === 1 &&
+        Expr.leadingCoefficient(node) !== null);
+    }
+
     var latex = side.map(function (node, idx) {
       if (drilled && drilled.path[0] === idx) {
         if (drilled.part === 'den') {
@@ -800,6 +833,7 @@
         return drilledGroupLatex(node, idPrefix, idx, drilled.path.slice(1), idx === 0, drilled.branch);
       }
       var body = Expr.isProductGroup(node) ? productGroupBranchesLatex(node, idPrefix + '-' + idx, idx === 0) : Expr.nodeLatex(node, idx === 0);
+      if (canDragCoeffAcross(node)) body = coeffSplitLatex(node, idPrefix + '-' + idx + '-coeff');
       return '\\htmlId{' + idPrefix + '-' + idx + '}{' + body + '}';
     }).join('');
     window.katex.render(latex || '{}', container, { throwOnError: false, trust: true, strict: false });
@@ -952,6 +986,10 @@
         return new Set(sideName === 'left' ? p.selectedLeft : p.selectedRight);
       },
       commit: function (order) { App.History.setSideOrder(sideName, order); },
+      // Lâché de l'AUTRE côté du "=" (voir updateTermDrag/endTermDrag) : le terme change
+      // de membre -> soustraction (ou addition) des deux côtés, voir dragAcross.
+      crossOps: function (origIdx) { return App.History.dragAcrossOps(sideName, { kind: 'term', index: origIdx }); },
+      onCross: function (origIdx) { App.History.dragAcross(sideName, { kind: 'term', index: origIdx }); },
       buildLatex: function (orderedArr) {
         return orderedArr.map(function (node, i) {
           return '\\htmlId{dragpv-' + i + '}{' + Expr.nodeLatex(node, i === 0) + '}';
@@ -993,10 +1031,36 @@
             commit: function (order) { App.History.setFactorOrder(sideName, idx, order); },
             buildLatex: function (orderedFactors) { return buildFactorDragLatex(side, idPrefix, idx, orderedFactors); },
             tagClass: 'factor-slot',
-            escalate: { side: side, topIdx: idx, idPrefix: idPrefix, dragCtx: topLevelDragCtx }
+            // Produit SEUL dans son membre : lâcher un facteur de l'autre côté du "=" divise
+            // les deux membres par ce facteur (voir dragAcross) — et plus d'échappement vers
+            // le produit entier (aucun frère avec qui le réordonner de toute façon).
+            // Sinon, comportement habituel : sortir du produit bascule sur le produit
+            // entier, qui lui traverse alors comme un terme normal (soustraction).
+            crossOps: side.length === 1 ? function (fi) { return App.History.dragAcrossOps(sideName, { kind: 'factor', index: idx, factorIndex: fi }); } : null,
+            onCross: side.length === 1 ? function (fi) { App.History.dragAcross(sideName, { kind: 'factor', index: idx, factorIndex: fi }); } : null,
+            escalate: side.length === 1 ? null : { side: side, topIdx: idx, idPrefix: idPrefix, dragCtx: topLevelDragCtx }
           }, i, options.onTermClick ? function (targetEl) { options.onTermClick(sideName, idx, targetEl); } : null);
         }
       });
+    });
+
+    // Coefficient détachable (voir canDragCoeffAcross/coeffSplitLatex plus haut) : glisser
+    // SEULEMENT par-dessus le "=" (rien à réordonner), où il divise les deux membres. Un
+    // simple clic dessus reste un clic sur le terme entier (même sélection que d'habitude).
+    side.forEach(function (node, idx) {
+      if (!canDragCoeffAcross(node)) return;
+      var coeffEl = container.querySelector('#' + escId(idPrefix + '-' + idx + '-coeff'));
+      if (!coeffEl) return;
+      coeffEl.classList.add('coeff-slot', 'draggable-term');
+      attachPointerDrag(coeffEl, container, [node], {
+        getSelected: function () { return new Set(); },
+        commit: function () { App.History.setSideOrder(sideName, [0]); },
+        noReorder: true,
+        crossOps: function () { return App.History.dragAcrossOps(sideName, { kind: 'coeff', index: idx }); },
+        onCross: function () { App.History.dragAcross(sideName, { kind: 'coeff', index: idx }); }
+      }, 0, options.onTermClick ? function (targetEl, coords) {
+        options.onTermClick(sideName, idx, targetEl, resolveIsDenPart(idx, targetEl, coords));
+      } : null);
     });
 
     side.forEach(function (node, idx) {
@@ -1140,9 +1204,50 @@
       // produit (voir updateTermDrag/escalateFactorDragToTopLevel plus bas). null pour tout
       // autre glisser (déjà au premier niveau, ou intérieur d'un groupe "drillé" — rien
       // "au-dessus" vers quoi remonter dans ce dernier cas).
-      escalate: dragCtx.escalate || null
+      escalate: dragCtx.escalate || null,
+      crossing: false
     };
-    reflowDragSide(); // tague data-drag-id sur le rendu déjà présent + estompe le terme saisi
+    if (dragCtx.noReorder) el.classList.add('drag-source-active');
+    else reflowDragSide(); // tague data-drag-id sur le rendu déjà présent + estompe le terme saisi
+  }
+
+  // Le curseur est-il passé de l'AUTRE côté du "=" de la ligne du glisser en cours (au-delà
+  // du milieu du signe, et pas trop loin verticalement de la ligne) ? Renvoie alors le
+  // membre opposé (élément .side), sinon null. Seulement si le contexte de glisser sait
+  // traverser (dragCtx.onCross, voir renderSide).
+  function crossTargetSide(clientX, clientY) {
+    var d = termDrag;
+    if (!d.dragCtx.onCross) return null;
+    var line = d.container.closest('.eq-line');
+    var eqSign = line && line.querySelector(':scope > .eq-sign');
+    var fromSide = d.container.getAttribute('data-side');
+    if (!eqSign || (fromSide !== 'left' && fromSide !== 'right')) return null;
+    var lineRect = line.getBoundingClientRect();
+    var V_SLACK = 60;
+    if (clientY < lineRect.top - V_SLACK || clientY > lineRect.bottom + V_SLACK) return null;
+    var signRect = eqSign.getBoundingClientRect();
+    var mid = signRect.left + signRect.width / 2;
+    if (fromSide === 'left' ? clientX <= mid : clientX >= mid) return null;
+    return line.querySelector(':scope > .side[data-side="' + (fromSide === 'left' ? 'right' : 'left') + '"]');
+  }
+
+  // Bascule l'état visuel "va traverser le =" : membre cible surligné, et un badge sous le
+  // fantôme annonce l'opération qui sera appliquée aux deux membres au lâcher (même
+  // étiquette que la flèche qui en résultera, voir formatOpLabel). `ops` null : quitte cet état.
+  function setDragCrossing(targetSideEl, ops) {
+    var d = termDrag;
+    if (d.crossTargetEl) d.crossTargetEl.classList.remove('drag-cross-target');
+    var oldBadge = d.ghostEl.querySelector('.drag-cross-badge');
+    if (oldBadge) oldBadge.parentNode.removeChild(oldBadge);
+    d.crossing = !!ops;
+    d.crossTargetEl = ops ? targetSideEl : null;
+    d.ghostEl.classList.toggle('drag-ghost-crossing', !!ops);
+    if (!ops) return;
+    targetSideEl.classList.add('drag-cross-target');
+    var badge = document.createElement('div');
+    badge.className = 'drag-cross-badge';
+    window.katex.render(formatOpLabel({ type: 'expr', ops: ops, noRiskNote: true }) || '{}', badge, { throwOnError: false, strict: false });
+    d.ghostEl.appendChild(badge);
   }
 
   // Détermine, d'après la position horizontale du curseur, où le terme saisi devrait
@@ -1174,6 +1279,19 @@
   function updateTermDrag(clientX, clientY) {
     var d = termDrag;
     if (!d) return;
+    // Par-dessus le "=" : plus de réordonnancement dans le membre d'origine, on annonce
+    // juste l'opération qui sera appliquée au lâcher (voir setDragCrossing/endTermDrag).
+    // Testé AVANT l'échappement ci-dessous (qui n'existe de toute façon plus pour un
+    // produit seul dans son membre, voir renderSide). Un geste sans opération sensée
+    // (crossOps -> null, ex. terme nul) ne traverse simplement pas.
+    var crossSideEl = crossTargetSide(clientX, clientY);
+    var crossOps = crossSideEl ? d.dragCtx.crossOps(d.draggedOrigIdx) : null;
+    if (crossOps) {
+      if (!d.crossing || d.crossTargetEl !== crossSideEl) setDragCrossing(crossSideEl, crossOps);
+      d.ghostEl.style.transform = 'translate(' + (clientX - d.startClientX) + 'px, ' + (clientY - d.startClientY) + 'px) scale(1.06)';
+      return;
+    }
+    if (d.crossing) setDragCrossing(null, null);
     // Glisser PAR FACTEUR uniquement (voir renderSide/beginTermDrag) : le curseur sort des
     // bornes horizontales du produit ENTIER (mesurées sur son id stable "idPrefix-topIdx",
     // toujours présent pendant CE glisser précis — voir productGroupFactorsLatexForOrder)
@@ -1195,6 +1313,7 @@
     var dx = clientX - d.startClientX;
     var dy = clientY - d.startClientY;
     d.ghostEl.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(1.06)';
+    if (d.dragCtx.noReorder) return;
 
     var newOrder = computeTargetOrder(clientX);
     if (newOrder.join(',') !== d.order.join(',')) {
@@ -1242,7 +1361,8 @@
       startClientY: clientY,
       ghostEl: ghost,
       tagClass: esc.dragCtx.tagClass || 'term',
-      escalate: null // remonté d'un cran : rien "au-dessus" vers quoi remonter encore.
+      escalate: null, // remonté d'un cran : rien "au-dessus" vers quoi remonter encore.
+      crossing: false
     };
     reflowDragSide();
     updateTermDrag(clientX, clientY); // reflète immédiatement la position du curseur, sans attendre le prochain mousemove.
@@ -1299,10 +1419,16 @@
     var d = termDrag;
     if (!d) return;
     if (d.ghostEl.parentNode) d.ghostEl.parentNode.removeChild(d.ghostEl);
-    var order = d.order;
-    var commit = d.dragCtx.commit;
+    if (d.crossTargetEl) d.crossTargetEl.classList.remove('drag-cross-target');
     termDrag = null;
-    commit(order);
+    // Lâché de l'autre côté du "=" : nouvelle étape (opération sur les deux membres) au
+    // lieu d'un simple réordonnancement — voir dragAcross dans history.js, qui notifie
+    // (donc ré-affiche proprement) dans tous les cas, succès comme erreur.
+    if (d.crossing) {
+      d.dragCtx.onCross(d.draggedOrigIdx);
+      return;
+    }
+    d.dragCtx.commit(d.order);
   }
 
   // En dessous de cette taille, on arrête de réduire la police et on laisse le
