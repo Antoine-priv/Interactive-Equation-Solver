@@ -2690,11 +2690,13 @@ button {
    fiche : elle s'allonge vers le bas pour le montrer (la marge négative annule le `gap`
    tant qu'il est replié). */
 .map-card-actions {
-  display: flex; justify-content: flex-end;
-  max-height: 0; margin-top: -10px; opacity: 0; overflow: hidden;
-  transition: max-height 0.2s ease, margin-top 0.2s ease, opacity 0.15s ease;
+  /* Ligne de grille 0fr → 1fr : la hauteur s'anime jusqu'à celle, exacte, du bouton. */
+  display: grid; justify-items: end; grid-template-rows: 0fr;
+  margin-top: -10px; opacity: 0; overflow: hidden;
+  transition: grid-template-rows 0.28s cubic-bezier(0.22, 1, 0.36, 1), margin-top 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
 }
-.map-card.map-card-pinned .map-card-actions, .map-card:hover .map-card-actions, .map-card:focus-within .map-card-actions { max-height: 60px; margin-top: 0; opacity: 1; }
+.map-card-actions > * { min-height: 0; overflow: hidden; }
+.map-card.map-card-pinned .map-card-actions, .map-card:hover .map-card-actions, .map-card:focus-within .map-card-actions { grid-template-rows: 1fr; margin-top: 0; opacity: 1; }
 .map-play-btn {
   border: 0; border-radius: 999px; padding: 8px 20px; cursor: pointer;
   font: 600 14px inherit; font-family: inherit; background: var(--accent); color: #fff;

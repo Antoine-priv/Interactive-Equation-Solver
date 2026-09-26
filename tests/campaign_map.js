@@ -159,6 +159,23 @@ function ok(label, cond) {
   const c1 = await cardBox();
   ok('hovering the card reveals the play button', await playShown());
   ok('the card grows downward only', Math.abs(c1.top - c0.top) < 1 && c1.bottom > c0.bottom + 20);
+  // Aller-retour fiche → nœud, puis clic qui la fixe : « Jouer » se replie puis se déplie
+  // avec une transition (le contenu n'est pas reconstruit).
+  const actionsH = () => page.evaluate(() => document.querySelector('.map-card-actions').getBoundingClientRect().height);
+  const fullH = await actionsH();
+  await page.mouse.move(t1n.x, t1n.y);
+  await page.waitForTimeout(80);
+  const midOut = await actionsH();
+  ok('leaving the card folds the play button with an animation', midOut > 1 && midOut < fullH - 1);
+  await page.waitForTimeout(300);
+  ok('folded once back on the node', (await actionsH()) < 1);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(80);
+  const midIn = await actionsH();
+  ok('pinning the card unfolds the play button with an animation', midIn > 1 && midIn < fullH - 1);
+  await page.waitForTimeout(300);
+  ok('fully unfolded once pinned', Math.abs((await actionsH()) - fullH) < 1);
 
   // --- Jouer T1 ---
   await page.click('[data-map-play="t1"]');

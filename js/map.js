@@ -332,6 +332,14 @@
   function renderCard() {
     var l = App.Levels.get(shownId());
     if (!l || nodeState(l) === 'locked') { hideCard(); return; }
+    // Fiche déjà affichée pour ce niveau (aperçu qu'on fixe d'un clic, retour du survol sur
+    // le nœud…) : on garde son contenu pour que « Jouer » apparaisse/disparaisse avec la
+    // transition de .map-card-actions, au lieu d'être reconstruit directement dans son
+    // état final.
+    if (cardShownFor === l.id && !card.hidden && !card.classList.contains('map-card-out')) {
+      card.classList.toggle('map-card-pinned', pinned);
+      return;
+    }
     var P = App.Progress;
     var st = nodeState(l);
     var z = App.Levels.zone(l.zone);
@@ -370,7 +378,10 @@
     play.setAttribute('data-map-play', l.id);
     play.textContent = st === 'done' && !l.daily ? 'Rejouer' : 'Jouer';
     play.addEventListener('click', function () { if (onPlay) onPlay(l.id); });
-    actions.appendChild(play);
+    // Enveloppe sans padding : elle peut se replier à 0 (voir .map-card-actions).
+    var fold = document.createElement('div');
+    fold.appendChild(play);
+    actions.appendChild(fold);
     card.classList.toggle('map-card-pinned', pinned);
     showCard(l.id);
     positionCard();
