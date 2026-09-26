@@ -281,7 +281,15 @@
     var next = l.daily ? null : nextLevel();
     var nextBtn = winEl.querySelector('[data-win-next]');
     nextBtn.hidden = !next;
-    nextBtn.onclick = function () { if (next) startLevel(next.id); };
+    // « Suivant » passe par la carte quand un niveau vient de s'ouvrir : l'animation de
+    // déblocage joue, puis la carte se ferme sur le nouveau problème.
+    nextBtn.onclick = function () {
+      if (!next) return;
+      if (pendingUnlock && pendingUnlock.unlocked.length) {
+        hideWin();
+        openMap({ focus: next.id, onUnlockEnd: function () { startLevel(next.id); } });
+      } else startLevel(next.id);
+    };
     winEl.hidden = false;
     var starsBox = winEl.querySelector('.win-stars');
     starsBox.classList.remove('play');

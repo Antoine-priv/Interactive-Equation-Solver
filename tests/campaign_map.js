@@ -142,7 +142,12 @@ function ok(label, cond) {
   await page.waitForTimeout(100);
   ok('opening the map with the map button plays the unlock animation', await page.evaluate(() =>
     !!document.querySelector('.map-edge.draw-in[data-edge="t1-t2"]')));
+  ok('the new level card waits for the end of the animation', await page.evaluate(() => document.querySelector('.map-card').hidden));
   await page.waitForTimeout(1600);
+  ok('still no card while the token travels', await page.evaluate(() => document.querySelector('.map-card').hidden));
+  await page.waitForTimeout(800);
+  ok('the card of the unlocked level pops once the animation is over', await page.evaluate(() =>
+    !document.querySelector('.map-card').hidden && document.querySelector('.map-card-title').textContent === 'Ajouter'));
   await page.screenshot({ path: SCRATCH + '/campaign_map_after.png' });
   const after = await page.evaluate(() => ({
     t1: document.querySelector('[data-level="t1"]').getAttribute('class'),
@@ -182,6 +187,16 @@ function ok(label, cond) {
   });
   await page.waitForTimeout(200);
   ok('undo used: 2 stars', await page.evaluate(() => document.querySelectorAll('#levelWin [data-win-star].on').length) === 2);
+
+  // --- "Suivant" : la carte s'ouvre, l'animation de déblocage joue, puis le niveau suivant démarre ---
+  await page.click('[data-win-next]');
+  await page.waitForTimeout(150);
+  ok('Suivant opens the map with the unlock animation', await page.evaluate(() =>
+    window.App.Map.isOpen() && !!document.querySelector('.map-edge.draw-in[data-edge="t2-t3"]') &&
+    window.App.Campaign.current().id === 't2' && document.getElementById('levelWin').hidden));
+  await page.waitForTimeout(2600);
+  ok('then the map closes on the next level', await page.evaluate(() =>
+    document.getElementById('mapOverlay').hidden && window.App.Campaign.current().id === 't3' && !window.App.Campaign.current().won));
 
   await page.evaluate(() => window.App.Campaign.startLevel('t3'));
   await page.evaluate(() => { window.App.History.startNewEquation(window.App.Parser.parseEquation('x+1=2')); });

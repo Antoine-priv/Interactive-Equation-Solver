@@ -230,7 +230,13 @@
         }
       });
     }, 1250 * delay);
+    // Fin de l'animation : le jeton a fini d'avancer (transition de 0,9 s, voir .map-token).
+    unlockTimer = setTimeout(function () {
+      unlockTimer = null;
+      if (opts.onUnlockEnd) opts.onUnlockEnd();
+    }, 2250 * delay);
   }
+  var unlockTimer = null;
 
   function showBanner(title, text) {
     var b = overlay.querySelector('.map-banner');
@@ -386,8 +392,22 @@
     renderBar();
     view.s = Math.max(fitScale(), Math.min(1.5, fitScale() * 1.9));
     centerOn(focus.x, focus.y);
-    renderCard();
-    if (opts.unlocked && opts.unlocked.length) playUnlock(opts);
+    clearTimeout(unlockTimer);
+    unlockTimer = null;
+    if (opts.unlocked && opts.unlocked.length) {
+      // La fiche du niveau débloqué n'apparaît qu'une fois l'animation terminée (sauf si
+      // `onUnlockEnd` prend le relais, ex. « Suivant » qui lance directement le niveau).
+      hideCard(true);
+      world.querySelectorAll('.map-node.selected').forEach(function (n) { n.classList.remove('selected'); });
+      var then = opts.onUnlockEnd;
+      opts.onUnlockEnd = function () {
+        // Carte fermée ou autre nœud choisi entre-temps : on ne prend pas la main.
+        if (!isOpen() || selectedId !== focus.id) return;
+        if (then) then();
+        else select(focus.id);
+      };
+      playUnlock(opts);
+    } else renderCard();
   }
 
   // Fermeture animée (voir .map-closing dans style.css) : la carte n'est plus "ouverte"
@@ -397,6 +417,8 @@
   var CLOSE_MS = 260;
   function close() {
     if (overlay.hidden || closing) return;
+    clearTimeout(unlockTimer);
+    unlockTimer = null;
     document.body.classList.remove('map-open');
     if (App.Coach) App.Coach.refresh();
     if (reducedMotion()) { finishClose(); return; }
