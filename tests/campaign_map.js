@@ -68,8 +68,8 @@ function ok(label, cond) {
   await page.waitForTimeout(250);
   ok('the map button is hidden on the map', await page.evaluate(() =>
     document.getElementById('mapBtn').getBoundingClientRect().width === 0));
-  await page.evaluate(() => window.App.Map.close());
-  ok('closing the map is animated', await page.evaluate(() => document.getElementById('mapOverlay').classList.contains('map-closing') &&
+  await page.keyboard.press('Escape');
+  ok('closing the map (Escape) is animated', await page.evaluate(() => document.getElementById('mapOverlay').classList.contains('map-closing') &&
     !window.App.Map.isOpen()));
   await page.waitForTimeout(350);
   ok('the map is closed, the map button is back', await page.evaluate(() => document.getElementById('mapOverlay').hidden &&

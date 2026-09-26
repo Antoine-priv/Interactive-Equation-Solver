@@ -500,7 +500,13 @@
       if (!card.hidden && cardShownFor) select(null);
     });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && isOpen() && cardShownFor) select(null);
+      // Échap ferme la carte et ramène à l'équation en cours (sauf si les réglages sont
+      // ouverts par-dessus : c'est eux qu'Échap ferme alors).
+      if (e.key !== 'Escape' || !isOpen()) return;
+      var settings = document.getElementById('settingsOverlay');
+      if (settings && !settings.hidden) return;
+      e.preventDefault();
+      close();
     });
     App.Progress.subscribe(function () { if (isOpen()) renderBar(); });
   }
