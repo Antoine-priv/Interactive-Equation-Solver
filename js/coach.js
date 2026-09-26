@@ -1,7 +1,9 @@
 /* Coach : bulles du tutoriel (le Port, niveaux t1 à t7, voir docs/gamification/plan.md).
    Chaque niveau a une liste d'étapes { text, target, done } : l'étape affichée est la
    première dont `done(state)` est faux ; `target` désigne l'élément à entourer (sélecteur
-   ou fonction). Une étape `manual` attend un clic sur « Compris ». Le coach suit l'action
+   ou fonction). Une étape `manual` attend un clic sur « Compris ». Une étape `afterWin`
+   ne s'affiche qu'une fois le niveau réussi (les autres, seulement avant), et `skip(state)`
+   vrai la saute. Le coach suit l'action
    réelle de l'élève (App.History.subscribe) et ne bloque jamais rien. */
 (function (App) {
   'use strict';
@@ -12,7 +14,8 @@
   function S() {
     var H = App.History;
     var eq = H.lastEquation();
-    return { H: H, eq: eq, pending: H.getPending(), steps: H.getSteps().length, solved: App.Equation.isSolved(eq) };
+    var run = App.Campaign.current() || {};
+    return { H: H, eq: eq, pending: H.getPending(), steps: H.getSteps().length, solved: App.Equation.isSolved(eq), run: run };
   }
   function term(side, i) {
     return function () { return document.querySelector('.eq-row.current .side[data-side="' + side + '"] [data-index="' + i + '"]'); };
@@ -44,7 +47,9 @@
     ],
     t4: [
       { text: 'Nouveau geste : attrape le 8 et lâche-le de l\'autre côté du « = ».', target: term('left', 1), done: stepsAtLeast(2) },
-      { text: 'L\'application a écrit −8 des deux côtés pour toi. Simplifie.', target: sideEl('left'), done: function (s) { return s.solved; } }
+      { text: 'L\'application a écrit −8 des deux côtés pour toi. Simplifie 8 et −8.', target: sideEl('left'), done: or(countTerms('left'), function (s) { return s.solved; }) },
+      { text: 'Bravo ! La simplification automatique est maintenant activée : après chaque opération, les calculs se font tout seuls. Tu peux la désactiver dans les réglages.',
+        target: '#settingsBtn', manual: true, afterWin: true, skip: function (s) { return s.run.enabled !== 'autoSimplify'; } }
     ],
     t5: [
       { text: 'Commence par faire passer le 5 de l\'autre côté.', target: term('left', 1),
@@ -71,7 +76,7 @@
     var s = S();
     for (var i = 0; i < script.length; i++) {
       var st = script[i];
-      var isDone = st.manual ? !!manualDone[i] : st.done(s);
+      var isDone = (st.skip && st.skip(s)) || (st.manual ? !!manualDone[i] : st.done(s));
       if (!isDone) return { step: st, index: i };
     }
     return null;
@@ -149,7 +154,8 @@
 
   function position() {
     var cur = currentStep();
-    var visible = !!cur && !document.body.classList.contains('map-open') && !(App.Campaign.current() || {}).won;
+    var won = !!(App.Campaign.current() || {}).won;
+    var visible = !!cur && !document.body.classList.contains('map-open') && !!cur.step.afterWin === won;
     if (!visible) {
       ring.hidden = true;
       if (!bubble.hidden && !popping) popOut();
@@ -163,7 +169,9 @@
     if (cur.index !== shownIndex) {
       if (!bubble.hidden) { popOut(); return; }
       shownIndex = cur.index;
-      bubble.querySelector('[data-coach-step]').textContent = 'Coach · ' + (cur.index + 1) + ' / ' + script.length;
+      // Le compteur ne compte que les étapes de la résolution (pas celles d'après la victoire).
+      var total = script.filter(function (st) { return !st.afterWin; }).length;
+      bubble.querySelector('[data-coach-step]').textContent = cur.step.afterWin ? 'Coach' : 'Coach · ' + (cur.index + 1) + ' / ' + total;
       bubble.querySelector('[data-coach-text]').textContent = cur.step.text;
       var btn = bubble.querySelector('[data-coach-ok]');
       btn.hidden = !cur.step.manual;

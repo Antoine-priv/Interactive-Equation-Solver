@@ -126,6 +126,49 @@ function ok(label, cond) {
   c = await coach();
   ok('coach disappears once the level is won', !c.visible && await page.evaluate(() => window.App.Campaign.current().won));
 
+  // --- T3 (t4) : le coach 2/2 part dès 8−8 simplifié ; à la fin, la simplification
+  // automatique est activée et le coach le signale sur le bouton des réglages ---
+  await page.evaluate(() => {
+    localStorage.setItem('equations-progress', JSON.stringify({ version: 1, badges: [], levels: { t1: { stars: 3 }, t3: { stars: 3 } } }));
+    window.App.Progress.load();
+    window.App.Settings.set('autoSimplify', false);
+    window.App.Campaign.startLevel('t4');
+    var H = window.App.History;
+    H.selectOp('expr'); H.setExprChainText('-8'); H.confirm();
+  });
+  c = await coach();
+  ok('T3: step 2/2 after the drag', c.visible && c.index === 1 && /2 \/ 2/.test(c.text));
+  await page.evaluate(() => {
+    var H = window.App.History;
+    H.toggleTermSelection('left', 1); H.toggleTermSelection('left', 2); H.confirmSimplifySelection();
+  });
+  c = await coach();
+  ok('T3: the coach leaves once 8−8 is simplified', !c.visible);
+  await page.evaluate(() => {
+    var H = window.App.History;
+    H.toggleTermSelection('right', 0); H.toggleTermSelection('right', 1); H.confirmSimplifySelection();
+  });
+  c = await coach();
+  const gearRect = await page.evaluate(() => document.getElementById('settingsBtn').getBoundingClientRect().toJSON());
+  ok('T3 won: auto-simplify is turned on', await page.evaluate(() => window.App.Campaign.current().won && window.App.Settings.get('autoSimplify')));
+  ok('and the coach says so, pointing at the settings', c.visible && /simplification automatique/.test(c.text) && /réglages/.test(c.text) &&
+    inside(c.ring, gearRect));
+  await page.screenshot({ path: SCRATCH + '/campaign_coach_autosimplify.png' });
+  await page.click('[data-coach-ok]');
+  c = await coach();
+  ok('"Compris" dismisses it', !c.visible);
+  await page.evaluate(() => {
+    window.App.Settings.set('autoSimplify', false);
+    window.App.Campaign.startLevel('t4');
+    var H = window.App.History;
+    H.selectOp('expr'); H.setExprChainText('-8'); H.confirm();
+    H.toggleTermSelection('left', 1); H.toggleTermSelection('left', 2); H.confirmSimplifySelection();
+    H.toggleTermSelection('right', 0); H.toggleTermSelection('right', 1); H.confirmSimplifySelection();
+  });
+  c = await coach();
+  ok('replaying T3 does not turn it back on', !c.visible && await page.evaluate(() =>
+    window.App.Campaign.current().won && !window.App.Settings.get('autoSimplify')));
+
   // --- T7 : étape "Compris" ---
   await page.evaluate(() => {
     localStorage.setItem('equations-progress', JSON.stringify({ version: 1, badges: [], levels: {

@@ -195,7 +195,8 @@
     var level = App.Levels.get(id);
     if (!level || !App.Progress.isAvailable(level)) return false;
     pendingUnlock = null;
-    run = { level: level, part: 0, undos: 0, hints: 0, hintIdx: 0, won: false, message: null, priorSteps: 0, verdictKey: null };
+    run = { level: level, part: 0, undos: 0, hints: 0, hintIdx: 0, won: false, message: null, priorSteps: 0, verdictKey: null,
+      replay: App.Progress.isSolved(level.id) };
     if (level.daily) run.dailyEq = App.Campaign.dailyEquation();
     hideWin();
     hideHint(true);
@@ -281,6 +282,12 @@
       result = App.Progress.recordWin(run.level.id, { stars: stars, steps: steps });
     }
     run.result = result;
+    // Premier succès d'un niveau qui débloque un réglage (T3 : simplification automatique) :
+    // il est activé, et le coach le signale (voir le script du niveau dans coach.js).
+    if (run.level.enables && !run.replay && !App.Settings.get(run.level.enables)) {
+      App.Settings.set(run.level.enables, true);
+      run.enabled = run.level.enables;
+    }
     if (result && !run.level.daily) pendingUnlock = { from: run.level.id, unlocked: result.unlocked };
     renderBar();
     applyKeyLocks();
@@ -323,7 +330,8 @@
       var n = App.Progress.dailyStreak();
       row(true, 'Série : ' + n + ' jour' + (n > 1 ? 's' : '') + ' d\'affilée');
     }
-    var next = l.daily ? null : nextLevel();
+    // Un niveau rejoué ne propose pas « Suivant » : on revient à la carte.
+    var next = l.daily || run.replay ? null : nextLevel();
     var nextBtn = winEl.querySelector('[data-win-next]');
     nextBtn.hidden = !next;
     // « Suivant » passe par la carte quand un niveau vient de s'ouvrir : l'animation de
@@ -431,7 +439,6 @@
     }, true);
     window.addEventListener('resize', function () { if (hintOpen()) positionHint(); });
     winEl.querySelector('[data-win-close]').addEventListener('click', hideWin);
-    winEl.querySelector('[data-win-replay]').addEventListener('click', function () { if (run) startLevel(run.level.id); });
     winEl.querySelector('[data-win-map]').addEventListener('click', function () {
       hideWin();
       openMap();
@@ -540,7 +547,7 @@
     isOpLocked: isOpLocked,
     stepCount: stepCount,
     rangesEqual: rangesEqual,
-    current: function () { return run ? { id: run.level.id, part: run.part, undos: run.undos, hints: run.hints, won: run.won, message: run.message } : null; },
+    current: function () { return run ? { id: run.level.id, part: run.part, undos: run.undos, hints: run.hints, won: run.won, message: run.message, enabled: run.enabled || null } : null; },
     showHint: showHint,
     dailyEquation: dailyEquation
   };

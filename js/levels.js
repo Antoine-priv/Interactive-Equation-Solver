@@ -75,6 +75,7 @@
       learn: 'Diviser par le coefficient',
       hints: ['3x veut dire 3 fois x.', 'Opération ÷3, puis Simplifier.'] },
     { id: 't4', code: 'T3', zone: 'port', x: 185, y: 375, req: ['t3'], title: 'Faire glisser', latex: 'x+8=3', sol: P(-5), par: 1,
+      enables: 'autoSimplify',
       learn: 'Passer un terme de l\'autre côté',
       hints: ['Un terme peut passer de l\'autre côté du « = ».', 'Attrape le 8 et lâche-le de l\'autre côté du « = ».'] },
     { id: 't5', code: 'T4', zone: 'port', x: 120, y: 305, req: ['t4'], title: 'Deux étapes', latex: '2x+5=11', sol: P(3), par: 2,

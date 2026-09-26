@@ -122,8 +122,35 @@ function ok(label, cond) {
   ok('and shows no card', await page.evaluate(() => document.querySelector('.map-card').hidden &&
     !document.querySelector('.map-node.selected')));
 
-  // --- Jouer T1 ---
+  // --- Glisser la carte ferme la fiche fixée ---
   await page.evaluate(() => window.App.Map.select('t1'));
+  await page.waitForTimeout(300);
+  await page.mouse.move(300, 750);
+  await page.mouse.down();
+  await page.mouse.move(360, 700, { steps: 5 });
+  await page.mouse.up();
+  await page.waitForTimeout(250);
+  ok('dragging the map closes the pinned card', await page.evaluate(() => document.querySelector('.map-card').hidden &&
+    !document.querySelector('.map-node.selected')));
+
+  // --- « Jouer » n'apparaît qu'au survol de la fiche, qui s'allonge vers le bas ---
+  await page.mouse.move(700, 880);
+  await page.evaluate(() => window.App.Map.select('t1'));
+  await page.waitForTimeout(300);
+  const playShown = () => page.evaluate(() => {
+    var a = document.querySelector('.map-card-actions');
+    return getComputedStyle(a).opacity === '1' && a.getBoundingClientRect().height > 20;
+  });
+  const cardBox = () => page.evaluate(() => document.querySelector('.map-card').getBoundingClientRect().toJSON());
+  const c0 = await cardBox();
+  ok('the play button is hidden while the mouse is off the card', !(await playShown()));
+  await page.mouse.move(c0.x + c0.width / 2, c0.y + 20);
+  await page.waitForTimeout(300);
+  const c1 = await cardBox();
+  ok('hovering the card reveals the play button', await playShown());
+  ok('the card grows downward only', Math.abs(c1.top - c0.top) < 1 && c1.bottom > c0.bottom + 20);
+
+  // --- Jouer T1 ---
   await page.click('[data-map-play="t1"]');
   await page.waitForTimeout(350);
   const lv = await page.evaluate(() => ({
@@ -194,6 +221,19 @@ function ok(label, cond) {
   ok('the animation plays only once', await page.evaluate(() => !document.querySelector('.map-edge.draw-in')));
   ok('reopening after a win focuses the next level to play', await page.evaluate(() =>
     document.querySelector('.map-card-title').textContent === 'Diviser'));
+
+  // --- Plus de « Rejouer » à la fin ; un niveau rejoué ne propose pas « Suivant » ---
+  await page.evaluate(() => window.App.Campaign.startLevel('t1'));
+  await page.evaluate(() => {
+    var H = window.App.History;
+    H.selectOp('expr'); H.setExprChainText('-3'); H.confirm();
+    H.toggleTermSelection('left', 1); H.toggleTermSelection('left', 2); H.confirmSimplifySelection();
+    H.toggleTermSelection('right', 0); H.toggleTermSelection('right', 1); H.confirmSimplifySelection();
+  });
+  await page.waitForTimeout(200);
+  ok('replaying a solved level: no Suivant, no Rejouer', await page.evaluate(() => window.App.Campaign.current().won &&
+    !document.getElementById('levelWin').hidden && document.querySelector('[data-win-next]').hidden &&
+    !document.querySelector('[data-win-replay]')));
 
   // --- Un "Annuler" enlève la 2e étoile ; "Mode libre" quitte la campagne ---
   await page.evaluate(() => window.App.Campaign.startLevel('t3'));
