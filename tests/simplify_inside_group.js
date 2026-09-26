@@ -107,6 +107,28 @@ function ok(label, cond) {
   await page.waitForTimeout(150);
   ok('opposite groups cancel to 0', await lastLeft() === JSON.stringify([{ coeff: 0, pow: 0 }]));
 
+  // 8) Un seul terme entre les parenthèses d'un facteur numérique : Simplifier fait le calcul
+  // jusqu'au bout (T6 : "(11+4)/5" donnait "15/5", qui restait bloqué sans Développer).
+  await start('5x=11+4');
+  await page.evaluate(() => { var H = window.App.History; H.selectOp('expr'); H.setExprChainText('\\div5'); H.confirm(); });
+  ok('(11+4)/5 is a quotient group', await page.evaluate(() => window.App.Expr.isFactorGroup(window.App.History.lastEquation().right[0])));
+  await select('right', 0);
+  await page.click('button[data-op="simplify"]');
+  await page.waitForTimeout(150);
+  ok('(11+4)/5 simplifies to 3', await page.evaluate(() => JSON.stringify(window.App.History.lastEquation().right)) ===
+    JSON.stringify([{ coeff: 3, pow: 0 }]));
+  await start('3(11+4)=x');
+  await select('left', 0);
+  await page.click('button[data-op="simplify"]');
+  await page.waitForTimeout(150);
+  ok('3(11+4) simplifies to 45', await lastLeft() === JSON.stringify([{ coeff: 45, pow: 0 }]));
+  await start('2(3x)=x+1');
+  await select('left', 0);
+  ok('2(3x): Simplifier enabled', await canSimplify());
+  await page.click('button[data-op="simplify"]');
+  await page.waitForTimeout(150);
+  ok('2(3x) simplifies to 6x', await lastLeft() === JSON.stringify([{ coeff: 6, pow: 1 }]));
+
   ok('no page errors', errs.length === 0);
   if (errs.length) console.log(errs.join('\n'));
   await browser.close();

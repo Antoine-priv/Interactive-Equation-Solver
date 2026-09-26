@@ -822,6 +822,16 @@
         cq.cancelled.forEach(function (f) { if (sideHasVariable(f)) nonZero.push(cloneSide(f)); });
         return;
       }
+      // Un seul terme entre les parenthèses d'un facteur numérique (ex. "15/5", "(5x)/5",
+      // "3(2x)", typiquement juste après avoir simplifié leur intérieur) : il n'y a plus rien
+      // à distribuer, le groupe se réduit à ce terme (même calcul que Développer, voir
+      // expandOneInner) — sans avoir à passer par Développer (pas encore débloqué au Port).
+      if (isFactorGroup(s) && !s.factorTerms && s.innerTerms.length === 1 && !isGroup(s.innerTerms[0]) &&
+          !(s.isDivision && s.factor.pow !== 0)) {
+        out[i] = expandOneInner(s.sign, s.factor, !!s.isDivision, s.innerTerms[0]);
+        acted.push(i);
+        return;
+      }
       if (JSON.stringify(s) !== JSON.stringify(n)) { out[i] = s; acted.push(i); }
     });
     var partialDesc = null;
