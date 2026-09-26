@@ -2856,14 +2856,28 @@ body:has(.modal-overlay:not([hidden])) #coachRing,
 body:has(.modal-overlay:not([hidden])) .coach-bubble { display: none; }
 #coachRing {
   position: fixed;
+  left: 0;
+  top: 0;
   z-index: 55;
   border: 2px solid var(--accent);
   border-radius: 12px;
   pointer-events: none;
-  animation: coach-ring 1.6s ease-out infinite;
-  transition: left 0.25s ease, top 0.25s ease, width 0.25s ease, height 0.25s ease;
 }
-@keyframes coach-ring { 0% { box-shadow: 0 0 0 0 rgba(79, 70, 229, 0.45); } 100% { box-shadow: 0 0 0 14px rgba(79, 70, 229, 0); } }
+/* Pulsation en transform/opacity seulement (composée par le GPU, sans repeindre la page à
+   chaque image comme un box-shadow animé). L'échelle par axe vient de coach.js. */
+#coachRing::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.45);
+  animation: coach-ring 1.6s ease-out infinite;
+  will-change: transform, opacity;
+}
+@keyframes coach-ring {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(var(--coach-sx, 1.2), var(--coach-sy, 1.4)); opacity: 0; }
+}
 .coach-bubble {
   position: fixed;
   z-index: 56;
@@ -2878,7 +2892,6 @@ body:has(.modal-overlay:not([hidden])) .coach-bubble { display: none; }
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: left 0.25s ease, top 0.25s ease;
 }
 .coach-bubble[hidden] { display: none; }
 .coach-step { font-size: 11.5px; opacity: 0.7; }
@@ -2892,8 +2905,7 @@ body:has(.modal-overlay:not([hidden])) .coach-bubble { display: none; }
 .coach-bubble.below::before { top: -8px; border-top: 0; border-bottom-color: var(--text); }
 .coach-bubble.above::after { bottom: -8px; border-bottom: 0; border-top-color: var(--text); }
 @media (prefers-reduced-motion: reduce) {
-  #coachRing { animation: none; }
-  #coachRing, .coach-bubble { transition: none; }
+  #coachRing::after { animation: none; opacity: 0; }
 }
 
 /* Carte : défi du jour et bannière "Nouvelle région" */

@@ -87,20 +87,34 @@
     return typeof t === 'function' ? t() : document.querySelector(t);
   }
 
+  // Déplacement animé seulement quand l'étape change : on interpole depuis l'ancienne
+  // position vers la position *actuelle* de la cible (relue à chaque image, elle peut encore
+  // bouger avec le recentrage du canevas), si bien que le contour arrive exactement dessus.
+  // Le reste du temps il colle à sa cible, sans transition qui le ferait traîner.
+  var GLIDE_MS = 250;
+  var lastIndex = -1, glide = null, drawn = null;
+  function ease(t) { return 1 - Math.pow(1 - t, 3); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
   function position() {
     var cur = currentStep();
     var visible = !!cur && !document.body.classList.contains('map-open') && !(App.Campaign.current() || {}).won;
     bubble.hidden = !visible;
-    ring.hidden = true;
-    if (!visible) return;
-    bubble.querySelector('[data-coach-step]').textContent = 'Coach · ' + (cur.index + 1) + ' / ' + script.length;
-    bubble.querySelector('[data-coach-text]').textContent = cur.step.text;
-    var btn = bubble.querySelector('[data-coach-ok]');
-    btn.hidden = !cur.step.manual;
-    btn.onclick = function () { manualDone[cur.index] = true; refresh(); };
+    if (!visible) { ring.hidden = true; lastIndex = -1; drawn = null; return; }
+    if (cur.index !== lastIndex) {
+      glide = lastIndex !== -1 && drawn ? { from: drawn, t0: performance.now() } : null;
+      lastIndex = cur.index;
+      bubble.querySelector('[data-coach-step]').textContent = 'Coach · ' + (cur.index + 1) + ' / ' + script.length;
+      bubble.querySelector('[data-coach-text]').textContent = cur.step.text;
+      var btn = bubble.querySelector('[data-coach-ok]');
+      btn.hidden = !cur.step.manual;
+      btn.onclick = function () { manualDone[cur.index] = true; refresh(); };
+    }
     var target = resolveTarget(cur.step.target);
     var r = target && target.getBoundingClientRect();
     if (!r || (!r.width && !r.height)) {
+      ring.hidden = true;
+      drawn = null;
       bubble.style.left = '50%';
       bubble.style.top = '';
       bubble.style.bottom = '32px';
@@ -108,32 +122,58 @@
       bubble.className = 'coach-bubble';
       return;
     }
-    ring.hidden = false;
-    ring.style.left = (r.left - 6) + 'px';
-    ring.style.top = (r.top - 6) + 'px';
-    ring.style.width = (r.width + 12) + 'px';
-    ring.style.height = (r.height + 12) + 'px';
+    // Ne rebasculer `hidden` que s'il change : le repasser à true puis false relancerait
+    // l'animation de pulsation à chaque recalage.
+    if (ring.hidden) ring.hidden = false;
     var bw = bubble.offsetWidth || 280, bh = bubble.offsetHeight || 80;
     var below = r.bottom + 14 + bh < window.innerHeight - 10;
-    var left = Math.max(12, Math.min(window.innerWidth - bw - 12, r.left + r.width / 2 - bw / 2));
+    var to = {
+      x: r.left - 6, y: r.top - 6, w: r.width + 12, h: r.height + 12,
+      bx: Math.max(12, Math.min(window.innerWidth - bw - 12, r.left + r.width / 2 - bw / 2)),
+      by: below ? r.bottom + 14 : r.top - 14 - bh
+    };
+    var d = to;
+    if (glide) {
+      var t = Math.min(1, (performance.now() - glide.t0) / GLIDE_MS);
+      if (t >= 1) glide = null;
+      else {
+        var k = ease(t), f = glide.from;
+        d = { x: lerp(f.x, to.x, k), y: lerp(f.y, to.y, k), w: lerp(f.w, to.w, k), h: lerp(f.h, to.h, k),
+          bx: lerp(f.bx, to.bx, k), by: lerp(f.by, to.by, k) };
+        trackUntil = Math.max(trackUntil, performance.now() + 50);
+      }
+    }
+    drawn = d;
+    ring.style.transform = 'translate(' + d.x + 'px, ' + d.y + 'px)';
+    ring.style.width = d.w + 'px';
+    ring.style.height = d.h + 'px';
+    // Le halo s'étend de 14 px de chaque côté : échelle propre à chaque axe.
+    ring.style.setProperty('--coach-sx', ((d.w + 28) / d.w).toFixed(4));
+    ring.style.setProperty('--coach-sy', ((d.h + 28) / d.h).toFixed(4));
     bubble.style.transform = '';
     bubble.style.bottom = '';
-    bubble.style.left = left + 'px';
-    bubble.style.top = (below ? r.bottom + 14 : r.top - 14 - bh) + 'px';
-    bubble.className = 'coach-bubble ' + (below ? 'below' : 'above');
-    bubble.style.setProperty('--coach-arrow-x', Math.max(16, Math.min(bw - 16, r.left + r.width / 2 - left)) + 'px');
+    bubble.style.left = d.bx + 'px';
+    bubble.style.top = d.by + 'px';
+    var cls = 'coach-bubble ' + (below ? 'below' : 'above');
+    if (bubble.className !== cls) bubble.className = cls;
+    bubble.style.setProperty('--coach-arrow-x', Math.max(16, Math.min(bw - 16, r.left + r.width / 2 - d.bx)) + 'px');
   }
 
-  // Après chaque rendu, renderAll recentre le canevas avec une transition CSS : la cible
-  // bouge encore quelques centaines de millisecondes, on se recale donc plusieurs fois.
-  var timers = [];
+  // Après chaque rendu, renderAll recentre le canevas avec une transition CSS (et les lignes
+  // sont reconstruites) : la cible bouge encore un moment, on la suit donc à chaque image
+  // pendant une seconde plutôt qu'à quelques instants fixes, qui la saisissaient en plein
+  // mouvement et plaçaient le contour à une position intermédiaire.
+  var trackUntil = 0;
+  function track() {
+    raf = null;
+    if (!script) return;
+    position();
+    if (performance.now() < trackUntil) raf = requestAnimationFrame(track);
+  }
   function refresh() {
     if (!bubble) return;
-    if (raf) cancelAnimationFrame(raf);
-    timers.forEach(clearTimeout);
-    raf = requestAnimationFrame(function () {
-      timers = [60, 250, 500, 900].map(function (ms) { return setTimeout(position, ms); });
-    });
+    trackUntil = performance.now() + 1000;
+    if (!raf) raf = requestAnimationFrame(track);
   }
 
   function start(id) {
@@ -146,6 +186,8 @@
   function stop() {
     script = null;
     levelId = null;
+    lastIndex = -1;
+    glide = drawn = null;
     if (bubble) { bubble.hidden = true; ring.hidden = true; }
   }
 
@@ -155,6 +197,7 @@
     App.History.subscribe(function () { if (script) refresh(); });
     window.addEventListener('resize', function () { if (script) refresh(); });
     document.addEventListener('mouseup', function () { if (script) refresh(); });
+    document.addEventListener('wheel', function () { if (script) refresh(); }, { passive: true });
   }
 
   App.Coach = {

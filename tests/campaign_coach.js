@@ -47,7 +47,20 @@ function ok(label, cond) {
   await page.waitForTimeout(600);
   ok('coach back once the settings window is closed', await coachShown());
 
+  // Le contour pulse en continu : sélectionner un terme (qui recale le coach) ne doit pas
+  // relancer l'animation, dont l'horloge ne recule donc jamais.
+  await page.evaluate(() => {
+    window.__pulse = []; var t0 = performance.now();
+    (function f() {
+      var a = document.getElementById('coachRing').getAnimations({ subtree: true })[0];
+      window.__pulse.push(a ? a.currentTime : -1);
+      if (performance.now() - t0 < 1200) requestAnimationFrame(f);
+    })();
+  });
   await page.click('.eq-row.current .side[data-side="left"] [data-index="1"]');
+  await page.waitForTimeout(1300);
+  ok('selecting a term does not restart the ring pulse', await page.evaluate(() =>
+    window.__pulse.every(function (v, i) { return v >= 0 && (i === 0 || v >= window.__pulse[i - 1]); })));
   c = await coach();
   ok('step 2 after the click: "Opération"', c.index === 1 && /Opération/.test(c.text));
   const opRect = await page.evaluate(() => document.querySelector('#opButtons button[data-op="expr"]').getBoundingClientRect().toJSON());
@@ -57,7 +70,30 @@ function ok(label, cond) {
   c = await coach();
   ok('step 3: type −3 on the keypad', c.index === 2);
   await page.evaluate(() => window.App.History.setExprChainText('-3'));
+  // Après Valider, le canevas se recentre : le contour doit rejoindre le côté gauche en un
+  // glissement continu, sans s'arrêter à une position intermédiaire saisie en plein
+  // recentrage pendant que la cible continue de bouger.
+  await page.evaluate(() => {
+    window.__track = []; var t0 = performance.now();
+    (function f() {
+      var t = document.querySelector('.eq-row.current .side[data-side="left"]');
+      window.__track.push([performance.now() - t0, document.getElementById('coachRing').getBoundingClientRect().top,
+        t ? t.getBoundingClientRect().top - 6 : NaN]);
+      if (performance.now() - t0 < 800) requestAnimationFrame(f);
+    })();
+  });
   await page.click('[data-key="enter"]');
+  await page.waitForTimeout(900);
+  ok('after Valider the ring never stalls off target and ends on it', await page.evaluate(() => {
+    var tr = window.__track, t0 = tr[0][2], stall = 0, worst = 0;
+    var after = tr.filter(function (s) { return Math.abs(s[2] - t0) > 1; }); // une fois la nouvelle ligne rendue
+    after.forEach(function (s, i) {
+      var still = i > 0 && Math.abs(s[1] - after[i - 1][1]) < 0.5;
+      stall = still && Math.abs(s[1] - s[2]) > 1 ? stall + 1 : 0;
+      worst = Math.max(worst, stall);
+    });
+    return after.length > 0 && worst < 3 && Math.abs(tr[tr.length - 1][1] - tr[tr.length - 1][2]) < 1;
+  }));
   c = await coach();
   ok('step 4 once the operation is applied: simplify the left side', c.index === 3);
   await page.screenshot({ path: SCRATCH + '/campaign_coach_step4.png' });
