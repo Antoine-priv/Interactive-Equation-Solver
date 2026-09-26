@@ -2849,7 +2849,8 @@ body.campaign-lock-key-square [data-key="square"] { visibility: hidden; }
 }
 #levelWin[hidden] { display: none; }
 #levelWin h3 { margin: 0; font-size: 19px; }
-#levelWin .level-hint-close { color: var(--text-muted); }
+#levelWin .level-hint-close { color: var(--text-muted); opacity: 0; transition: opacity 0.15s; }
+#levelWin:hover .level-hint-close, #levelWin .level-hint-close:focus-visible { opacity: 0.7; }
 .win-stars { display: flex; justify-content: center; gap: 8px; font-size: 40px; line-height: 1; }
 .win-stars[hidden], .level-steps[hidden] { display: none; }
 .win-stars span { color: var(--border); }
