@@ -114,7 +114,7 @@ function ok(label, cond) {
   // --- T7 : étape "Compris" ---
   await page.evaluate(() => {
     localStorage.setItem('equations-progress', JSON.stringify({ version: 1, badges: [], levels: {
-      t1: { stars: 3 }, t2: { stars: 3 }, t3: { stars: 3 }, t4: { stars: 3 }, t5: { stars: 3 }, t6: { stars: 3 } } }));
+      t1: { stars: 3 }, t3: { stars: 3 }, t4: { stars: 3 }, t5: { stars: 3 }, t6: { stars: 3 } } }));
     window.App.Progress.load();
     window.App.Campaign.startLevel('t7');
   });

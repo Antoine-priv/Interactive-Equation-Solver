@@ -162,7 +162,6 @@ function installHelpers() {
 // ---- Scripts de résolution (exécutés dans la page, R disponible) ----
 const S = {
   t1: () => { R.op('-3'); },
-  t2: () => { R.op('+5'); },
   t3: () => { R.op('\\div3'); },
   t4: () => { R.op('-8'); },
   t5: () => { R.op('-5'); R.op('\\div2'); },

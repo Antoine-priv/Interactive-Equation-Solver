@@ -58,7 +58,7 @@ function ok(label, cond) {
   // --- Nouvelle région : le brouillard se lève et une bannière s'affiche ---
   await page.evaluate(() => {
     var levels = {};
-    ['t1', 't2', 't3', 't4', 't5', 't6', 't7'].forEach(function (id) { levels[id] = { stars: 3 }; });
+    ['t1', 't3', 't4', 't5', 't6', 't7'].forEach(function (id) { levels[id] = { stars: 3 }; });
     localStorage.setItem('equations-progress', JSON.stringify({ version: 1, badges: [], levels: levels }));
     window.App.Progress.load();
     window.App.Map.open({ from: 't7', unlocked: ['l1'] });

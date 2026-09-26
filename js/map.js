@@ -159,7 +159,7 @@
       if (st === 'open' && !isFresh && cur && cur.id === l.id) el('circle', { r: 18, class: 'map-node-pulse' }, g);
       el('circle', { r: l.boss ? 21 : 17, class: 'map-node-body' }, g);
       var t = el('text', { class: 'map-node-label' }, g);
-      t.textContent = l.daily ? '★' : l.id.toUpperCase();
+      t.textContent = l.daily ? '★' : App.Levels.code(l);
       if (st === 'locked' || isFresh) {
         // Le tremblement (transform CSS) est sur un groupe intérieur : sur celui qui porte
         // l'attribut transform, il l'écraserait et ramènerait le cadenas au centre du nœud.

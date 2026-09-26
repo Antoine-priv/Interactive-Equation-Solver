@@ -141,23 +141,23 @@ function ok(label, cond) {
   await page.click('#mapBtn');
   await page.waitForTimeout(100);
   ok('opening the map with the map button plays the unlock animation', await page.evaluate(() =>
-    !!document.querySelector('.map-edge.draw-in[data-edge="t1-t2"]')));
+    !!document.querySelector('.map-edge.draw-in[data-edge="t1-t3"]')));
   ok('the new level card waits for the end of the animation', await page.evaluate(() => document.querySelector('.map-card').hidden));
   await page.waitForTimeout(1600);
   ok('still no card while the token travels', await page.evaluate(() => document.querySelector('.map-card').hidden));
   await page.waitForTimeout(800);
   ok('the card of the unlocked level pops once the animation is over', await page.evaluate(() =>
-    !document.querySelector('.map-card').hidden && document.querySelector('.map-card-title').textContent === 'Ajouter'));
+    !document.querySelector('.map-card').hidden && document.querySelector('.map-card-title').textContent === 'Diviser'));
   await page.screenshot({ path: SCRATCH + '/campaign_map_after.png' });
   const after = await page.evaluate(() => ({
     t1: document.querySelector('[data-level="t1"]').getAttribute('class'),
-    t2: document.querySelector('[data-level="t2"]').getAttribute('class'),
+    t3: document.querySelector('[data-level="t3"]').getAttribute('class'),
     stars: document.querySelector('[data-map-stars]').textContent
   }));
-  ok('T1 shown as done, T2 now open', /done/.test(after.t1) && /open/.test(after.t2) && !/locked/.test(after.t2));
+  ok('T1 shown as done, T3 now open', /done/.test(after.t1) && /open/.test(after.t3) && !/locked/.test(after.t3));
   ok('star total updated', after.stars === '3');
   const pos = await page.evaluate(() => {
-    var n = document.querySelector('[data-level="t2"] .map-node-body').getBoundingClientRect();
+    var n = document.querySelector('[data-level="t3"] .map-node-body').getBoundingClientRect();
     var c = document.querySelector('.map-card').getBoundingClientRect();
     return { n: n.toJSON(), c: c.toJSON() };
   });
@@ -173,17 +173,15 @@ function ok(label, cond) {
   await page.waitForTimeout(100);
   ok('the animation plays only once', await page.evaluate(() => !document.querySelector('.map-edge.draw-in')));
   ok('reopening after a win focuses the next level to play', await page.evaluate(() =>
-    document.querySelector('.map-card-title').textContent === 'Ajouter'));
+    document.querySelector('.map-card-title').textContent === 'Diviser'));
 
   // --- Un "Annuler" enlève la 2e étoile ; "Mode libre" quitte la campagne ---
-  await page.evaluate(() => window.App.Campaign.startLevel('t2'));
+  await page.evaluate(() => window.App.Campaign.startLevel('t3'));
   await page.evaluate(() => {
     var H = window.App.History;
     H.selectOp('expr'); H.setExprChainText('+1'); H.confirm();
     H.undo();
-    H.selectOp('expr'); H.setExprChainText('+5'); H.confirm();
-    H.toggleTermSelection('left', 1); H.toggleTermSelection('left', 2); H.confirmSimplifySelection();
-    H.toggleTermSelection('right', 0); H.toggleTermSelection('right', 1); H.confirmSimplifySelection();
+    H.selectOp('expr'); H.setExprChainText('\\div3'); H.confirm();
   });
   await page.waitForTimeout(200);
   ok('undo used: 2 stars', await page.evaluate(() => document.querySelectorAll('#levelWin [data-win-star].on').length) === 2);
@@ -192,13 +190,13 @@ function ok(label, cond) {
   await page.click('[data-win-next]');
   await page.waitForTimeout(150);
   ok('Suivant opens the map with the unlock animation', await page.evaluate(() =>
-    window.App.Map.isOpen() && !!document.querySelector('.map-edge.draw-in[data-edge="t2-t3"]') &&
-    window.App.Campaign.current().id === 't2' && document.getElementById('levelWin').hidden));
+    window.App.Map.isOpen() && !!document.querySelector('.map-edge.draw-in[data-edge="t3-t4"]') &&
+    window.App.Campaign.current().id === 't3' && document.getElementById('levelWin').hidden));
   await page.waitForTimeout(2600);
   ok('then the map closes on the next level', await page.evaluate(() =>
-    document.getElementById('mapOverlay').hidden && window.App.Campaign.current().id === 't3' && !window.App.Campaign.current().won));
+    document.getElementById('mapOverlay').hidden && window.App.Campaign.current().id === 't4' && !window.App.Campaign.current().won));
 
-  await page.evaluate(() => window.App.Campaign.startLevel('t3'));
+  await page.evaluate(() => window.App.Campaign.startLevel('t4'));
   await page.evaluate(() => { window.App.History.startNewEquation(window.App.Parser.parseEquation('x+1=2')); });
   ok('a free equation leaves the level', await page.evaluate(() => window.App.Campaign.current() === null &&
     document.getElementById('levelBar').hidden && !window.App.Campaign.isOpLocked('factor')));

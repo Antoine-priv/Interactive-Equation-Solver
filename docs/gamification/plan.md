@@ -61,9 +61,8 @@
 
 | Id | Problème | Énoncé | Apprend | ★★★ en | Prérequis | Notes |
 |---|---|---|---|---|---|---|
-| t1 | Premier pas | `x + 3 = 7` | Isoler x en retirant la même chose des deux côtés | 1 | — | Découvre : Cliquer un terme, pavé Opération « −3 » |
-| t2 | Ajouter | `x − 5 = 2` | Ajouter aux deux côtés | 1 | t1 | Découvre : Lire la flèche entre deux étapes |
-| t3 | Diviser | `3x = 12` | Diviser par le coefficient | 1 | t2 | Découvre : Opération « ÷3 » |
+| t1 | Premier pas | `x + 3 = 7` | Isoler x en ajoutant ou retirant la même chose des deux côtés (remplace aussi l'ancien t2 « Ajouter ») | 1 | — | Découvre : Cliquer un terme, pavé Opération « −3 » |
+| t3 | Diviser | `3x = 12` | Diviser par le coefficient | 1 | t1 | Découvre : Opération « ÷3 » |
 | t4 | Faire glisser | `x + 8 = 3` | Passer un terme de l'autre côté | 1 | t3 | Découvre : Glisser un terme au-delà du « = » |
 | t5 | Deux étapes | `2x + 5 = 11` | Enchaîner soustraction puis division | 2 | t4 | Découvre : Glisser le coefficient 2 pour diviser |
 | t6 | Rassembler | `3x + 2x − 4 = 11` | Regrouper les termes semblables | 2 | t5 | Découvre : Sélection multiple et « Simplifier » |
