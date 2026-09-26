@@ -2686,7 +2686,14 @@ button {
 .map-card-statement { color: var(--text-muted); font-size: 12.5px; }
 .map-card-learn { color: var(--text); }
 .map-card-meta { display: flex; gap: 12px; flex-wrap: wrap; color: var(--text-muted); font-size: 12.5px; }
-.map-card-actions { display: flex; justify-content: flex-end; }
+/* « Jouer » n'apparaît qu'au survol de la fiche (fixée ou non) : elle s'allonge vers le
+   bas pour le montrer (la marge négative annule le `gap` tant qu'il est replié). */
+.map-card-actions {
+  display: flex; justify-content: flex-end;
+  max-height: 0; margin-top: -10px; opacity: 0; overflow: hidden;
+  transition: max-height 0.2s ease, margin-top 0.2s ease, opacity 0.15s ease;
+}
+.map-card:hover .map-card-actions, .map-card:focus-within .map-card-actions { max-height: 60px; margin-top: 0; opacity: 1; }
 .map-play-btn {
   border: 0; border-radius: 999px; padding: 8px 20px; cursor: pointer;
   font: 600 14px inherit; font-family: inherit; background: var(--accent); color: #fff;

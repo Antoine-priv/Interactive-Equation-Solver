@@ -73,13 +73,17 @@
     var l = App.Levels.get(shownId());
     if (!l) return;
     var w = viewport.clientWidth, h = viewport.clientHeight;
-    var cw = card.offsetWidth, ch = card.offsetHeight;
+    // Hauteur de la fiche sans « Jouer » (révélé au survol) : elle s'allonge vers le bas
+    // sans remonter. `full` sert seulement à la garder dans l'écran une fois allongée.
+    var actions = card.querySelector('.map-card-actions');
+    var extra = actions ? actions.scrollHeight + 10 : 0;
+    var cw = card.offsetWidth, ch = card.offsetHeight - (actions ? 10 + parseFloat(getComputedStyle(actions).marginTop) + actions.offsetHeight : 0);
     var nx = view.x + l.x * view.s, ny = view.y + l.y * view.s;
     var gap = 28 * Math.max(0.8, view.s);
     var right = nx + gap + cw <= w - 12;
     var left = right ? nx + gap : nx - gap - cw;
     left = Math.max(12, Math.min(w - cw - 12, left));
-    var top = Math.max(74, Math.min(h - ch - 12, ny - ch / 2));
+    var top = Math.max(74, Math.min(h - ch - extra - 12, ny - ch / 2));
     card.style.left = left + 'px';
     card.style.top = top + 'px';
     card.classList.toggle('on-left', !right);
@@ -282,7 +286,7 @@
   // Survol : aperçu de la fiche, tant qu'aucune n'est fixée. Le court délai à la sortie
   // laisse la souris passer du nœud à la fiche sans la fermer.
   function hover(id) {
-    if (pinned) return;
+    if (pinned || viewport.classList.contains('dragging')) return;
     var l = App.Levels.get(id);
     if (!l || nodeState(l) === 'locked') return;
     clearTimeout(hoverTimer);
@@ -477,7 +481,11 @@
     window.addEventListener('mousemove', function (e) {
       if (!drag) return;
       var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-      if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true;
+      if (!drag.moved && Math.abs(dx) + Math.abs(dy) > 4) {
+        drag.moved = true;
+        // Glisser la carte ferme la fiche (fixée ou aperçu).
+        if (selectedId || hoverId) select(null);
+      }
       if (!drag.moved) return;
       viewport.classList.add('dragging');
       view.x = drag.vx + dx;
