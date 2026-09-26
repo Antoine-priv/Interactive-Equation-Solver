@@ -112,6 +112,7 @@
     var steps = stepCount();
     var par = l.par;
     var stepsEl = bar.querySelector('[data-level-steps]');
+    stepsEl.hidden = !App.Levels.starred(l);
     stepsEl.textContent = par ? steps + ' / ' + par + ' étape' + (par > 1 ? 's' : '') + ' pour ★★★' : steps + ' étape' + (steps > 1 ? 's' : '');
     stepsEl.classList.toggle('over', !!par && steps > par);
     var st = bar.querySelector('[data-level-statement]');
@@ -133,7 +134,7 @@
     var hints = run.level.hints;
     var i = run.hintIdx;
     hintEl.querySelector('[data-hint-text]').textContent = hints[i];
-    hintEl.querySelector('[data-hint-note]').textContent = 'Indice ' + (i + 1) + ' / ' + hints.length + ' · limite ce niveau à ★';
+    hintEl.querySelector('[data-hint-note]').textContent = 'Indice ' + (i + 1) + ' / ' + hints.length + (App.Levels.starred(run.level) ? ' · limite ce niveau à ★' : '');
     hintEl.querySelector('[data-hint-prev]').disabled = i === 0;
     hintEl.querySelector('[data-hint-next]').disabled = i === hints.length - 1;
   }
@@ -274,6 +275,7 @@
     var efficient = !run.level.par || steps <= run.level.par;
     var stars = 1 + (clean ? 1 : 0) + (efficient ? 1 : 0);
     if (run.hints > 0) stars = 1;
+    if (!App.Levels.starred(run.level)) stars = 3; // tutoriel : pas d'étoiles, réussite pleine
     var result = null;
     if (run.level.daily) {
       App.Progress.recordDaily();
@@ -324,8 +326,11 @@
       crit.appendChild(d);
     }
     row(true, 'Équation résolue');
-    row(clean, run.hints ? 'Indice utilisé : le niveau est limité à ★' : (clean ? 'Sans indice ni « Annuler »' : '« Annuler » utilisé'));
-    if (l.par) row(efficient, steps + ' étape' + (steps > 1 ? 's' : '') + (efficient ? ', dans la limite de ' : ', il en faut ') + l.par + (efficient ? '' : ' au plus pour ★★★'));
+    // Tutoriel (le Port) : ni étoiles ni critères.
+    var starred = App.Levels.starred(l);
+    winEl.querySelector('.win-stars').hidden = !starred;
+    if (starred) row(clean, run.hints ? 'Indice utilisé : le niveau est limité à ★' : (clean ? 'Sans indice ni « Annuler »' : '« Annuler » utilisé'));
+    if (starred && l.par) row(efficient, steps + ' étape' + (steps > 1 ? 's' : '') + (efficient ? ', dans la limite de ' : ', il en faut ') + l.par + (efficient ? '' : ' au plus pour ★★★'));
     if (l.daily) {
       var n = App.Progress.dailyStreak();
       row(true, 'Série : ' + n + ' jour' + (n > 1 ? 's' : '') + ' d\'affilée');

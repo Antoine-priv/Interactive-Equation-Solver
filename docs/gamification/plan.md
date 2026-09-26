@@ -57,16 +57,15 @@
 
 ### Le Port — Tutoriel
 
-*Notion :* Prise en main : sélection, Opération, glisser, Simplifier, navigation. *S’ouvre après :* Départ. *Récompense :* Badge « Premiers pas ».
+*Notion :* Prise en main : sélection, Opération, glisser, Simplifier, navigation. *S’ouvre après :* Départ. *Récompense :* Badge « Premiers pas ». Tutoriel : ni étoiles ni limite d'étapes (ne compte pas dans le total d'étoiles).
 
-| Id | Problème | Énoncé | Apprend | ★★★ en | Prérequis | Notes |
-|---|---|---|---|---|---|---|
-| t1 | Premier pas | `x + 3 = 7` | Isoler x en ajoutant ou retirant la même chose des deux côtés (remplace aussi l'ancien t2 « Ajouter ») | 1 | — | Découvre : Cliquer un terme, pavé Opération « −3 » |
-| t3 | Diviser | `3x = 12` | Diviser par le coefficient | 1 | t1 | Découvre : Opération « ÷3 » |
-| t4 | Faire glisser | `x + 8 = 3` | Passer un terme de l'autre côté | 1 | t3 | Découvre : Glisser un terme au-delà du « = » |
-| t5 | Deux étapes | `2x + 5 = 11` | Enchaîner soustraction puis division | 2 | t4 | Découvre : Glisser le coefficient 2 pour diviser |
-| t6 | Rassembler | `3x + 2x − 4 = 11` | Regrouper les termes semblables | 2 | t5 | Découvre : Sélection multiple et « Simplifier » |
-| t7 | Grand large | `5x + 3 = 2x + 12` | x des deux côtés | 3 | t6 | Épreuve · Découvre : Déplacer le canevas et zoomer (loupes, Ctrl + molette) · Badge « Premiers pas » |
+| Id | Problème | Énoncé | Apprend | Prérequis | Notes |
+|---|---|---|---|---|---|
+| t1 | Premier pas | `x + 3 = 7` | Isoler x en ajoutant ou retirant la même chose des deux côtés (remplace aussi l'ancien t2 « Ajouter ») | — | Découvre : pavé Opération « −3 » |
+| t3 | Diviser | `3x = 12` | Diviser par le coefficient | t1 | Découvre : Opération « ÷3 » |
+| t4 | Faire glisser | `x + 8 = 3` | Passer un terme de l'autre côté | t3 | Découvre : Glisser un terme au-delà du « = » · active la simplification automatique |
+| t5 | Deux étapes | `2x + 5 = 11` | Enchaîner soustraction puis division | t4 | Découvre : Glisser le coefficient 2 pour diviser |
+| t7 | Grand large | `3x + 2x + 3 = 2x + 12` | Regrouper les termes semblables, x des deux côtés (remplace aussi l'ancien t6 « Rassembler ») | t5 | Épreuve · Découvre : Sélection multiple et « Simplifier », déplacer le canevas et zoomer · Badge « Premiers pas » |
 
 ### La Plaine — Équations du 1er degré
 

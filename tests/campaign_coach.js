@@ -170,15 +170,19 @@ function ok(label, cond) {
   // --- T7 : étape "Compris" ---
   await page.evaluate(() => {
     localStorage.setItem('equations-progress', JSON.stringify({ version: 1, badges: [], levels: {
-      t1: { stars: 3 }, t3: { stars: 3 }, t4: { stars: 3 }, t5: { stars: 3 }, t6: { stars: 3 } } }));
+      t1: { stars: 3 }, t3: { stars: 3 }, t4: { stars: 3 }, t5: { stars: 3 } } }));
     window.App.Progress.load();
     window.App.Campaign.startLevel('t7');
   });
   c = await coach();
   ok('T7 opens with a manual step', c.visible && c.index === 0 && await page.evaluate(() => !document.querySelector('[data-coach-ok]').hidden));
-  await page.click('[data-coach-ok]');
+  await page.click('#zoomOutBtn');
   c = await coach();
-  ok('"Compris" moves to the next step', c.index === 1);
+  ok('zooming out moves to the next step', c.index === 1);
+  const both = await page.evaluate(() => ['0', '1'].map((i) =>
+    document.querySelector('.eq-row.current .side[data-side="left"] [data-index="' + i + '"]').getBoundingClientRect().toJSON()));
+  ok('the ring frames both 3x and 2x', inside(c.ring, both[0]) && inside(c.ring, both[1]));
+  await page.screenshot({ path: SCRATCH + '/campaign_coach_t7_select.png' });
 
   await page.evaluate(() => { window.App.History.startNewEquation(window.App.Parser.parseEquation('x+1=2')); });
   c = await coach();

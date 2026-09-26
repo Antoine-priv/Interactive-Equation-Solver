@@ -90,7 +90,7 @@ function ok(label, cond) {
     Hs.toggleTermSelection('right', 0); Hs.toggleTermSelection('right', 1); Hs.confirmSimplifySelection();
   });
   await page.waitForTimeout(150);
-  ok('with a hint, the level is capped at ★', await H(page, () => document.querySelectorAll('#levelWin [data-win-star].on').length) === 1);
+  ok('tutorial level: no stars at the end, even with a hint', await H(page, () => document.querySelector('#levelWin .win-stars').hidden));
   await page.close();
 
   page = await freshPage(true);

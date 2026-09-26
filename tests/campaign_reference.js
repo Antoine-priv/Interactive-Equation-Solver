@@ -165,8 +165,7 @@ const S = {
   t3: () => { R.op('\\div3'); },
   t4: () => { R.op('-8'); },
   t5: () => { R.op('-5'); R.op('\\div2'); },
-  t6: () => { R.tidy(); R.linear(); },
-  t7: () => { R.linear(); },
+  t7: () => { R.tidy(); R.linear(); },
   l1: () => { R.linear(); },
   l2: () => { R.linear(); },
   l3: () => { R.expandAll(); R.linear(); },
@@ -308,7 +307,7 @@ const BLOCKED = {};
       console.log('   last equation:', JSON.stringify(res.eq));
       console.log('   final S:', JSON.stringify(res.final));
     }
-    summary.push(lv.id + '=' + res.steps + (res.steps !== lv.par ? ' (par ' + lv.par + ')' : ''));
+    summary.push(lv.id + '=' + res.steps + (lv.par && res.steps !== lv.par ? ' (par ' + lv.par + ')' : ''));
   }
   console.log('steps: ' + summary.join(', '));
   ok('no page errors', errs.length === 0);

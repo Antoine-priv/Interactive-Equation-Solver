@@ -37,7 +37,7 @@ function ok(label, cond) {
     localStorage.setItem('equations-progress', JSON.stringify({ version: 1, badges: [], levels: levels }));
     P.load();
     var fewStars = P.isAvailable(L.get('top'));
-    Object.keys(levels).forEach(function (id) { levels[id].stars = 2; });
+    Object.keys(levels).forEach(function (id) { levels[id].stars = 3; });
     localStorage.setItem('equations-progress', JSON.stringify({ version: 1, badges: [], levels: levels }));
     P.load();
     return { fewStars: fewStars, enough: P.isAvailable(L.get('top')) };

@@ -125,15 +125,16 @@ function ok(label, cond) {
   // --- Glisser la carte ferme la fiche fixée ---
   await page.evaluate(() => window.App.Map.select('t1'));
   await page.waitForTimeout(300);
-  await page.mouse.move(300, 750);
+  await page.mouse.move(1100, 600);
   await page.mouse.down();
-  await page.mouse.move(360, 700, { steps: 5 });
+  await page.mouse.move(1160, 550, { steps: 5 });
   await page.mouse.up();
   await page.waitForTimeout(250);
   ok('dragging the map closes the pinned card', await page.evaluate(() => document.querySelector('.map-card').hidden &&
     !document.querySelector('.map-node.selected')));
 
-  // --- « Jouer » n'apparaît qu'au survol de la fiche, qui s'allonge vers le bas ---
+  // --- « Jouer » : toujours visible sur une fiche fixée ; sur un aperçu (survol du nœud),
+  // seulement au survol de la fiche, qui s'allonge alors vers le bas ---
   await page.mouse.move(700, 880);
   await page.evaluate(() => window.App.Map.select('t1'));
   await page.waitForTimeout(300);
@@ -141,10 +142,19 @@ function ok(label, cond) {
     var a = document.querySelector('.map-card-actions');
     return getComputedStyle(a).opacity === '1' && a.getBoundingClientRect().height > 20;
   });
+  ok('a pinned card shows its play button', await playShown());
+  await page.evaluate(() => window.App.Map.select(null));
+  await page.waitForTimeout(250);
+  const t1n = await page.evaluate(() => {
+    var b = document.querySelector('.map-node[data-level="t1"] .map-node-body').getBoundingClientRect();
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  });
+  await page.mouse.move(t1n.x, t1n.y);
+  await page.waitForTimeout(300);
   const cardBox = () => page.evaluate(() => document.querySelector('.map-card').getBoundingClientRect().toJSON());
   const c0 = await cardBox();
-  ok('the play button is hidden while the mouse is off the card', !(await playShown()));
-  await page.mouse.move(c0.x + c0.width / 2, c0.y + 20);
+  ok('a hover preview hides the play button', !(await playShown()));
+  await page.mouse.move(c0.x + c0.width / 2, c0.y + 20, { steps: 3 });
   await page.waitForTimeout(300);
   const c1 = await cardBox();
   ok('hovering the card reveals the play button', await playShown());
@@ -202,7 +212,8 @@ function ok(label, cond) {
     stars: document.querySelector('[data-map-stars]').textContent
   }));
   ok('T1 shown as done, T3 now open', /done/.test(after.t1) && /open/.test(after.t3) && !/locked/.test(after.t3));
-  ok('star total updated', after.stars === '3');
+  ok('tutorial levels count no stars', after.stars === '0' &&
+    await page.evaluate(() => !document.querySelector('[data-level="t1"] .map-node-stars')));
   const pos = await page.evaluate(() => {
     var n = document.querySelector('[data-level="t3"] .map-node-body').getBoundingClientRect();
     var c = document.querySelector('.map-card').getBoundingClientRect();
@@ -244,7 +255,8 @@ function ok(label, cond) {
     H.selectOp('expr'); H.setExprChainText('\\div3'); H.confirm();
   });
   await page.waitForTimeout(200);
-  ok('undo used: 2 stars', await page.evaluate(() => document.querySelectorAll('#levelWin [data-win-star].on').length) === 2);
+  ok('tutorial win: no stars, no criteria but "solved"', await page.evaluate(() => document.querySelector('#levelWin .win-stars').hidden &&
+    document.querySelector('[data-win-criteria]').textContent === '✓ Équation résolue' && document.querySelector('[data-level-steps]').hidden));
 
   // --- "Suivant" : la carte s'ouvre, l'animation de déblocage joue, puis le niveau suivant démarre ---
   await page.click('[data-win-next]');

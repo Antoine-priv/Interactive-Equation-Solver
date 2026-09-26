@@ -66,12 +66,15 @@
 
   function stars(id) { return state.levels[id] ? state.levels[id].stars : 0; }
 
+  // Les niveaux du tutoriel (voir App.Levels.starred) ne comptent pas.
   function totalStars() {
-    return Object.keys(state.levels).reduce(function (acc, id) { return acc + state.levels[id].stars; }, 0);
+    return Object.keys(state.levels).reduce(function (acc, id) {
+      return acc + (App.Levels.starred(App.Levels.get(id)) ? state.levels[id].stars : 0);
+    }, 0);
   }
 
   function maxStars() {
-    return App.Levels.LEVELS.filter(function (l) { return !l.daily; }).length * 3;
+    return App.Levels.LEVELS.filter(function (l) { return !l.daily && App.Levels.starred(l); }).length * 3;
   }
 
   // Un niveau s'ouvre quand tous ses prérequis sont résolus (et, pour le Sommet, avec
@@ -114,7 +117,7 @@
     if (level.badge) addBadge(level.badge, earned);
     if (result.badges) result.badges.forEach(function (b) { addBadge(b, earned); });
     var zoneLevels = App.Levels.LEVELS.filter(function (l) { return l.zone === level.zone && !l.daily; });
-    if (zoneLevels.every(function (l) { return stars(l.id) === 3; })) addBadge('perfectionniste', earned);
+    if (App.Levels.starred(level) && zoneLevels.every(function (l) { return stars(l.id) === 3; })) addBadge('perfectionniste', earned);
     var unlocked = App.Levels.LEVELS.filter(function (l) { return isAvailable(l) && before.indexOf(l.id) === -1; })
       .map(function (l) { return l.id; });
     save();

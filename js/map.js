@@ -176,7 +176,7 @@
         el('circle', { r: 7, class: 'map-node-lock-bg' }, shake);
         el('path', { d: 'M-3 0h6v4h-6zM-2 0v-2a2 2 0 0 1 4 0v2', class: 'map-node-lock-icon' }, shake);
       }
-      if (st === 'done') {
+      if (st === 'done' && App.Levels.starred(l)) {
         var s = el('text', { class: 'map-node-stars', y: l.boss ? 36 : 32 }, g);
         var n = P.stars(l.id);
         s.textContent = '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
@@ -371,6 +371,7 @@
     play.textContent = st === 'done' && !l.daily ? 'Rejouer' : 'Jouer';
     play.addEventListener('click', function () { if (onPlay) onPlay(l.id); });
     actions.appendChild(play);
+    card.classList.toggle('map-card-pinned', pinned);
     showCard(l.id);
     positionCard();
   }

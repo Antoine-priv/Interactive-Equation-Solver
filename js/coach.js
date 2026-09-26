@@ -1,7 +1,8 @@
 /* Coach : bulles du tutoriel (le Port, niveaux t1 à t7, voir docs/gamification/plan.md).
    Chaque niveau a une liste d'étapes { text, target, done } : l'étape affichée est la
    première dont `done(state)` est faux ; `target` désigne l'élément à entourer (sélecteur
-   ou fonction). Une étape `manual` attend un clic sur « Compris ». Une étape `afterWin`
+   ou fonction, ou liste d'entre eux : le contour les englobe tous). Une étape `manual`
+   attend un clic sur « Compris » (ou sur l'élément `doneOnClick`). Une étape `afterWin`
    ne s'affiche qu'une fois le niveau réussi (les autres, seulement avant), et `skip(state)`
    vrai la saute. Le coach suit l'action
    réelle de l'élève (App.History.subscribe) et ne bloque jamais rien. */
@@ -58,16 +59,14 @@
         target: function () { return document.querySelector('.eq-row.current .coeff-slot') || document.querySelector('.eq-row.current .side[data-side="left"]'); },
         done: function (s) { return s.solved; } }
     ],
-    t6: [
-      { text: '3x et 2x peuvent se réunir : sélectionne-les tous les deux.', target: term('left', 0),
+    t7: [
+      { text: 'Cette résolution va s\'allonger. Fais glisser le fond pour te déplacer, et utilise les loupes pour zoomer.', target: '#zoomOutBtn', manual: true,
+        doneOnClick: '#zoomOutBtn' },
+      { text: '3x et 2x peuvent se réunir : sélectionne-les tous les deux.', target: [term('left', 0), term('left', 1)],
         done: function (s) { return (sel('left', 0)(s) && sel('left', 1)(s)) || s.eq.left.filter(function (t) { return t.pow === 1; }).length < 2; } },
       { text: 'Clique sur « Simplifier » : ils deviennent 5x.', target: op('simplify'),
         done: function (s) { return s.eq.left.filter(function (t) { return t.pow === 1; }).length < 2; } },
-      { text: 'Termine seul : isole x.', target: sideEl('left'), done: function (s) { return s.solved; } }
-    ],
-    t7: [
-      { text: 'Cette résolution va s\'allonger. Fais glisser le fond pour te déplacer, et utilise les loupes pour zoomer.', target: '#zoomOutBtn', manual: true },
-      { text: 'Rassemble les x d\'un côté, puis isole x.', target: sideEl('left'), done: function (s) { return s.solved; } }
+      { text: 'Rassemble maintenant les x d\'un côté, puis isole x.', target: sideEl('left'), done: function (s) { return s.solved; } }
     ]
   };
 
@@ -85,6 +84,20 @@
   function resolveTarget(t) {
     if (!t) return null;
     return typeof t === 'function' ? t() : document.querySelector(t);
+  }
+  // Rectangle de la cible ; une liste de cibles donne le rectangle qui les englobe toutes.
+  function targetRect(t) {
+    var els = (Array.isArray(t) ? t : [t]).map(resolveTarget);
+    var r = null;
+    els.forEach(function (el) {
+      var b = el && el.getBoundingClientRect();
+      if (!b || (!b.width && !b.height)) return;
+      if (!r) { r = { left: b.left, top: b.top, right: b.right, bottom: b.bottom }; return; }
+      r.left = Math.min(r.left, b.left); r.top = Math.min(r.top, b.top);
+      r.right = Math.max(r.right, b.right); r.bottom = Math.max(r.bottom, b.bottom);
+    });
+    if (r) { r.width = r.right - r.left; r.height = r.bottom - r.top; }
+    return r;
   }
 
   // Changement d'étape : la bulle disparaît en rétrécissant (avec l'ancien texte), puis
@@ -161,9 +174,7 @@
       if (!bubble.hidden && !popping) popOut();
       return;
     }
-    var target = resolveTarget(cur.step.target);
-    var r = target && target.getBoundingClientRect();
-    if (r && !r.width && !r.height) r = null;
+    var r = targetRect(cur.step.target);
     placeRing(r);
     if (popping) return;
     if (cur.index !== shownIndex) {
@@ -227,6 +238,12 @@
     App.History.subscribe(function () { if (script) refresh(); });
     window.addEventListener('resize', function () { if (script) refresh(); });
     document.addEventListener('mouseup', function () { if (script) refresh(); });
+    document.addEventListener('click', function (e) {
+      var cur = script && currentStep();
+      if (!cur || !cur.step.doneOnClick || !e.target.closest || !e.target.closest(cur.step.doneOnClick)) return;
+      manualDone[cur.index] = true;
+      refresh();
+    }, true);
     document.addEventListener('wheel', function () { if (script) refresh(); }, { passive: true });
     // Pendant un glisser (canevas ou terme), le contenu bouge sans autre événement : chaque
     // mouvement bouton enfoncé prolonge le suivi, même après une pause.

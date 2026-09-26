@@ -2686,14 +2686,15 @@ button {
 .map-card-statement { color: var(--text-muted); font-size: 12.5px; }
 .map-card-learn { color: var(--text); }
 .map-card-meta { display: flex; gap: 12px; flex-wrap: wrap; color: var(--text-muted); font-size: 12.5px; }
-/* « Jouer » n'apparaît qu'au survol de la fiche (fixée ou non) : elle s'allonge vers le
-   bas pour le montrer (la marge négative annule le `gap` tant qu'il est replié). */
+/* « Jouer » n'apparaît que sur une fiche fixée (clic sur le nœud) ou au survol de la
+   fiche : elle s'allonge vers le bas pour le montrer (la marge négative annule le `gap`
+   tant qu'il est replié). */
 .map-card-actions {
   display: flex; justify-content: flex-end;
   max-height: 0; margin-top: -10px; opacity: 0; overflow: hidden;
   transition: max-height 0.2s ease, margin-top 0.2s ease, opacity 0.15s ease;
 }
-.map-card:hover .map-card-actions, .map-card:focus-within .map-card-actions { max-height: 60px; margin-top: 0; opacity: 1; }
+.map-card.map-card-pinned .map-card-actions, .map-card:hover .map-card-actions, .map-card:focus-within .map-card-actions { max-height: 60px; margin-top: 0; opacity: 1; }
 .map-play-btn {
   border: 0; border-radius: 999px; padding: 8px 20px; cursor: pointer;
   font: 600 14px inherit; font-family: inherit; background: var(--accent); color: #fff;
@@ -2848,6 +2849,7 @@ body.campaign-lock-key-square [data-key="square"] { visibility: hidden; }
 #levelWin h3 { margin: 0; font-size: 19px; }
 #levelWin .level-hint-close { color: var(--text-muted); }
 .win-stars { display: flex; justify-content: center; gap: 8px; font-size: 40px; line-height: 1; }
+.win-stars[hidden], .level-steps[hidden] { display: none; }
 .win-stars span { color: var(--border); }
 .win-stars span.on { color: var(--star); }
 .win-stars.play span { animation: win-star-in 0.5s cubic-bezier(0.3, 1.7, 0.5, 1) both; }
