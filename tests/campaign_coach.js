@@ -36,6 +36,23 @@ function ok(label, cond) {
   ok('step 1: select the 3, ring around it', c.visible && c.index === 0 && inside(c.ring, termRect));
   await page.screenshot({ path: SCRATCH + '/campaign_coach_step1.png' });
 
+  // Glisser le fond du canevas, s'arrêter plus d'une seconde bouton enfoncé, puis reprendre :
+  // le contour suit toujours sa cible (le suivi n'expire pas pendant le glisser).
+  const ringOff = () => page.evaluate(() => {
+    var r = document.getElementById('coachRing').getBoundingClientRect();
+    var t = document.querySelector('.eq-row.current .side[data-side="left"] [data-index="1"]').getBoundingClientRect();
+    return Math.max(Math.abs(r.left + 6 - t.left), Math.abs(r.top + 6 - t.top));
+  });
+  await page.mouse.move(300, 750);
+  await page.mouse.down();
+  await page.mouse.move(340, 720, { steps: 5 });
+  await page.waitForTimeout(1500);
+  await page.mouse.move(420, 660, { steps: 8 });
+  await page.waitForTimeout(100);
+  ok('the ring keeps following its target after a pause mid-drag', await ringOff() < 1);
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+
   // Une fenêtre modale (ici les paramètres) masque le coach au lieu de le laisser par-dessus.
   const coachShown = () => page.evaluate(() =>
     getComputedStyle(document.getElementById('coachBubble')).display !== 'none' &&

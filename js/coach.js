@@ -219,6 +219,9 @@
     window.addEventListener('resize', function () { if (script) refresh(); });
     document.addEventListener('mouseup', function () { if (script) refresh(); });
     document.addEventListener('wheel', function () { if (script) refresh(); }, { passive: true });
+    // Pendant un glisser (canevas ou terme), le contenu bouge sans autre événement : chaque
+    // mouvement bouton enfoncé prolonge le suivi, même après une pause.
+    document.addEventListener('mousemove', function (e) { if (script && e.buttons) refresh(); }, { passive: true, capture: true });
   }
 
   App.Coach = {
