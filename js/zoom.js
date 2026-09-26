@@ -48,6 +48,10 @@
   }
 
   var Zoom = {
+    // Réutilisées par les boutons de zoom de la carte (voir map.js).
+    ZOOM_IN_SVG: ZOOM_IN_SVG,
+    ZOOM_OUT_SVG: ZOOM_OUT_SVG,
+    ZOOM_STEP: ZOOM_STEP,
     init: function () {
       zoomInBtn = document.getElementById('zoomInBtn');
       zoomOutBtn = document.getElementById('zoomOutBtn');

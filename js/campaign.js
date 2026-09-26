@@ -358,7 +358,12 @@
     initProgressIO();
     var mapBtn = document.getElementById('mapBtn');
     mapBtn.innerHTML = MAP_SVG;
-    mapBtn.addEventListener('click', function () { openMap(); });
+    // Le bouton carte reste visible au-dessus de la carte : un second clic la referme et
+    // ramène à l'équation en cours.
+    mapBtn.addEventListener('click', function () {
+      if (App.Map.isOpen()) { App.Map.close(); return; }
+      openMap();
+    });
 
     App.Coach.init();
     App.Map.init({
@@ -429,18 +434,18 @@
     resetBtn.addEventListener('click', function () {
       if (!armed) {
         resetBtn.textContent = 'Confirmer : tout effacer';
-        resetBtn.classList.add('danger');
+        resetBtn.classList.add('armed');
         armed = setTimeout(function () {
           armed = null;
-          resetBtn.textContent = 'Réinitialiser la progression';
-          resetBtn.classList.remove('danger');
+          resetBtn.textContent = 'Réinitialiser ma progression';
+          resetBtn.classList.remove('armed');
         }, 4000);
         return;
       }
       clearTimeout(armed);
       armed = null;
-      resetBtn.textContent = 'Réinitialiser la progression';
-      resetBtn.classList.remove('danger');
+      resetBtn.textContent = 'Réinitialiser ma progression';
+      resetBtn.classList.remove('armed');
       exitLevel();
       pendingUnlock = null;
       App.Progress.reset();

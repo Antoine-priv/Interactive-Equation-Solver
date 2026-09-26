@@ -2692,12 +2692,28 @@ button {
   font: 600 14px inherit; font-family: inherit; background: var(--accent); color: #fff;
 }
 .map-play-btn:hover { background: var(--accent-hover); }
-.map-zoom { position: absolute; right: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
+/* Mêmes boutons que #zoomInBtn/#zoomOutBtn du canevas, au même endroit. */
+.map-zoom { position: absolute; right: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 12px; }
 .map-zoom button {
   width: 44px; height: 44px; border-radius: var(--radius-sm); border: 1px solid var(--border);
-  background: var(--surface); color: var(--text); font-size: 20px; cursor: pointer; box-shadow: var(--shadow-md);
+  background: var(--surface); color: var(--text); cursor: pointer; box-shadow: var(--shadow-md);
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s ease, transform 0.1s ease, opacity 0.15s ease;
 }
-.map-zoom button:hover { background: var(--accent-soft); color: var(--accent); }
+.map-zoom button:hover:not(:disabled) { background: var(--accent-soft); color: var(--accent); transform: translateY(-1px); }
+.map-zoom button:active:not(:disabled) { transform: translateY(0); }
+.map-zoom button:disabled { opacity: 0.4; cursor: default; }
+/* Zoom animé : même courbe que .canvas-panning-animated. */
+.map-world { transform-origin: 0 0; }
+.map-world.map-world-animated { transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+.map-card.map-card-animated { transition: left 0.32s cubic-bezier(0.22, 1, 0.36, 1), top 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
+/* Ouverture de la carte : fondu et léger dézoom. */
+#mapOverlay.map-opening { animation: map-overlay-in 0.35s ease-out; }
+#mapOverlay.map-opening .map-viewport { animation: map-viewport-in 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes map-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes map-viewport-in { from { transform: scale(1.06); } to { transform: none; } }
+/* Le bouton carte reste accessible au-dessus de la carte, pour revenir à l'équation. */
+body.map-open #mapBtn { z-index: 61; background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft-border); }
 
 /* ---- Barre de niveau ---- */
 #levelBar {
@@ -2818,7 +2834,8 @@ body.in-level .eq-row.solved .eq-line { transition: box-shadow 0.5s ease; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .map-zone, .map-token, .map-edge.drawing, #campaignToast { transition-duration: 0.01ms !important; }
+  .map-zone, .map-token, .map-edge.drawing, #campaignToast, .map-world, .map-card { transition-duration: 0.01ms !important; }
+  #mapOverlay.map-opening, #mapOverlay.map-opening .map-viewport { animation: none; }
   .map-node-pulse, .campaign-new, .win-stars.play span, .map-node.just-opened .map-node-body,
   .map-node.unlocking .map-node-lock { animation: none !important; }
 }
@@ -2912,3 +2929,6 @@ body.in-level #history { padding-top: 150px; }
 }
 .map-card.on-left::before { left: auto; right: -8px; border-right: 0; border-left: 8px solid var(--surface); }
 .map-pill.danger { background: var(--danger); color: #fff; }
+.map-pill.danger:hover { filter: brightness(0.92); }
+.map-pill.danger.armed { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.3); }
+.progress-note:empty { display: none; }

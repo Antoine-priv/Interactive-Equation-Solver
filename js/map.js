@@ -11,6 +11,7 @@
   var WORLD_W = 1710, WORLD_H = 650;
   var overlay, viewport, svg, world, card, badgePanel;
   var view = { x: 0, y: 0, s: 1 };
+  var zoomInBtn = null, zoomOutBtn = null;
   var selectedId = null;
   var onPlay = null;
 
@@ -41,9 +42,21 @@
     return App.Levels.LEVELS.some(function (l) { return l.zone === zone.id && App.Progress.isAvailable(l); });
   }
 
-  function applyView() {
-    world.setAttribute('transform', 'translate(' + view.x + ' ' + view.y + ') scale(' + view.s + ')');
+  // Transform CSS (pas l'attribut SVG) pour pouvoir l'animer comme le canevas (voir
+  // .map-world-animated dans style.css, même courbe que .canvas-panning-animated).
+  function applyView(animated) {
+    world.classList.toggle('map-world-animated', !!animated);
+    card.classList.toggle('map-card-animated', !!animated);
+    world.style.transform = 'translate(' + view.x + 'px, ' + view.y + 'px) scale(' + view.s + ')';
     positionCard();
+    refreshZoomButtons();
+  }
+
+  var MIN_FACTOR = 0.9, MAX_SCALE = 3;
+  function refreshZoomButtons() {
+    if (!zoomInBtn) return;
+    zoomInBtn.disabled = view.s >= MAX_SCALE - 1e-6;
+    zoomOutBtn.disabled = view.s <= fitScale() * MIN_FACTOR + 1e-6;
   }
 
   // La fiche du niveau flotte à côté de son nœud (à droite, ou à gauche si la place
@@ -86,14 +99,14 @@
     applyView();
   }
 
-  function zoomAt(factor, cx, cy) {
+  function zoomAt(factor, cx, cy, animated) {
     var fit = fitScale();
-    var s = Math.max(fit * 0.9, Math.min(3, view.s * factor));
+    var s = Math.max(fit * MIN_FACTOR, Math.min(MAX_SCALE, view.s * factor));
     view.x = cx - (cx - view.x) * (s / view.s);
     view.y = cy - (cy - view.y) * (s / view.s);
     view.s = s;
     clampView();
-    applyView();
+    applyView(animated);
   }
 
   // ---- Construction du SVG ----
@@ -335,6 +348,10 @@
     opts = opts || {};
     overlay.hidden = false;
     document.body.classList.add('map-open');
+    // Animation d'ouverture (voir .map-opening dans style.css).
+    overlay.classList.remove('map-opening');
+    void overlay.offsetWidth;
+    overlay.classList.add('map-opening');
     if (App.Coach) App.Coach.refresh();
     App.Progress.setLastScreen('map');
     badgePanel.hidden = true;
@@ -399,11 +416,16 @@
       clampView();
       applyView();
     }, { passive: false });
-    overlay.querySelector('[data-map-zoom="in"]').addEventListener('click', function () {
-      zoomAt(1.25, viewport.clientWidth / 2, viewport.clientHeight / 2);
+    // Mêmes loupes, même pas et même animation que le zoom du canevas (voir zoom.js).
+    zoomInBtn = overlay.querySelector('[data-map-zoom="in"]');
+    zoomOutBtn = overlay.querySelector('[data-map-zoom="out"]');
+    zoomInBtn.innerHTML = App.Zoom.ZOOM_IN_SVG;
+    zoomOutBtn.innerHTML = App.Zoom.ZOOM_OUT_SVG;
+    zoomInBtn.addEventListener('click', function () {
+      if (!zoomInBtn.disabled) zoomAt(App.Zoom.ZOOM_STEP, viewport.clientWidth / 2, viewport.clientHeight / 2, true);
     });
-    overlay.querySelector('[data-map-zoom="out"]').addEventListener('click', function () {
-      zoomAt(1 / 1.25, viewport.clientWidth / 2, viewport.clientHeight / 2);
+    zoomOutBtn.addEventListener('click', function () {
+      if (!zoomOutBtn.disabled) zoomAt(1 / App.Zoom.ZOOM_STEP, viewport.clientWidth / 2, viewport.clientHeight / 2, true);
     });
     window.addEventListener('resize', function () { if (isOpen()) { clampView(); applyView(); } });
   }
@@ -431,7 +453,12 @@
       renderBadges();
       badgePanel.hidden = !badgePanel.hidden;
     });
-    viewport.addEventListener('click', function () { badgePanel.hidden = true; });
+    // Un clic à côté (fond de la carte, pas un glisser) ferme la fiche du niveau et le
+    // panneau des badges ; un clic sur un nœud, lui, ne remonte pas jusqu'ici.
+    viewport.addEventListener('click', function () {
+      badgePanel.hidden = true;
+      if (!card.hidden) select(null);
+    });
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && isOpen() && !card.hidden) select(null);
     });

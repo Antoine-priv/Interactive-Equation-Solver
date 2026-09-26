@@ -46,6 +46,30 @@ function ok(label, cond) {
   await page.waitForTimeout(300);
   await page.screenshot({ path: SCRATCH + '/campaign_map_start.png' });
 
+  // Loupes du canevas, zoom animé, fiche fermée par un clic à côté, bouton carte au-dessus.
+  ok('map zoom buttons use the canvas magnifier icons', await page.evaluate(() =>
+    document.querySelector('[data-map-zoom="in"]').innerHTML === document.getElementById('zoomInBtn').innerHTML &&
+    document.querySelector('[data-map-zoom="out"]').innerHTML === document.getElementById('zoomOutBtn').innerHTML));
+  const s0 = await page.evaluate(() => window.App.Map.view().s);
+  await page.click('[data-map-zoom="in"]');
+  ok('zooming in is animated', await page.evaluate(() => document.querySelector('.map-world').classList.contains('map-world-animated')) &&
+    await page.evaluate(() => window.App.Map.view().s) > s0);
+  await page.waitForTimeout(400);
+  await page.click('[data-map-zoom="out"]');
+  await page.waitForTimeout(400);
+  await page.mouse.click(200, 820);
+  ok('a click beside the card closes it', await page.evaluate(() => document.querySelector('.map-card').hidden));
+  ok('the map button stays clickable over the map', await page.evaluate(() => {
+    var b = document.getElementById('mapBtn').getBoundingClientRect();
+    return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2).closest('#mapBtn') !== null;
+  }));
+  await page.click('#mapBtn');
+  ok('clicking it again goes back to the equation', await page.evaluate(() => document.getElementById('mapOverlay').hidden));
+  await page.click('#mapBtn');
+  ok('and reopens the map, with the opening animation', await page.evaluate(() =>
+    !document.getElementById('mapOverlay').hidden && document.getElementById('mapOverlay').classList.contains('map-opening')));
+
+  await page.screenshot({ path: SCRATCH + '/campaign_map_buttons.png' });
   // Un nœud verrouillé explique ce qui manque.
   await page.evaluate(() => window.App.Map.select('l1'));
   ok('locked level lists its missing prerequisite', await page.evaluate(() =>
@@ -150,6 +174,12 @@ function ok(label, cond) {
   ok('a foreign file is refused', /n'est pas/.test(await page.textContent('#progressNote')) &&
     await page.evaluate(() => window.App.Progress.stars('t1')) === 3);
 
+  ok('settings: no explanatory sentence, import styled like export, red reset button', await page.evaluate(() => {
+    var imp = document.getElementById('progressImport'), exp = document.getElementById('progressExport'), rst = document.getElementById('progressReset');
+    return imp.className === exp.className && rst.textContent === 'Réinitialiser ma progression' &&
+      getComputedStyle(rst).backgroundColor === 'rgb(220, 38, 38)';
+  }));
+  await page.screenshot({ path: SCRATCH + '/campaign_settings.png' });
   // --- Réinitialisation (réglages, second clic pour confirmer) ---
   await page.click('#progressReset');
   ok('first click only asks for confirmation', await page.evaluate(() => window.App.Progress.stars('t1')) === 3 &&
