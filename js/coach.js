@@ -135,12 +135,14 @@
       return;
     }
     var bw = bubble.offsetWidth || 280, bh = bubble.offsetHeight || 80;
-    var below = r.bottom + 14 + bh < window.innerHeight - 10;
+    // Contour à 6 px de la cible, flèche de 8 px, puis 6 px d'air entre sa pointe et le contour.
+    var GAP = 20;
+    var below = r.bottom + GAP + bh < window.innerHeight - 10;
     var left = Math.max(12, Math.min(window.innerWidth - bw - 12, r.left + r.width / 2 - bw / 2));
     bubble.style.transform = '';
     bubble.style.bottom = '';
     bubble.style.left = left + 'px';
-    bubble.style.top = (below ? r.bottom + 14 : r.top - 14 - bh) + 'px';
+    bubble.style.top = (below ? r.bottom + GAP : r.top - GAP - bh) + 'px';
     bubble.classList.toggle('below', below);
     bubble.classList.toggle('above', !below);
     bubble.style.setProperty('--coach-arrow-x', Math.max(16, Math.min(bw - 16, r.left + r.width / 2 - left)) + 'px');
