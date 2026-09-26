@@ -70,7 +70,7 @@
     // les ids restent ceux des sauvegardes, seul l'affichage est renuméroté).
     { id: 't1', zone: 'port', x: 70, y: 560, req: [], title: 'Premier pas', latex: 'x+3=7', sol: P(4), par: 1,
       feat: ['simplify'], learn: 'Ajouter ou retirer la même chose des deux côtés',
-      hints: ['Pour isoler x, il faut faire disparaître le +3.', 'Clique sur le 3, tape −3 dans le pavé Opération, puis Simplifier.'] },
+      hints: ['Pour isoler x, il faut faire disparaître le +3.', 'Clique sur Opération, tape −3 dans le pavé, puis Simplifier.'] },
     { id: 't3', code: 'T2', zone: 'port', x: 100, y: 430, req: ['t1'], title: 'Diviser', latex: '3x=12', sol: P(4), par: 1,
       learn: 'Diviser par le coefficient',
       hints: ['3x veut dire 3 fois x.', 'Opération ÷3, puis Simplifier.'] },

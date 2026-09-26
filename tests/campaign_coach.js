@@ -32,15 +32,15 @@ function ok(label, cond) {
 
   await page.evaluate(() => window.App.Campaign.startLevel('t1'));
   let c = await coach();
-  const termRect = await page.evaluate(() => document.querySelector('.eq-row.current .side[data-side="left"] [data-index="1"]').getBoundingClientRect().toJSON());
-  ok('step 1: select the 3, ring around it', c.visible && c.index === 0 && inside(c.ring, termRect));
+  const opRect = await page.evaluate(() => document.querySelector('#opButtons button[data-op="expr"]').getBoundingClientRect().toJSON());
+  ok('step 1: "Opération" right away, no need to select the 3', c.visible && c.index === 0 && /Opération/.test(c.text) && inside(c.ring, opRect));
   await page.screenshot({ path: SCRATCH + '/campaign_coach_step1.png' });
 
   // Glisser le fond du canevas, s'arrêter plus d'une seconde bouton enfoncé, puis reprendre :
   // le contour suit toujours sa cible (le suivi n'expire pas pendant le glisser).
   const ringOff = () => page.evaluate(() => {
     var r = document.getElementById('coachRing').getBoundingClientRect();
-    var t = document.querySelector('.eq-row.current .side[data-side="left"] [data-index="1"]').getBoundingClientRect();
+    var t = document.querySelector('#opButtons button[data-op="expr"]').getBoundingClientRect();
     return Math.max(Math.abs(r.left + 6 - t.left), Math.abs(r.top + 6 - t.top));
   });
   await page.mouse.move(300, 750);
@@ -79,13 +79,11 @@ function ok(label, cond) {
   ok('selecting a term does not restart the ring pulse', await page.evaluate(() =>
     window.__pulse.every(function (v, i) { return v >= 0 && (i === 0 || v >= window.__pulse[i - 1]); })));
   c = await coach();
-  ok('step 2 after the click: "Opération"', c.index === 1 && /Opération/.test(c.text));
-  const opRect = await page.evaluate(() => document.querySelector('#opButtons button[data-op="expr"]').getBoundingClientRect().toJSON());
-  ok('ring around the Opération button', inside(c.ring, opRect));
+  ok('selecting a term does not skip the "Opération" step', c.index === 0);
 
   await page.click('#opButtons button[data-op="expr"]');
   c = await coach();
-  ok('step 3: type −3 on the keypad', c.index === 2);
+  ok('step 2: type −3 on the keypad', c.index === 1);
   await page.evaluate(() => window.App.History.setExprChainText('-3'));
   // Après Valider : la bulle se referme (ancien texte) puis se rouvre avec le nouveau ; le
   // contour ne glisse pas : dès que la nouvelle ligne est rendue il est posé sur sa cible,
@@ -112,7 +110,7 @@ function ok(label, cond) {
   ok('after Valider the ring jumps directly onto its target, never gliding',
     moved.length > 0 && moved.every((s) => s.ring !== null && Math.abs(s.ring - s.target) < 1));
   c = await coach();
-  ok('step 4 once the operation is applied: simplify the left side', c.index === 3);
+  ok('step 3 once the operation is applied: simplify the left side', c.index === 2);
   await page.screenshot({ path: SCRATCH + '/campaign_coach_step4.png' });
 
   await page.evaluate(() => {
@@ -120,7 +118,7 @@ function ok(label, cond) {
     H.toggleTermSelection('left', 1); H.toggleTermSelection('left', 2); H.confirmSimplifySelection();
   });
   c = await coach();
-  ok('step 5: same on the right', c.index === 4);
+  ok('step 4: same on the right', c.index === 3);
   await page.evaluate(() => {
     var H = window.App.History;
     H.toggleTermSelection('right', 0); H.toggleTermSelection('right', 1); H.confirmSimplifySelection();

@@ -33,8 +33,7 @@
 
   var SCRIPTS = {
     t1: [
-      { text: 'Clique sur le 3 pour le sélectionner.', target: term('left', 1), done: or(sel('left', 1), opened, stepsAtLeast(2)) },
-      { text: 'Clique sur « Opération » : ce que tu tapes s\'applique aux deux côtés.', target: op('expr'), done: or(opened, stepsAtLeast(2)) },
+      { text: 'Pour faire disparaître le +3, clique sur « Opération » : ce que tu tapes s\'applique aux deux côtés.', target: op('expr'), done: or(opened, stepsAtLeast(2)) },
       { text: 'Tape −3 avec le pavé, puis valide avec la touche ⏎.', target: KEYPAD, done: stepsAtLeast(2) },
       { text: 'Les deux côtés ont changé de la même façon (la flèche rappelle l\'opération faite). Sélectionne 3 et −3, puis clique sur « Simplifier ».', target: sideEl('left'), done: countTerms('left') },
       { text: 'Fais de même à droite avec 7 et −3.', target: sideEl('right'), done: function (s) { return s.solved; } }
