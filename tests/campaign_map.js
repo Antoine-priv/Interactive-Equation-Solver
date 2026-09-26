@@ -66,15 +66,14 @@ function ok(label, cond) {
     !document.querySelector('.map-card').hidden && document.querySelector('.map-card').classList.contains('map-card-in')));
   await page.mouse.click(200, 820);
   await page.waitForTimeout(250);
-  ok('the map button stays clickable over the map', await page.evaluate(() => {
-    var b = document.getElementById('mapBtn').getBoundingClientRect();
-    return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2).closest('#mapBtn') !== null;
-  }));
-  await page.click('#mapBtn');
+  ok('the map button is hidden on the map', await page.evaluate(() =>
+    document.getElementById('mapBtn').getBoundingClientRect().width === 0));
+  await page.evaluate(() => window.App.Map.close());
   ok('closing the map is animated', await page.evaluate(() => document.getElementById('mapOverlay').classList.contains('map-closing') &&
     !window.App.Map.isOpen()));
   await page.waitForTimeout(350);
-  ok('clicking it again goes back to the equation', await page.evaluate(() => document.getElementById('mapOverlay').hidden));
+  ok('the map is closed, the map button is back', await page.evaluate(() => document.getElementById('mapOverlay').hidden &&
+    document.getElementById('mapBtn').getBoundingClientRect().width > 0));
   await page.click('#mapBtn');
   ok('and reopens the map, with the opening animation', await page.evaluate(() =>
     !document.getElementById('mapOverlay').hidden && document.getElementById('mapOverlay').classList.contains('map-opening')));
@@ -195,6 +194,8 @@ function ok(label, cond) {
   const exported = JSON.parse(require('fs').readFileSync(await download.path(), 'utf8'));
   ok('export downloads a JSON file with the progress', /^progression-equations-.*\.json$/.test(download.suggestedFilename()) &&
     exported.progress && exported.progress.levels.t1.stars === 3);
+  ok('export shows no "saved" note (the browser does not tell if the file was kept)', await page.evaluate(() =>
+    document.getElementById('progressNote').textContent === ''));
   await page.evaluate(() => { localStorage.removeItem('equations-progress'); window.App.Progress.load(); });
   ok('progress cleared', await page.evaluate(() => window.App.Progress.totalStars()) === 0);
   await page.setInputFiles('#progressImportFile', { name: 'p.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) });

@@ -2712,8 +2712,8 @@ button {
 #mapOverlay.map-opening .map-viewport { animation: map-viewport-in 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes map-overlay-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes map-viewport-in { from { transform: scale(1.06); } to { transform: none; } }
-/* Le bouton carte reste accessible au-dessus de la carte, pour revenir à l'équation. */
-body.map-open #mapBtn { z-index: 61; background: var(--accent-soft); color: var(--accent); border-color: var(--accent-soft-border); }
+/* Sur la carte, le bouton carte n'a pas lieu d'être. */
+body.map-open #mapBtn { display: none; }
 
 /* ---- Barre de niveau ---- */
 #levelBar {

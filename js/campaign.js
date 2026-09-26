@@ -358,12 +358,7 @@
     initProgressIO();
     var mapBtn = document.getElementById('mapBtn');
     mapBtn.innerHTML = MAP_SVG;
-    // Le bouton carte reste visible au-dessus de la carte : un second clic la referme et
-    // ramène à l'équation en cours.
-    mapBtn.addEventListener('click', function () {
-      if (App.Map.isOpen()) { App.Map.close(); return; }
-      openMap();
-    });
+    mapBtn.addEventListener('click', function () { openMap(); });
 
     App.Coach.init();
     App.Map.init({
@@ -425,7 +420,7 @@
       document.body.appendChild(a);
       a.click();
       setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 0);
-      say('Fichier enregistré dans tes téléchargements.', 'ok');
+      say('');
     });
     document.getElementById('progressImport').addEventListener('click', function () { fileInput.click(); });
     // Réinitialiser : un second clic confirme (pas de boîte de dialogue native).
