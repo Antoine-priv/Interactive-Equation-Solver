@@ -66,6 +66,26 @@ function ok(label, cond) {
     !document.querySelector('.map-card').hidden && document.querySelector('.map-card').classList.contains('map-card-in')));
   await page.mouse.click(200, 820);
   await page.waitForTimeout(250);
+
+  // Survol d'un nœud : aperçu de la fiche ; clic : fiche fixée ; re-clic : fermée.
+  const t1c = await page.evaluate(() => {
+    var b = document.querySelector('.map-node[data-level="t1"] .map-node-body').getBoundingClientRect();
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  });
+  await page.mouse.move(t1c.x, t1c.y);
+  ok('hovering a node previews its card', await page.evaluate(() => !document.querySelector('.map-card').hidden &&
+    !!document.querySelector('[data-map-play="t1"]')));
+  await page.mouse.move(200, 820);
+  await page.waitForTimeout(400);
+  ok('leaving the node hides the preview', await page.evaluate(() => document.querySelector('.map-card').hidden));
+  await page.mouse.click(t1c.x, t1c.y);
+  await page.mouse.move(200, 820);
+  await page.waitForTimeout(400);
+  ok('clicking a node pins its card', await page.evaluate(() => !document.querySelector('.map-card').hidden));
+  await page.mouse.click(t1c.x, t1c.y);
+  await page.waitForTimeout(250);
+  ok('clicking the pinned node again closes its card', await page.evaluate(() => document.querySelector('.map-card').hidden));
+  await page.mouse.move(200, 820);
   ok('the map button is hidden on the map', await page.evaluate(() =>
     document.getElementById('mapBtn').getBoundingClientRect().width === 0));
   await page.keyboard.press('Escape');
@@ -167,7 +187,7 @@ function ok(label, cond) {
   await page.evaluate(() => window.App.Map.select('t1'));
   ok('the card of a solved level does not repeat its stars', await page.evaluate(() =>
     document.querySelector('.map-card-title').textContent === 'Premier pas' &&
-    document.querySelector('.map-card-meta').textContent === '★★★ en 1 étape au plus'));
+    !document.querySelector('.map-card-meta')));
   await page.evaluate(() => window.App.Map.close());
   await page.click('#mapBtn');
   await page.waitForTimeout(100);

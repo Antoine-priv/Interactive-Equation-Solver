@@ -13,6 +13,10 @@
   var view = { x: 0, y: 0, s: 1 };
   var zoomInBtn = null, zoomOutBtn = null;
   var selectedId = null;
+  // La fiche suit le survol d'un nœud (`hoverId`) tant qu'aucun niveau n'est fixé par un
+  // clic (`pinned`, fiche de `selectedId`).
+  var pinned = false, hoverId = null, hoverTimer = null;
+  function shownId() { return pinned ? selectedId : hoverId; }
   var onPlay = null;
 
   function el(tag, attrs, parent) {
@@ -66,7 +70,7 @@
   // manque), et le suit quand la carte bouge.
   function positionCard() {
     if (!card || card.hidden) return;
-    var l = App.Levels.get(selectedId);
+    var l = App.Levels.get(shownId());
     if (!l) return;
     var w = viewport.clientWidth, h = viewport.clientHeight;
     var cw = card.offsetWidth, ch = card.offsetHeight;
@@ -173,10 +177,12 @@
         var n = P.stars(l.id);
         s.textContent = '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
       }
-      g.addEventListener('click', function (e) { e.stopPropagation(); select(l.id); });
+      g.addEventListener('click', function (e) { e.stopPropagation(); toggle(l.id); });
       g.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(l.id); }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(l.id); }
       });
+      g.addEventListener('mouseenter', function () { hover(l.id); });
+      g.addEventListener('mouseleave', unhoverSoon);
     });
 
     var tokenAt = (opts && opts.from && App.Levels.get(opts.from)) || cur;
@@ -259,10 +265,38 @@
       id = null;
     }
     selectedId = id;
+    pinned = !!id;
+    hoverId = null;
+    clearTimeout(hoverTimer);
     world.querySelectorAll('.map-node').forEach(function (n) {
       n.classList.toggle('selected', n.getAttribute('data-level') === id);
     });
     renderCard();
+  }
+
+  // Clic sur le nœud du niveau déjà fixé : ferme sa fiche, comme un clic à côté.
+  function toggle(id) {
+    select(pinned && selectedId === id ? null : id);
+  }
+
+  // Survol : aperçu de la fiche, tant qu'aucune n'est fixée. Le court délai à la sortie
+  // laisse la souris passer du nœud à la fiche sans la fermer.
+  function hover(id) {
+    if (pinned) return;
+    var l = App.Levels.get(id);
+    if (!l || nodeState(l) === 'locked') return;
+    clearTimeout(hoverTimer);
+    hoverId = id;
+    renderCard();
+  }
+  function unhoverSoon() {
+    if (pinned) return;
+    clearTimeout(hoverTimer);
+    hoverTimer = setTimeout(function () {
+      if (pinned) return;
+      hoverId = null;
+      renderCard();
+    }, 120);
   }
 
   // Ouverture/fermeture animées de la fiche (voir .map-card-in/.map-card-out dans
@@ -292,7 +326,7 @@
   }
 
   function renderCard() {
-    var l = App.Levels.get(selectedId);
+    var l = App.Levels.get(shownId());
     if (!l || nodeState(l) === 'locked') { hideCard(); return; }
     var P = App.Progress;
     var st = nodeState(l);
@@ -319,13 +353,8 @@
     }
     if (l.statement) div('map-card-statement', l.statement);
     div('map-card-learn', l.learn);
-    var meta = div('map-card-meta');
-    if (l.par && !l.daily) {
-      var par = document.createElement('span');
-      par.textContent = '★★★ en ' + l.par + ' étape' + (l.par > 1 ? 's' : '') + ' au plus';
-      meta.appendChild(par);
-    }
     if (l.daily && P.dailyDoneToday()) {
+      var meta = div('map-card-meta');
       var done = document.createElement('span');
       done.textContent = 'Réussi aujourd\'hui';
       meta.appendChild(done);
@@ -388,6 +417,8 @@
     var focus = App.Levels.get(opts.focus) || (opts.unlocked && opts.unlocked.length && App.Levels.get(opts.unlocked[0])) ||
       App.Levels.get(opts.from) || currentLevel() || App.Levels.LEVELS[0];
     selectedId = focus.id;
+    pinned = true;
+    hoverId = null;
     buildWorld(opts);
     renderBar();
     view.s = Math.max(fitScale(), Math.min(1.5, fitScale() * 1.9));
@@ -499,6 +530,8 @@
     svg = overlay.querySelector('svg.map-svg');
     world = el('g', { class: 'map-world' }, svg);
     card = overlay.querySelector('.map-card');
+    card.addEventListener('mouseenter', function () { clearTimeout(hoverTimer); });
+    card.addEventListener('mouseleave', unhoverSoon);
     badgePanel = overlay.querySelector('.map-badges');
     initPanZoom();
     overlay.querySelector('[data-map-free]').addEventListener('click', function () {
