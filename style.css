@@ -2932,3 +2932,19 @@ body.in-level #history { padding-top: 150px; }
 .map-pill.danger:hover { filter: brightness(0.92); }
 .map-pill.danger.armed { box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.3); }
 .progress-note:empty { display: none; }
+
+/* Fermeture de la carte (voir close dans map.js) : les clics traversent déjà. */
+#mapOverlay.map-closing { animation: map-overlay-out 0.26s ease-in forwards; pointer-events: none; }
+#mapOverlay.map-closing .map-viewport { animation: map-viewport-out 0.26s ease-in forwards; }
+@keyframes map-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes map-viewport-out { from { transform: none; } to { transform: scale(1.06); } }
+/* Fiche d'un niveau : grandit depuis sa pointe (le nœud), rétrécit en se fermant. */
+.map-card { transform-origin: 0 var(--card-arrow-y, 50%); }
+.map-card.on-left { transform-origin: 100% var(--card-arrow-y, 50%); }
+.map-card.map-card-in { animation: map-card-in 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+.map-card.map-card-out { animation: map-card-out 0.16s ease-in forwards; pointer-events: none; }
+@keyframes map-card-in { from { opacity: 0; transform: scale(0.85); } to { opacity: 1; transform: none; } }
+@keyframes map-card-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.85); } }
+@media (prefers-reduced-motion: reduce) {
+  #mapOverlay.map-closing, #mapOverlay.map-closing .map-viewport, .map-card.map-card-in, .map-card.map-card-out { animation: none; }
+}

@@ -58,12 +58,22 @@ function ok(label, cond) {
   await page.click('[data-map-zoom="out"]');
   await page.waitForTimeout(400);
   await page.mouse.click(200, 820);
+  ok('the card closes with an animation', await page.evaluate(() => document.querySelector('.map-card').classList.contains('map-card-out')));
+  await page.waitForTimeout(250);
   ok('a click beside the card closes it', await page.evaluate(() => document.querySelector('.map-card').hidden));
+  await page.evaluate(() => window.App.Map.select('t1'));
+  ok('selecting a node opens its card with an animation', await page.evaluate(() =>
+    !document.querySelector('.map-card').hidden && document.querySelector('.map-card').classList.contains('map-card-in')));
+  await page.mouse.click(200, 820);
+  await page.waitForTimeout(250);
   ok('the map button stays clickable over the map', await page.evaluate(() => {
     var b = document.getElementById('mapBtn').getBoundingClientRect();
     return document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2).closest('#mapBtn') !== null;
   }));
   await page.click('#mapBtn');
+  ok('closing the map is animated', await page.evaluate(() => document.getElementById('mapOverlay').classList.contains('map-closing') &&
+    !window.App.Map.isOpen()));
+  await page.waitForTimeout(350);
   ok('clicking it again goes back to the equation', await page.evaluate(() => document.getElementById('mapOverlay').hidden));
   await page.click('#mapBtn');
   ok('and reopens the map, with the opening animation', await page.evaluate(() =>
@@ -78,7 +88,7 @@ function ok(label, cond) {
   // --- Jouer T1 ---
   await page.evaluate(() => window.App.Map.select('t1'));
   await page.click('[data-map-play="t1"]');
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(350);
   const lv = await page.evaluate(() => ({
     mapHidden: document.getElementById('mapOverlay').hidden,
     bar: !document.getElementById('levelBar').hidden,

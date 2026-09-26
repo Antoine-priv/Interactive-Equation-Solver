@@ -246,9 +246,35 @@
     renderCard();
   }
 
+  // Ouverture/fermeture animées de la fiche (voir .map-card-in/.map-card-out dans
+  // style.css) ; elle grandit depuis sa pointe, donc depuis le nœud.
+  var cardTimer = null, cardShownFor = null;
+  var CARD_OUT_MS = 160;
+  function showCard(id) {
+    clearTimeout(cardTimer);
+    var wasHidden = card.hidden || card.classList.contains('map-card-out');
+    card.classList.remove('map-card-out');
+    card.hidden = false;
+    if (wasHidden || cardShownFor !== id) {
+      card.classList.remove('map-card-in');
+      void card.offsetWidth;
+      card.classList.add('map-card-in');
+    }
+    cardShownFor = id;
+  }
+  function hideCard(instant) {
+    clearTimeout(cardTimer);
+    cardShownFor = null;
+    if (card.hidden) return;
+    if (instant || reducedMotion()) { card.hidden = true; card.classList.remove('map-card-out'); return; }
+    card.classList.remove('map-card-in');
+    card.classList.add('map-card-out');
+    cardTimer = setTimeout(function () { card.hidden = true; card.classList.remove('map-card-out'); }, CARD_OUT_MS);
+  }
+
   function renderCard() {
     var l = App.Levels.get(selectedId);
-    if (!l) { card.hidden = true; return; }
+    if (!l) { hideCard(); return; }
     var P = App.Progress;
     var st = nodeState(l);
     var z = App.Levels.zone(l.zone);
@@ -309,7 +335,7 @@
       play.addEventListener('click', function () { if (onPlay) onPlay(l.id); });
       actions.appendChild(play);
     }
-    card.hidden = false;
+    showCard(l.id);
     positionCard();
   }
 
@@ -346,6 +372,7 @@
   // opts : { focus: id, from: id réussi, unlocked: [ids qui viennent de s'ouvrir] }
   function open(opts) {
     opts = opts || {};
+    if (closing) { clearTimeout(closeTimer); closing = false; overlay.classList.remove('map-closing'); }
     overlay.hidden = false;
     document.body.classList.add('map-open');
     // Animation d'ouverture (voir .map-opening dans style.css).
@@ -366,14 +393,30 @@
     if (opts.unlocked && opts.unlocked.length) playUnlock(opts);
   }
 
+  // Fermeture animée (voir .map-closing dans style.css) : la carte n'est plus "ouverte"
+  // dès l'appel (isOpen, body.map-open, clics qui traversent), le calque disparaît à la
+  // fin de l'animation.
+  var closeTimer = null, closing = false;
+  var CLOSE_MS = 260;
   function close() {
-    overlay.hidden = true;
+    if (overlay.hidden || closing) return;
     document.body.classList.remove('map-open');
-    card.hidden = true;
     if (App.Coach) App.Coach.refresh();
+    if (reducedMotion()) { finishClose(); return; }
+    closing = true;
+    overlay.classList.remove('map-opening');
+    overlay.classList.add('map-closing');
+    closeTimer = setTimeout(finishClose, CLOSE_MS);
+  }
+  function finishClose() {
+    clearTimeout(closeTimer);
+    closing = false;
+    overlay.classList.remove('map-closing');
+    overlay.hidden = true;
+    hideCard(true);
   }
 
-  function isOpen() { return !!overlay && !overlay.hidden; }
+  function isOpen() { return !!overlay && !overlay.hidden && !closing; }
 
   function initPanZoom() {
     var drag = null;
@@ -457,10 +500,10 @@
     // panneau des badges ; un clic sur un nœud, lui, ne remonte pas jusqu'ici.
     viewport.addEventListener('click', function () {
       badgePanel.hidden = true;
-      if (!card.hidden) select(null);
+      if (!card.hidden && cardShownFor) select(null);
     });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && isOpen() && !card.hidden) select(null);
+      if (e.key === 'Escape' && isOpen() && cardShownFor) select(null);
     });
     App.Progress.subscribe(function () { if (isOpen()) renderBar(); });
   }
