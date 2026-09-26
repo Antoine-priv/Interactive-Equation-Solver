@@ -183,7 +183,7 @@
   // ---- Démarrage / sortie ----
   function startPart() {
     var part = App.Levels.partsOf(run.level)[run.part];
-    var eq = run.level.daily ? run.dailyEq : App.Parser.parseLatexEquation(part.latex);
+    var eq = run.level.daily ? run.dailyEq : App.Parser.parseLatexEquation(part.latex, { keepFractions: true });
     starting = true;
     try {
       App.History.startNewEquation({ left: eq.left, right: eq.right }, eq.operator ? { operator: eq.operator } : undefined);

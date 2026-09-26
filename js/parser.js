@@ -308,7 +308,10 @@
             pos = denClose + 1;
             continue;
           }
-          if (!SIMPLE_FRAC_NUMER_RE.test(numerContent)) {
+          // keepFractions (énoncés de la campagne) : même un numérateur simple reste une
+          // fraction affichée ("\frac{x}{3}", pas 0,33x), sauf un coefficient suivi de x
+          // ("\frac{1}{2}x").
+          if (!SIMPLE_FRAC_NUMER_RE.test(numerContent) || (keepFractions && s[denClose + 1] !== 'x')) {
             // Numérateur quelconque, dénominateur NUMÉRIQUE (ex. "\frac{7x-3}{5}") :
             // comportement inchangé.
             var denVal = parseFloat(denContent.replace(',', '.'));
@@ -569,12 +572,20 @@
     return parseSide(s);
   }
 
-  function parseLatexEquation(latex) {
+  // Seulement pendant parseLatexEquation(latex, { keepFractions: true }), voir parseSide.
+  var keepFractions = false;
+
+  function parseLatexEquation(latex, opts) {
     var parts = splitTopLevelRelation(stripHtmlWrappers(String(latex)));
     if (!parts) {
       throw new Error('L\'équation doit contenir exactement un signe =, >, <, ≥ ou ≤.');
     }
-    return { left: parseLatexSide(parts.left), right: parseLatexSide(parts.right), operator: parts.operator };
+    keepFractions = !!(opts && opts.keepFractions);
+    try {
+      return { left: parseLatexSide(parts.left), right: parseLatexSide(parts.right), operator: parts.operator };
+    } finally {
+      keepFractions = false;
+    }
   }
 
   App.Parser = {
