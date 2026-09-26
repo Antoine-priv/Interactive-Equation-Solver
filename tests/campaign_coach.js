@@ -70,30 +70,30 @@ function ok(label, cond) {
   c = await coach();
   ok('step 3: type −3 on the keypad', c.index === 2);
   await page.evaluate(() => window.App.History.setExprChainText('-3'));
-  // Après Valider, le canevas se recentre : le contour doit rejoindre le côté gauche en un
-  // glissement continu, sans s'arrêter à une position intermédiaire saisie en plein
-  // recentrage pendant que la cible continue de bouger.
+  // Après Valider : la bulle se referme (ancien texte) puis se rouvre avec le nouveau ; le
+  // contour ne glisse pas : dès que la nouvelle ligne est rendue il est posé sur sa cible,
+  // et la suit pendant le recentrage du canevas.
   await page.evaluate(() => {
     window.__track = []; var t0 = performance.now();
     (function f() {
+      var ring = document.getElementById('coachRing'), b = document.getElementById('coachBubble');
       var t = document.querySelector('.eq-row.current .side[data-side="left"]');
-      window.__track.push([performance.now() - t0, document.getElementById('coachRing').getBoundingClientRect().top,
-        t ? t.getBoundingClientRect().top - 6 : NaN]);
+      window.__track.push({ ring: ring.hidden ? null : ring.getBoundingClientRect().top, target: t ? t.getBoundingClientRect().top - 6 : NaN,
+        out: b.classList.contains('coach-out'), inn: b.classList.contains('coach-in'), text: b.textContent });
       if (performance.now() - t0 < 800) requestAnimationFrame(f);
     })();
   });
   await page.click('[data-key="enter"]');
   await page.waitForTimeout(900);
-  ok('after Valider the ring never stalls off target and ends on it', await page.evaluate(() => {
-    var tr = window.__track, t0 = tr[0][2], stall = 0, worst = 0;
-    var after = tr.filter(function (s) { return Math.abs(s[2] - t0) > 1; }); // une fois la nouvelle ligne rendue
-    after.forEach(function (s, i) {
-      var still = i > 0 && Math.abs(s[1] - after[i - 1][1]) < 0.5;
-      stall = still && Math.abs(s[1] - s[2]) > 1 ? stall + 1 : 0;
-      worst = Math.max(worst, stall);
-    });
-    return after.length > 0 && worst < 3 && Math.abs(tr[tr.length - 1][1] - tr[tr.length - 1][2]) < 1;
-  }));
+  const tr = await page.evaluate(() => window.__track);
+  const firstOut = tr.findIndex((s) => s.out);
+  const firstNew = tr.findIndex((s) => /Simplifier/.test(s.text));
+  ok('the bubble pops out with the old text, then pops in with the new one',
+    firstOut !== -1 && firstNew > firstOut && !/Simplifier/.test(tr[firstOut].text) && tr[firstNew].inn && !tr[firstNew].out);
+  const t0 = tr[0].target;
+  const moved = tr.filter((s) => Math.abs(s.target - t0) > 1); // une fois la nouvelle ligne rendue
+  ok('after Valider the ring jumps directly onto its target, never gliding',
+    moved.length > 0 && moved.every((s) => s.ring !== null && Math.abs(s.ring - s.target) < 1));
   c = await coach();
   ok('step 4 once the operation is applied: simplify the left side', c.index === 3);
   await page.screenshot({ path: SCRATCH + '/campaign_coach_step4.png' });
