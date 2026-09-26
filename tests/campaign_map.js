@@ -87,9 +87,18 @@ function ok(label, cond) {
     var b = document.querySelector('.map-node[data-level="l1"] .map-node-body').getBoundingClientRect();
     return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
   });
+  const lockAt = () => page.evaluate(() => {
+    var r = document.querySelector('.map-node[data-level="l1"] .map-node-lock-bg').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  const lockBefore = await lockAt();
   await page.mouse.click(l1.x, l1.y);
   ok('clicking a locked level shakes its lock', await page.evaluate(() =>
     document.querySelector('.map-node[data-level="l1"]').classList.contains('unlocking')));
+  await page.waitForTimeout(90);
+  const lockDuring = await lockAt();
+  ok('the lock shakes where it is, not at the center of the node',
+    Math.abs(lockDuring.x - lockBefore.x) < 3 && Math.abs(lockDuring.y - lockBefore.y) < 3);
   await page.waitForTimeout(250);
   ok('and shows no card', await page.evaluate(() => document.querySelector('.map-card').hidden &&
     !document.querySelector('.map-node.selected')));
@@ -151,6 +160,10 @@ function ok(label, cond) {
   const cx = pos.n.x + pos.n.width / 2, cy = pos.n.y + pos.n.height / 2;
   ok('level card floats next to its node', (pos.c.left > cx && pos.c.left - cx < 80 || cx > pos.c.right && cx - pos.c.right < 80) &&
     cy > pos.c.top && cy < pos.c.bottom);
+  await page.evaluate(() => window.App.Map.select('t1'));
+  ok('the card of a solved level does not repeat its stars', await page.evaluate(() =>
+    document.querySelector('.map-card-title').textContent === 'Premier pas' &&
+    document.querySelector('.map-card-meta').textContent === '★★★ en 1 étape au plus'));
   await page.evaluate(() => window.App.Map.close());
   await page.click('#mapBtn');
   await page.waitForTimeout(100);

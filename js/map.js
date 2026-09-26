@@ -47,7 +47,10 @@
   function applyView(animated) {
     world.classList.toggle('map-world-animated', !!animated);
     card.classList.toggle('map-card-animated', !!animated);
-    world.style.transform = 'translate(' + view.x + 'px, ' + view.y + 'px) scale(' + view.s + ')';
+    // Translation arrondie au pixel écran : sinon Firefox rend les textes décalés
+    // pendant le glisser puis les recale au repos (les titres des régions sautaient).
+    var dpr = window.devicePixelRatio || 1;
+    world.style.transform = 'translate(' + Math.round(view.x * dpr) / dpr + 'px, ' + Math.round(view.y * dpr) / dpr + 'px) scale(' + view.s + ')';
     positionCard();
     refreshZoomButtons();
   }
@@ -158,9 +161,12 @@
       var t = el('text', { class: 'map-node-label' }, g);
       t.textContent = l.daily ? '★' : l.id.toUpperCase();
       if (st === 'locked' || isFresh) {
+        // Le tremblement (transform CSS) est sur un groupe intérieur : sur celui qui porte
+        // l'attribut transform, il l'écraserait et ramènerait le cadenas au centre du nœud.
         var lock = el('g', { class: 'map-node-lock', transform: 'translate(' + (l.boss ? 14 : 12) + ' ' + (l.boss ? -14 : -12) + ')' }, g);
-        el('circle', { r: 7, class: 'map-node-lock-bg' }, lock);
-        el('path', { d: 'M-3 0h6v4h-6zM-2 0v-2a2 2 0 0 1 4 0v2', class: 'map-node-lock-icon' }, lock);
+        var shake = el('g', { class: 'map-node-lock-shake' }, lock);
+        el('circle', { r: 7, class: 'map-node-lock-bg' }, shake);
+        el('path', { d: 'M-3 0h6v4h-6zM-2 0v-2a2 2 0 0 1 4 0v2', class: 'map-node-lock-icon' }, shake);
       }
       if (st === 'done') {
         var s = el('text', { class: 'map-node-stars', y: l.boss ? 36 : 32 }, g);
@@ -308,13 +314,6 @@
     if (l.statement) div('map-card-statement', l.statement);
     div('map-card-learn', l.learn);
     var meta = div('map-card-meta');
-    if (st === 'done') {
-      var n = P.stars(l.id);
-      var s = document.createElement('span');
-      s.className = 'map-card-stars';
-      s.textContent = '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
-      meta.appendChild(s);
-    }
     if (l.par && !l.daily) {
       var par = document.createElement('span');
       par.textContent = '★★★ en ' + l.par + ' étape' + (l.par > 1 ? 's' : '') + ' au plus';
