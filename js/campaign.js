@@ -103,11 +103,11 @@
 
   // ---- Barre de niveau ----
   function renderBar() {
-    if (!run) { bar.hidden = true; hintEl.hidden = true; return; }
+    if (!run) { bar.hidden = true; hideHint(true); return; }
     var l = run.level, z = App.Levels.zone(l.zone);
     var parts = App.Levels.partsOf(l);
     bar.hidden = false;
-    bar.querySelector('[data-level-title]').textContent = (l.daily ? 'Défi du jour' : l.id.toUpperCase() + ' · ' + l.title);
+    bar.querySelector('[data-level-title]').textContent = (l.daily ? 'Défi du jour' : App.Levels.code(l) + ' · ' + l.title);
     bar.querySelector('[data-level-zone]').textContent = z.name + (parts.length > 1 ? ' · partie ' + (run.part + 1) + ' / ' + parts.length : '');
     var steps = stepCount();
     var par = l.par;
@@ -123,15 +123,60 @@
     bar.querySelector('[data-level-hint]').hidden = !(l.hints && l.hints.length);
   }
 
-  function showHint() {
-    if (!run || !run.level.hints) return;
+  // ---- Bulle d'indice ----
+  // « Indice » l'ouvre (sur le dernier indice vu, le premier la toute première fois) ou la
+  // ferme ; ‹ › passent d'un indice à l'autre. Tout indice affiché limite le niveau à ★.
+  var HINT_OUT_MS = 140, hintTimer = null;
+  function hintOpen() { return !hintEl.hidden && !hintEl.classList.contains('hint-out'); }
+
+  function renderHint() {
     var hints = run.level.hints;
-    run.hints += 1;
-    var i = Math.min(run.hintIdx, hints.length - 1);
-    run.hintIdx += 1;
+    var i = run.hintIdx;
     hintEl.querySelector('[data-hint-text]').textContent = hints[i];
     hintEl.querySelector('[data-hint-note]').textContent = 'Indice ' + (i + 1) + ' / ' + hints.length + ' · limite ce niveau à ★';
+    hintEl.querySelector('[data-hint-prev]').disabled = i === 0;
+    hintEl.querySelector('[data-hint-next]').disabled = i === hints.length - 1;
+  }
+
+  // Sous le bouton « Indice », la flèche pointant sur son centre.
+  function positionHint() {
+    var btn = bar.querySelector('[data-level-hint]').getBoundingClientRect();
+    var w = hintEl.offsetWidth || 340;
+    var cx = btn.left + btn.width / 2;
+    var left = Math.max(12, Math.min(window.innerWidth - w - 12, cx - w / 2));
+    hintEl.style.left = left + 'px';
+    hintEl.style.top = (btn.bottom + 12) + 'px';
+    hintEl.style.setProperty('--hint-arrow-x', Math.max(16, Math.min(w - 16, cx - left)) + 'px');
+  }
+
+  function showHint() {
+    if (!run || !run.level.hints) return;
+    clearTimeout(hintTimer);
+    run.hints += 1;
+    renderHint();
+    hintEl.classList.remove('hint-out', 'hint-in');
     hintEl.hidden = false;
+    positionHint();
+    void hintEl.offsetWidth;
+    hintEl.classList.add('hint-in');
+  }
+
+  function hideHint(instant) {
+    clearTimeout(hintTimer);
+    if (hintEl.hidden) return;
+    if (instant) { hintEl.hidden = true; hintEl.classList.remove('hint-in', 'hint-out'); return; }
+    hintEl.classList.remove('hint-in');
+    hintEl.classList.add('hint-out');
+    hintTimer = setTimeout(function () { hintEl.hidden = true; hintEl.classList.remove('hint-out'); }, HINT_OUT_MS);
+  }
+
+  function stepHint(delta) {
+    if (!run || !run.level.hints) return;
+    var i = Math.max(0, Math.min(run.level.hints.length - 1, run.hintIdx + delta));
+    if (i === run.hintIdx) return;
+    run.hintIdx = i;
+    run.hints += 1;
+    renderHint();
   }
 
   // ---- Démarrage / sortie ----
@@ -153,7 +198,7 @@
     run = { level: level, part: 0, undos: 0, hints: 0, hintIdx: 0, won: false, message: null, priorSteps: 0, verdictKey: null };
     if (level.daily) run.dailyEq = App.Campaign.dailyEquation();
     hideWin();
-    hintEl.hidden = true;
+    hideHint(true);
     document.body.classList.add('in-level');
     App.Map.close();
     App.Progress.setLastScreen('map');
@@ -374,14 +419,17 @@
       onFree: function () { exitLevel(); }
     });
 
-    bar.querySelector('[data-level-hint]').addEventListener('click', showHint);
+    bar.querySelector('[data-level-hint]').addEventListener('click', function () { if (hintOpen()) hideHint(); else showHint(); });
     bar.querySelector('[data-level-restart]').addEventListener('click', function () { if (run) startLevel(run.level.id); });
-    hintEl.querySelector('[data-hint-close]').addEventListener('click', function () { hintEl.hidden = true; });
-    // Un clic en dehors de la bulle la ferme (sauf sur « Indice », qui affiche le suivant).
+    hintEl.querySelector('[data-hint-close]').addEventListener('click', function () { hideHint(); });
+    hintEl.querySelector('[data-hint-prev]').addEventListener('click', function () { stepHint(-1); });
+    hintEl.querySelector('[data-hint-next]').addEventListener('click', function () { stepHint(1); });
+    // Un clic en dehors de la bulle la ferme (sauf sur « Indice », qui la ferme lui-même).
     document.addEventListener('mousedown', function (e) {
-      if (hintEl.hidden || hintEl.contains(e.target) || e.target.closest('[data-level-hint]')) return;
-      hintEl.hidden = true;
+      if (!hintOpen() || hintEl.contains(e.target) || e.target.closest('[data-level-hint]')) return;
+      hideHint();
     }, true);
+    window.addEventListener('resize', function () { if (hintOpen()) positionHint(); });
     winEl.querySelector('[data-win-close]').addEventListener('click', hideWin);
     winEl.querySelector('[data-win-replay]').addEventListener('click', function () { if (run) startLevel(run.level.id); });
     winEl.querySelector('[data-win-map]').addEventListener('click', function () {

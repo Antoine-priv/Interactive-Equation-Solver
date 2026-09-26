@@ -2753,21 +2753,65 @@ body.map-open #mapBtn { display: none; }
   text-align: center;
 }
 .level-msg { background: var(--warning-soft); color: var(--warning); font-weight: 600; }
+/* Bulle d'indice : ancrée sous le bouton « Indice » (left/top et --hint-arrow-x posés par
+   positionHint dans campaign.js), flèche vers le bouton, pop à l'ouverture/fermeture. */
 #levelHint {
   position: fixed;
   top: 84px;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
   z-index: 41;
   width: 340px;
   background: var(--text);
   color: var(--bg);
   border-radius: var(--radius-md);
-  padding: 12px 34px 12px 14px;
+  padding: 12px 14px;
   font-size: 13.5px;
   box-shadow: var(--shadow-lg);
+  transform-origin: var(--hint-arrow-x, 50%) 0;
 }
+#levelHint::before {
+  content: "";
+  position: absolute;
+  top: -8px;
+  left: calc(var(--hint-arrow-x, 50%) - 8px);
+  border: 8px solid transparent;
+  border-top: 0;
+  border-bottom-color: var(--text);
+}
+#levelHint.hint-in { animation: coach-in 0.22s cubic-bezier(0.22, 1, 0.36, 1); }
+#levelHint.hint-out { animation: coach-out 0.14s ease-in forwards; pointer-events: none; }
 #levelHint small { display: block; margin-top: 4px; opacity: 0.7; font-size: 11.5px; }
+/* ‹ › ✕ : visibles seulement quand la souris est dans la bulle ; le texte leur laisse la place. */
+#levelHint [data-hint-text] { padding-right: 72px; }
+.level-hint-ctrl {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+#levelHint:hover .level-hint-ctrl { opacity: 1; pointer-events: auto; }
+.level-hint-ctrl button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: inherit;
+  font-size: 15px;
+  line-height: 22px;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.level-hint-ctrl button:hover:not(:disabled) { opacity: 1; background: rgba(127, 127, 127, 0.25); }
+.level-hint-ctrl button:disabled { opacity: 0.25; cursor: default; }
+@media (prefers-reduced-motion: reduce) {
+  #levelHint.hint-in, #levelHint.hint-out { animation: none; }
+}
 .level-hint-close { position: absolute; top: 6px; right: 8px; border: 0; background: none; color: inherit; cursor: pointer; opacity: 0.7; }
 
 /* Actions présentées par le niveau en cours (voir campaign.js) */

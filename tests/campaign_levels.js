@@ -22,7 +22,7 @@ function ok(label, cond) {
       await page.addInitScript(() => {
         // Tous les niveaux ouverts, sauf ceux qu'on veut jouer "pour la première fois".
         var levels = {};
-        ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 'l1', 'l2', 'l3', 'l4', 'l5', 'lB', 'f1', 'f2', 'f3',
+        ['t1', 't3', 't4', 't5', 't6', 't7', 'l1', 'l2', 'l3', 'l4', 'l5', 'lB', 'f1', 'f2', 'f3',
           'p1', 'p2', 'p3', 'p4', 'p5', 'pB', 'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'i1', 'i2', 'i3', 'iB']
           .forEach(function (id) { levels[id] = { stars: 1, bestSteps: 9, solvedAt: '2026-09-25' }; });
         if (!sessionStorage.getItem('seeded')) {
@@ -48,13 +48,41 @@ function ok(label, cond) {
 
   // --- Indice : le niveau est limité à ★ ---
   await H(page, () => window.App.History.cancelOp());
+  const hintShown = () => H(page, () => !document.getElementById('levelHint').hidden);
+  const hintText = () => H(page, () => document.querySelector('[data-hint-text]').textContent);
+  const ctrlOpacity = () => H(page, () => getComputedStyle(document.querySelector('.level-hint-ctrl')).opacity);
   await page.click('[data-level-hint]');
-  ok('hint bubble shows the first hint', await H(page, () => !document.getElementById('levelHint').hidden &&
-    document.querySelector('[data-hint-text]').textContent.indexOf('+3') !== -1));
+  await page.waitForTimeout(300);
+  ok('hint bubble shows the first hint', await hintShown() && (await hintText()).indexOf('+3') !== -1);
+  ok('the hint bubble sits under the Indice button, its arrow on the button center', await H(page, () => {
+    var b = document.querySelector('[data-level-hint]').getBoundingClientRect(), h = document.getElementById('levelHint');
+    var r = h.getBoundingClientRect(), ax = parseFloat(h.style.getPropertyValue('--hint-arrow-x'));
+    return r.top > b.bottom && r.top - b.bottom < 20 && Math.abs(r.left + ax - (b.left + b.width / 2)) < 1;
+  }));
+  await page.mouse.move(200, 700);
+  await page.waitForTimeout(200);
+  ok('‹ › ✕ hidden while the mouse is outside the bubble', await ctrlOpacity() === '0');
+  await page.hover('[data-hint-text]');
+  await page.waitForTimeout(200);
+  ok('‹ › ✕ shown while the mouse is inside the bubble', await ctrlOpacity() === '1');
+  ok('‹ disabled on the first hint', await H(page, () => document.querySelector('[data-hint-prev]').disabled));
+  await page.click('[data-hint-next]');
+  ok('› shows the next hint', (await hintText()).indexOf('Opération') !== -1 &&
+    await H(page, () => document.querySelector('[data-hint-next]').disabled));
+  await page.click('[data-hint-prev]');
+  ok('‹ goes back', (await hintText()).indexOf('+3') !== -1);
   await page.click('[data-hint-text]');
-  ok('clicking inside the hint bubble keeps it open', await H(page, () => !document.getElementById('levelHint').hidden));
+  ok('clicking inside the hint bubble keeps it open', await hintShown());
+  await page.click('[data-level-hint]');
+  ok('clicking Indice while open pops the bubble out', await H(page, () => document.getElementById('levelHint').classList.contains('hint-out')));
+  await page.waitForTimeout(300);
+  ok('then it is closed', !(await hintShown()));
+  await page.click('[data-level-hint]');
+  await page.waitForTimeout(300);
+  ok('reopening shows the last hint seen, with a pop-in', await hintShown() && (await hintText()).indexOf('+3') !== -1);
   await page.mouse.click(200, 700);
-  ok('clicking outside the hint bubble closes it', await H(page, () => document.getElementById('levelHint').hidden));
+  await page.waitForTimeout(300);
+  ok('clicking outside the hint bubble closes it', !(await hintShown()));
   await H(page, () => {
     var Hs = window.App.History;
     Hs.selectOp('expr'); Hs.setExprChainText('-3'); Hs.confirm();
