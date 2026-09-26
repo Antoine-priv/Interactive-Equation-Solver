@@ -36,6 +36,17 @@ function ok(label, cond) {
   ok('step 1: select the 3, ring around it', c.visible && c.index === 0 && inside(c.ring, termRect));
   await page.screenshot({ path: SCRATCH + '/campaign_coach_step1.png' });
 
+  // Une fenêtre modale (ici les paramètres) masque le coach au lieu de le laisser par-dessus.
+  const coachShown = () => page.evaluate(() =>
+    getComputedStyle(document.getElementById('coachBubble')).display !== 'none' &&
+    getComputedStyle(document.getElementById('coachRing')).display !== 'none');
+  await page.click('#settingsBtn');
+  await page.waitForTimeout(400);
+  ok('coach hidden while the settings window is open', !(await coachShown()));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(600);
+  ok('coach back once the settings window is closed', await coachShown());
+
   await page.click('.eq-row.current .side[data-side="left"] [data-index="1"]');
   c = await coach();
   ok('step 2 after the click: "Opération"', c.index === 1 && /Opération/.test(c.text));

@@ -2850,6 +2850,10 @@ body.in-level #history { padding-top: 150px; }
 .progress-note.err { color: var(--danger); }
 
 /* ---- Coach du Port (voir coach.js) ---- */
+/* Une fenêtre modale (paramètres, nouvelle équation, options de génération) recouvre le
+   coach : il se masque le temps qu'elle est ouverte plutôt que d'apparaître à travers. */
+body:has(.modal-overlay:not([hidden])) #coachRing,
+body:has(.modal-overlay:not([hidden])) .coach-bubble { display: none; }
 #coachRing {
   position: fixed;
   z-index: 55;
