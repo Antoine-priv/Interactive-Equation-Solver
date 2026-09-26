@@ -316,7 +316,7 @@
       // "÷d1" puis "÷d2" sans annulation, voir wrapSideInQuotient) reste exclu, même niché
       // dans un membre drillé — mêmes raisons que groupCount plus bas.
       var innerCanExpand = !isBranch && sel.length === 1 && isGroup(inner[sel[0]]) &&
-        !App.Expr.isExpressionQuotient(inner[sel[0]]);
+        !App.Expr.isExpressionQuotient(inner[sel[0]]) && !App.Expr.isKeptFraction(inner[sel[0]]);
       // L'AUTRE membre (celui où l'on n'est PAS "entré") reste sélectionnable pendant
       // qu'on est dans un groupe (voir render.js) : Simplifier peut alors porter sur les
       // deux à la fois en une seule étape (l'intérieur du groupe ET l'autre membre),
@@ -407,7 +407,7 @@
     // n'a rien à distribuer, contrairement à "k(...)"/"(...)(...)" — son radicand, lui,
     // reste librement développable en "entrant" dedans (voir drillIntoSqrt).
     function isFullyExpandableGroup(n) {
-      return isGroup(n) && !App.Expr.isExpressionQuotient(n) && !App.Expr.isSqrtGroup(n);
+      return isGroup(n) && !App.Expr.isExpressionQuotient(n) && !App.Expr.isSqrtGroup(n) && !App.Expr.isKeptFraction(n);
     }
     var groupCount = L.filter(function (i) { return isFullyExpandableGroup(eq.left[i]); }).length +
       R.filter(function (i) { return isFullyExpandableGroup(eq.right[i]); }).length;

@@ -308,7 +308,7 @@
             pos = denClose + 1;
             continue;
           }
-          // keepFractions (énoncés de la campagne) : même un numérateur simple reste une
+          // keepFractions (énoncés saisis ou de la campagne) : même un numérateur simple reste une
           // fraction affichée ("\frac{x}{3}", pas 0,33x), sauf un coefficient suivi de x
           // ("\frac{1}{2}x").
           if (!SIMPLE_FRAC_NUMER_RE.test(numerContent) || (keepFractions && s[denClose + 1] !== 'x')) {

@@ -770,7 +770,92 @@
   // fusionne avec les termes simples (simplifyNodes le fait disparaître, ou garde un "0"
   // si le membre n'a plus rien d'autre). `opts.inner === false` ne simplifie pas
   // l'intérieur des groupes (voir autoSimplify dans history.js).
+  // Fraction à dénominateur numérique gardée telle quelle (ex. "x/2", "(2x+1)/5") :
+  // la développer (ou la réduire à un seul terme) ferait apparaître des décimaux (0,5x),
+  // donc "Développer" n'y est pas proposé. "(6x)/3", lui, se réduit toujours à 2x.
+  function isKeptFraction(node) {
+    if (!isFactorGroup(node) || !node.isDivision || node.factorTerms || node.factor.pow !== 0) return false;
+    var d = node.factor.coeff;
+    return !node.innerTerms.every(function (t) {
+      return !isGroup(t) && Math.abs(roundClean(t.coeff / d) - Math.round(t.coeff / d)) < 1e-9;
+    });
+  }
+
+  // Nombre -> [numérateur, dénominateur] entiers (dénominateur > 0, ≤ 1000), ou null.
+  function toRational(v) {
+    for (var q = 1; q <= 1000; q++) {
+      var p = Math.round(v * q);
+      if (Math.abs(p / q - v) < 1e-9) return [p, q];
+    }
+    return null;
+  }
+
+  function gcdInt(a, b) {
+    a = Math.abs(a); b = Math.abs(b);
+    while (b) { var t = a % b; a = b; b = t; }
+    return a || 1;
+  }
+
+  // p/q·x^pow réduit : un terme simple si q vaut 1, sinon une fraction "(p·x^pow)/q".
+  function rationalTerm(p, q, pow) {
+    var g = gcdInt(p, q);
+    p /= g; q /= g;
+    if (q < 0) { p = -p; q = -q; }
+    if (p === 0) return { coeff: 0, pow: 0 };
+    if (q === 1) return { coeff: p, pow: pow };
+    return { sign: p < 0 ? -1 : 1, factor: { coeff: q, pow: 0 }, innerTerms: [{ coeff: Math.abs(p), pow: pow }], isDivision: true };
+  }
+
+  // Terme simple ou fraction "(k·x^n)/d" -> { p, q, pow } rationnel, sinon null.
+  function rationalOf(node) {
+    if (!isGroup(node)) {
+      var r = toRational(node.coeff);
+      return r && { p: r[0], q: r[1], pow: node.pow };
+    }
+    if (!isFactorGroup(node) || !node.isDivision || node.factorTerms || node.factor.pow !== 0 ||
+        node.innerTerms.length !== 1 || isGroup(node.innerTerms[0])) return null;
+    var num = toRational(node.sign * node.innerTerms[0].coeff), den = toRational(node.factor.coeff);
+    if (!num || !den) return null;
+    return { p: num[0] * den[1], q: num[1] * den[0], pow: node.innerTerms[0].pow };
+  }
+
+  // "Simplifier" une sélection de termes simples et de fractions "(k·x^n)/d" dont au moins
+  // une fraction : les termes semblables s'additionnent en fraction réduite (x/2 + x/3 ->
+  // 5x/6), jamais en décimal. Renvoie null si la sélection ne s'y prête pas ou ne change rien.
+  function simplifyFractions(side, indices) {
+    var idxSet = indices.slice().sort(function (a, b) { return a - b; });
+    var hasFraction = false;
+    var rats = idxSet.map(function (i) {
+      if (isGroup(side[i])) hasFraction = true;
+      return side[i] ? rationalOf(side[i]) : null;
+    });
+    if (!hasFraction || rats.some(function (r) { return !r; })) return null;
+    var powOrder = [], byPow = {};
+    rats.forEach(function (r) {
+      if (!byPow[r.pow]) { byPow[r.pow] = { p: 0, q: 1 }; powOrder.push(r.pow); }
+      var b = byPow[r.pow];
+      b.p = b.p * r.q + r.p * b.q;
+      b.q = b.q * r.q;
+      var g = gcdInt(b.p, b.q);
+      b.p /= g; b.q /= g;
+    });
+    var results = powOrder.map(function (pw) { return rationalTerm(byPow[pw].p, byPow[pw].q, pw); });
+    var kept = results.filter(function (t) { return isGroup(t) || t.coeff !== 0; });
+    if (!kept.length && side.length === idxSet.length) kept = [{ coeff: 0, pow: 0 }];
+    var out = [];
+    side.forEach(function (n, i) {
+      if (i === idxSet[0]) kept.forEach(function (t) { out.push(t); });
+      else if (idxSet.indexOf(i) === -1) out.push(cloneNode(n));
+    });
+    if (JSON.stringify(out) === JSON.stringify(side)) return null;
+    return { side: out, terms: idxSet.map(function (i) { return side[i]; }) };
+  }
+
   function simplifySelection(side, indices, factorSel, opts) {
+    if (!(factorSel && factorSel.branches && factorSel.branches.length)) {
+      var fr = simplifyFractions(side, indices);
+      if (fr) return fr;
+    }
     var out = cloneSide(side);
     var acted = [];
     var flat = [];
@@ -827,7 +912,7 @@
       // à distribuer, le groupe se réduit à ce terme (même calcul que Développer, voir
       // expandOneInner) — sans avoir à passer par Développer (pas encore débloqué au Port).
       if (isFactorGroup(s) && !s.factorTerms && s.innerTerms.length === 1 && !isGroup(s.innerTerms[0]) &&
-          !(s.isDivision && s.factor.pow !== 0)) {
+          !(s.isDivision && s.factor.pow !== 0) && !isKeptFraction(s)) {
         out[i] = expandOneInner(s.sign, s.factor, !!s.isDivision, s.innerTerms[0]);
         acted.push(i);
         return;
@@ -1331,6 +1416,19 @@
         };
       }
       if (!outerIsDivision && t.isDivision) {
+        // k * (.../d) : k et d entiers se simplifient (6·(x/4) -> 3x/2, 6·(5x/6) -> 5x),
+        // jamais de dénominateur décimal.
+        var kk = outerFactor.coeff, dd = t.factor.coeff;
+        if (outerFactor.pow === 0 && t.factor.pow === 0 && !t.factorTerms && kk === Math.round(kk) && dd === Math.round(dd)) {
+          var gk = gcdInt(kk, dd);
+          var scaled = t.innerTerms.map(function (n) { return scaleNode(n, kk / gk); });
+          var sgn = outerSign * t.sign;
+          if (dd / gk === 1) {
+            if (scaled.length === 1) return scaleNode(scaled[0], sgn);
+            return { sign: sgn, factor: { coeff: 1, pow: 0 }, innerTerms: scaled };
+          }
+          return { sign: sgn, factor: { coeff: dd / gk, pow: 0 }, innerTerms: scaled, isDivision: true };
+        }
         // k * (.../d) : reste une fraction, dénominateur divisé par k.
         return {
           sign: outerSign * t.sign,
@@ -1888,6 +1986,7 @@
     isSquareFactorGroup: isSquareFactorGroup,
     isGroup: isGroup,
     isExpressionQuotient: isExpressionQuotient,
+    isKeptFraction: isKeptFraction,
     factorPrefixLatex: factorPrefixLatex,
     sideHasVariable: sideHasVariable,
     wrapSideInProduct: wrapSideInProduct,

@@ -186,6 +186,11 @@ A regex-based tokenizer (no formal grammar): `parseSide`/`parseEquation` accept 
 as decimal separator, `\frac{a}{b}` for fractions, `x^2`/`x²` for degree-2 terms,
 and a `while` loop over consecutive `(...)` groups for products of arbitrary factor count.
 `parseLatexSide`/`parseLatexEquation` are the entry points for the unified math keypad, normalizing LaTeX into this dialect.
+`parseLatexEquation(latex, { keepFractions: true })` (new-equation modal and campaign) keeps
+`\frac{x}{3}` as a displayed fraction (a numeric-denominator `FactorGroup` `isDivision`), never
+`0,33x`. "Simplifier" adds such fractions and like plain terms as reduced fractions
+(`simplifyFractions`: `x/2+x/3` → `5x/6`), and "Développer" is not offered on a fraction whose
+expansion would give decimals (`Expr.isKeptFraction`).
 
 ## Unified math keypad (`js/mathKeypad.js`)
 

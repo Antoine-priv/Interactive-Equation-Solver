@@ -37,7 +37,7 @@
 
     function submitManual() {
       try {
-        var eq = App.Parser.parseLatexEquation(App.MathKeypad.getLatex());
+        var eq = App.Parser.parseLatexEquation(App.MathKeypad.getLatex(), { keepFractions: true });
         App.History.startNewEquation({ left: eq.left, right: eq.right }, eq.operator ? { operator: eq.operator } : undefined);
         close();
       } catch (err) {

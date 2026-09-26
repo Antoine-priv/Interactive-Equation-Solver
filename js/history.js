@@ -1566,7 +1566,7 @@
           // son numérateur ET son dénominateur restent chacun développables séparément en
           // "entrant" dedans (pending.drilled), pas via cette sélection libre au premier
           // niveau.
-          if (node && Expr.isGroup(node) && !Expr.isExpressionQuotient(node)) {
+          if (node && Expr.isGroup(node) && !Expr.isExpressionQuotient(node) && !Expr.isKeptFraction(node)) {
             targets.push({ side: side, index: idx, kind: 'full', node: node });
           }
         });
@@ -1645,7 +1645,7 @@
         // Un dénominateur-expression imbriqué (ex. "÷d1" puis "÷d2" sans annulation, voir
         // wrapSideInQuotient) reste exclu même trouvé DANS un membre drillé : expandFactorGroup/
         // expandOneInner supposent un `factor` numérique classique.
-        if (!targetNode || !Expr.isGroup(targetNode) || Expr.isExpressionQuotient(targetNode)) return false;
+        if (!targetNode || !Expr.isGroup(targetNode) || Expr.isExpressionQuotient(targetNode) || Expr.isKeptFraction(targetNode)) return false;
         var newInnerD, descD;
         try {
           if (Expr.isProductGroup(targetNode)) {
@@ -1723,7 +1723,8 @@
             var targetNodePrev = innerArrPrev[targetIdxPrev];
             // Même exclusion que confirmExpandFullSelection : un dénominateur-expression
             // imbriqué n'a pas de `factor` numérique pour expandFactorGroup/expandOneInner.
-            if (targetNodePrev && Expr.isGroup(targetNodePrev) && !Expr.isExpressionQuotient(targetNodePrev)) {
+            if (targetNodePrev && Expr.isGroup(targetNodePrev) && !Expr.isExpressionQuotient(targetNodePrev) &&
+                !Expr.isKeptFraction(targetNodePrev)) {
               try {
                 var newInnerExpPrev, descPrev;
                 if (Expr.isProductGroup(targetNodePrev)) {
