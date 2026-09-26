@@ -98,7 +98,7 @@
 |---|---|---|---|---|---|---|
 | i1 | Plus petit que | `x + 4 < 9` | Mêmes règles que pour = | 1 | l5 | Découvre : Relation « < » dans la fenêtre Nouvelle équation |
 | i2 | Le retournement | `−2x ≥ 6` | Diviser par un négatif inverse le sens | 1 | i1 | Badge « Retourneur » · Piège : Le sens de l'inégalité doit changer. |
-| i3 | Des deux côtés | `3x − 1 > 5x + 7` | Choisir le côté où garder x | 3 | i2 |  |
+| i3 | Des deux côtés | `3x − 1 > 4x + 7` | Choisir le côté où garder x | 2 | i2 |  |
 | iB | Épreuve des Collines | `2(x − 1) ≤ 5x + 4` | Inéquation avec parenthèses | 4 | i3 | Épreuve |
 
 ### La Montagne — Degré 2
