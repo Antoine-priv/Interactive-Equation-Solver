@@ -253,6 +253,9 @@ function ok(label, cond) {
     window.App.Map.isOpen() && !!document.querySelector('.map-edge.draw-in[data-edge="t3-t4"]') &&
     window.App.Campaign.current().id === 't3' && document.getElementById('levelWin').hidden));
   await page.waitForTimeout(2600);
+  ok('the map stays a moment once the unlock is over', await page.evaluate(() =>
+    window.App.Map.isOpen() && window.App.Campaign.current().id === 't3'));
+  await page.waitForTimeout(1000);
   ok('then the map closes on the next level', await page.evaluate(() =>
     document.getElementById('mapOverlay').hidden && window.App.Campaign.current().id === 't4' && !window.App.Campaign.current().won));
 

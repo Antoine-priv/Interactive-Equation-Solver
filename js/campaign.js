@@ -340,7 +340,10 @@
       if (!next) return;
       if (pendingUnlock && pendingUnlock.unlocked.length) {
         hideWin();
-        openMap({ focus: next.id, onUnlockEnd: function () { startLevel(next.id); } });
+        // Petite pause sur la carte une fois le déblocage fini, avant de lancer le niveau.
+        openMap({ focus: next.id, onUnlockEnd: function () {
+          setTimeout(function () { if (App.Map.isOpen()) startLevel(next.id); }, 1000);
+        } });
       } else startLevel(next.id);
     };
     winEl.hidden = false;

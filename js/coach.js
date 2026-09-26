@@ -49,12 +49,12 @@
       { text: 'Nouveau geste : attrape le 8 et lâche-le de l\'autre côté du « = ».', target: term('left', 1), done: stepsAtLeast(2) },
       { text: 'L\'application a écrit −8 des deux côtés pour toi. Simplifie 8 et −8.', target: sideEl('left'), done: or(countTerms('left'), function (s) { return s.solved; }) },
       { text: 'Bravo ! La simplification automatique est maintenant activée : après chaque opération, les calculs se font tout seuls. Tu peux la désactiver dans les réglages.',
-        target: '#settingsBtn', manual: true, afterWin: true, skip: function (s) { return s.run.enabled !== 'autoSimplify'; } }
+        target: '#settingsBtn', afterWin: true, done: function () { return false; }, skip: function (s) { return s.run.enabled !== 'autoSimplify'; } }
     ],
     t5: [
       { text: 'Commence par faire passer le 5 de l\'autre côté.', target: term('left', 1),
         done: function (s) { return !s.eq.left.some(function (t) { return t.pow === 0; }) || s.solved; } },
-      { text: 'Simplifie, puis glisse le 2 de 2x de l\'autre côté : c\'est une division.',
+      { text: 'Glisse maintenant le 2 de 2x de l\'autre côté du « = » : c\'est une division.',
         target: function () { return document.querySelector('.eq-row.current .coeff-slot') || document.querySelector('.eq-row.current .side[data-side="left"]'); },
         done: function (s) { return s.solved; } }
     ],

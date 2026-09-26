@@ -154,9 +154,7 @@ function ok(label, cond) {
   ok('and the coach says so, pointing at the settings', c.visible && /simplification automatique/.test(c.text) && /réglages/.test(c.text) &&
     inside(c.ring, gearRect));
   await page.screenshot({ path: SCRATCH + '/campaign_coach_autosimplify.png' });
-  await page.click('[data-coach-ok]');
-  c = await coach();
-  ok('"Compris" dismisses it', !c.visible);
+  ok('no "Compris" button on it', await page.evaluate(() => document.querySelector('[data-coach-ok]').hidden));
   await page.evaluate(() => {
     window.App.Settings.set('autoSimplify', false);
     window.App.Campaign.startLevel('t4');
