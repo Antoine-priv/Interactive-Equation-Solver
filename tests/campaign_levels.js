@@ -51,6 +51,10 @@ function ok(label, cond) {
   await page.click('[data-level-hint]');
   ok('hint bubble shows the first hint', await H(page, () => !document.getElementById('levelHint').hidden &&
     document.querySelector('[data-hint-text]').textContent.indexOf('+3') !== -1));
+  await page.click('[data-hint-text]');
+  ok('clicking inside the hint bubble keeps it open', await H(page, () => !document.getElementById('levelHint').hidden));
+  await page.mouse.click(200, 700);
+  ok('clicking outside the hint bubble closes it', await H(page, () => document.getElementById('levelHint').hidden));
   await H(page, () => {
     var Hs = window.App.History;
     Hs.selectOp('expr'); Hs.setExprChainText('-3'); Hs.confirm();

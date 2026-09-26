@@ -369,6 +369,11 @@
     bar.querySelector('[data-level-hint]').addEventListener('click', showHint);
     bar.querySelector('[data-level-restart]').addEventListener('click', function () { if (run) startLevel(run.level.id); });
     hintEl.querySelector('[data-hint-close]').addEventListener('click', function () { hintEl.hidden = true; });
+    // Un clic en dehors de la bulle la ferme (sauf sur « Indice », qui affiche le suivant).
+    document.addEventListener('mousedown', function (e) {
+      if (hintEl.hidden || hintEl.contains(e.target) || e.target.closest('[data-level-hint]')) return;
+      hintEl.hidden = true;
+    }, true);
     winEl.querySelector('[data-win-close]').addEventListener('click', hideWin);
     winEl.querySelector('[data-win-replay]').addEventListener('click', function () { if (run) startLevel(run.level.id); });
     winEl.querySelector('[data-win-map]').addEventListener('click', function () {
