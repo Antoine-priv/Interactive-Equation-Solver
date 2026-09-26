@@ -80,10 +80,19 @@ function ok(label, cond) {
     !document.getElementById('mapOverlay').hidden && document.getElementById('mapOverlay').classList.contains('map-opening')));
 
   await page.screenshot({ path: SCRATCH + '/campaign_map_buttons.png' });
-  // Un nœud verrouillé explique ce qui manque.
-  await page.evaluate(() => window.App.Map.select('l1'));
-  ok('locked level lists its missing prerequisite', await page.evaluate(() =>
-    document.querySelector('.map-card-locked').textContent.indexOf('Grand large') !== -1));
+  // Un nœud verrouillé n'ouvre pas de fiche : son cadenas tremble, la fiche ouverte se ferme.
+  await page.evaluate(() => window.App.Map.select('t1'));
+  await page.waitForTimeout(250);
+  const l1 = await page.evaluate(() => {
+    var b = document.querySelector('.map-node[data-level="l1"] .map-node-body').getBoundingClientRect();
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  });
+  await page.mouse.click(l1.x, l1.y);
+  ok('clicking a locked level shakes its lock', await page.evaluate(() =>
+    document.querySelector('.map-node[data-level="l1"]').classList.contains('unlocking')));
+  await page.waitForTimeout(250);
+  ok('and shows no card', await page.evaluate(() => document.querySelector('.map-card').hidden &&
+    !document.querySelector('.map-node.selected')));
 
   // --- Jouer T1 ---
   await page.evaluate(() => window.App.Map.select('t1'));

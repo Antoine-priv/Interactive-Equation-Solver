@@ -2686,7 +2686,6 @@ button {
 .map-card-meta { display: flex; gap: 12px; flex-wrap: wrap; color: var(--text-muted); font-size: 12.5px; }
 .map-card-stars { color: var(--star); letter-spacing: 1px; }
 .map-card-actions { display: flex; justify-content: flex-end; }
-.map-card-locked { color: var(--text-muted); font-size: 12.5px; }
 .map-play-btn {
   border: 0; border-radius: 999px; padding: 8px 20px; cursor: pointer;
   font: 600 14px inherit; font-family: inherit; background: var(--accent); color: #fff;

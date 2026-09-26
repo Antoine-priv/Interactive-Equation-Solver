@@ -238,7 +238,14 @@
   }
 
   // ---- Carte d'un niveau (au clic sur un nœud) ----
+  // Un niveau verrouillé n'ouvre pas de fiche : son cadenas tremble, c'est tout.
   function select(id) {
+    var l = App.Levels.get(id);
+    if (l && nodeState(l) === 'locked') {
+      var n = world.querySelector('.map-node[data-level="' + id + '"]');
+      if (n) { n.classList.remove('unlocking'); void n.getBoundingClientRect(); n.classList.add('unlocking'); }
+      id = null;
+    }
     selectedId = id;
     world.querySelectorAll('.map-node').forEach(function (n) {
       n.classList.toggle('selected', n.getAttribute('data-level') === id);
@@ -274,7 +281,7 @@
 
   function renderCard() {
     var l = App.Levels.get(selectedId);
-    if (!l) { hideCard(); return; }
+    if (!l || nodeState(l) === 'locked') { hideCard(); return; }
     var P = App.Progress;
     var st = nodeState(l);
     var z = App.Levels.zone(l.zone);
@@ -319,22 +326,13 @@
       meta.appendChild(done);
     }
     var actions = div('map-card-actions');
-    if (st === 'locked') {
-      var why = document.createElement('span');
-      why.className = 'map-card-locked';
-      var missing = l.req.filter(function (r) { return !P.isSolved(r); }).map(function (r) { return App.Levels.get(r).title; });
-      why.textContent = missing.length ? 'Termine d\'abord : ' + missing.join(', ')
-        : 'Il faut ' + l.stars + ' ★ (tu en as ' + P.totalStars() + ')';
-      actions.appendChild(why);
-    } else {
-      var play = document.createElement('button');
-      play.type = 'button';
-      play.className = 'map-play-btn';
-      play.setAttribute('data-map-play', l.id);
-      play.textContent = st === 'done' && !l.daily ? 'Rejouer' : 'Jouer';
-      play.addEventListener('click', function () { if (onPlay) onPlay(l.id); });
-      actions.appendChild(play);
-    }
+    var play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'map-play-btn';
+    play.setAttribute('data-map-play', l.id);
+    play.textContent = st === 'done' && !l.daily ? 'Rejouer' : 'Jouer';
+    play.addEventListener('click', function () { if (onPlay) onPlay(l.id); });
+    actions.appendChild(play);
     showCard(l.id);
     positionCard();
   }
