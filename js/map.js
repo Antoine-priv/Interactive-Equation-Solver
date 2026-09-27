@@ -364,7 +364,6 @@
       });
     }
     if (l.statement) div('map-card-statement', l.statement);
-    div('map-card-learn', l.learn);
     if (l.daily && P.dailyDoneToday()) {
       var meta = div('map-card-meta');
       var done = document.createElement('span');
