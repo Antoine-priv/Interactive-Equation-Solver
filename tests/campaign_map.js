@@ -35,6 +35,8 @@ function ok(label, cond) {
   ok('no auto-open under automation', await page.evaluate(() => document.getElementById('mapOverlay').hidden));
   await page.evaluate(() => window.App.Campaign.boot({ force: true }));
   ok('first launch opens the map', await page.evaluate(() => !document.getElementById('mapOverlay').hidden));
+  ok('launch opens the map without the opening animation', await page.evaluate(() =>
+    !document.getElementById('mapOverlay').classList.contains('map-opening')));
   const nodes = await page.evaluate(() => ({
     total: document.querySelectorAll('.map-node').length,
     open: Array.from(document.querySelectorAll('.map-node.open')).map((n) => n.getAttribute('data-level'))

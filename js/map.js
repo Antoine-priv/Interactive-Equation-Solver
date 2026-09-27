@@ -423,10 +423,13 @@
     if (closing) { clearTimeout(closeTimer); closing = false; overlay.classList.remove('map-closing'); }
     overlay.hidden = false;
     document.body.classList.add('map-open');
-    // Animation d'ouverture (voir .map-opening dans style.css).
+    // Animation d'ouverture (voir .map-opening dans style.css), sauf au lancement de
+    // l'application (opts.instant) : la carte est là d'emblée.
     overlay.classList.remove('map-opening');
-    void overlay.offsetWidth;
-    overlay.classList.add('map-opening');
+    if (!opts.instant) {
+      void overlay.offsetWidth;
+      overlay.classList.add('map-opening');
+    }
     if (App.Coach) App.Coach.refresh();
     App.Progress.setLastScreen('map');
     badgePanel.hidden = true;

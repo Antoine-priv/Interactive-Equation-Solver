@@ -544,7 +544,7 @@
   function boot(opts) {
     if (navigator.webdriver && !(opts && opts.force)) return;
     var last = App.Progress.lastScreen();
-    if (!App.Progress.hasProgress() || last === 'map' || last === null) openMap();
+    if (!App.Progress.hasProgress() || last === 'map' || last === null) openMap({ instant: true });
   }
 
   App.Campaign = {
