@@ -2648,13 +2648,13 @@ button {
 :root[data-theme="dark"] #mapOverlay .m-night { display: inline; }
 .map-viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; }
 .map-viewport.dragging { cursor: grabbing; }
-.map-svg { width: 100%; height: 100%; display: block; user-select: none; }
+.map-svg { display: block; overflow: visible; user-select: none; }
+.map-svg-live { position: absolute; left: 0; top: 0; pointer-events: none; will-change: transform; }
 /* Pas d'accrochage des glyphes à la grille de pixels : même rendu pendant et après un glisser. */
 .map-svg text { text-rendering: geometricPrecision; }
 
 /* Sol (mapArt.js) */
 .m-night { display: none; }
-.m-sea { fill: var(--m-sea); }
 .m-wave { fill: none; stroke: var(--m-wave); stroke-width: 1.6; stroke-linecap: round; }
 .m-star { fill: #fff; opacity: 0.6; }
 .m-shallow { fill: var(--m-shallow); stroke: var(--m-shallow); stroke-width: 44; stroke-linejoin: round; }
@@ -2733,8 +2733,8 @@ button {
 .m-palm-leaf-dk { fill: none; stroke: var(--m-leaf); stroke-width: 4; stroke-linecap: round; }
 .m-windmill-blades { animation: map-spin 14s linear infinite; }
 @keyframes map-spin { to { transform: rotate(360deg); } }
-.m-lm-map-ferry, .map-ferry { animation: map-bob 3.2s ease-in-out infinite; }
-@keyframes map-bob { 50% { transform: translate(0, -2px); } }
+.map-boat-bob { animation: map-bob 7s ease-in-out infinite; }
+@keyframes map-bob { 50% { transform: translate(0, -1.5px); } }
 
 /* Panneaux des régions */
 .m-sign { fill: var(--m-sign); }
@@ -2805,11 +2805,10 @@ button {
 .map-node-lock-icon { fill: none; stroke: var(--text-muted); stroke-width: 1.4; stroke-linejoin: round; }
 .map-node.unlocking .map-node-lock-shake { animation: map-lock-shake 0.35s ease; transform-box: fill-box; transform-origin: center; }
 .map-node.just-opened .map-node-body { animation: map-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); transform-box: fill-box; transform-origin: center; }
-.map-node-pulse { fill: none; stroke: var(--accent); stroke-width: 2; animation: map-pulse 1.8s ease-out infinite; transform-box: fill-box; transform-origin: center; pointer-events: none; }
-.map-token { transition: transform 0.9s cubic-bezier(0.45, 0.05, 0.3, 1); pointer-events: none; }
+.map-node-pulse { fill: none; stroke: var(--accent); stroke-width: 2; pointer-events: none; }
+.map-token { pointer-events: none; }
 .map-token-body { fill: var(--accent); }
 .map-token-x { font: italic 700 15px "KaTeX_Math", Georgia, serif; fill: #fff; text-anchor: middle; dominant-baseline: central; }
-@keyframes map-pulse { 0% { opacity: 0.7; transform: scale(1); } 100% { opacity: 0; transform: scale(1.9); } }
 @keyframes map-pop { 0% { transform: scale(0.4); } 100% { transform: scale(1); } }
 @keyframes map-lock-shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-14deg); } 75% { transform: rotate(14deg); } }
 
@@ -2902,7 +2901,8 @@ button {
 .map-zoom button:active:not(:disabled) { transform: translateY(0); }
 .map-zoom button:disabled { opacity: 0.4; cursor: default; }
 /* Zoom animé : même courbe que .canvas-panning-animated. */
-.map-world { transform-origin: 0 0; }
+/* Plan de la carte (voir applyView dans map.js) : calque composité déplacé par le GPU. */
+.map-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
 .map-world.map-world-animated { transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
 .map-card.map-card-animated { transition: left 0.32s cubic-bezier(0.22, 1, 0.36, 1), top 0.32s cubic-bezier(0.22, 1, 0.36, 1); }
 /* Ouverture de la carte : fondu et léger dézoom. */

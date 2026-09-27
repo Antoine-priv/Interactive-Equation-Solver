@@ -70,8 +70,7 @@
     { type: 'house', x: 365, y: 712, s: 0.9, r: 16 },
     { type: 'pier', x: 540, y: 572, len: 58, ground: true },
     { type: 'pier', x: 745, y: 546, len: -52, ground: true },
-    { type: 'boat', x: 600, y: 620, s: 1, sea: true }, { type: 'boat', x: 250, y: 925, s: 0.8, sea: true },
-    { type: 'boat', x: 640, y: 505, s: 0.85, sea: true, cls: 'map-ferry' },
+    { type: 'boat', x: 1040, y: 62, s: 0.8, sea: true }, { type: 'boat', x: 2395, y: 470, s: 0.9, sea: true },
     { type: 'windmill', x: 985, y: 690, r: 30 },
     { type: 'field', x: 900, y: 690, ground: true, r: 0 },
     { type: 'cabin', x: 960, y: 255, r: 20 },
@@ -598,14 +597,7 @@
       el('path', { d: 'M-9 -40L0 -52L9 -40Z', class: 'm-roof' }, g);
       el('rect', { x: -3, y: -9, width: 6, height: 9, class: 'm-door' }, g);
       el('rect', { x: -2, y: -26, width: 4, height: 5, class: 'm-window' }, g);
-      var blades = el('g', { transform: 'translate(0 -42)' }, g);
-      var spin = el('g', { class: 'm-windmill-blades' }, blades);
-      for (var a = 0; a < 4; a++) {
-        var b = el('g', { transform: 'rotate(' + (a * 90 + 20) + ')' }, spin);
-        el('rect', { x: -1, y: -30, width: 2, height: 30, class: 'm-wood-dk' }, b);
-        el('rect', { x: 1, y: -29, width: 7, height: 20, class: 'm-sail' }, b);
-      }
-      el('circle', { cx: 0, cy: -42, r: 2.5, class: 'm-wood-dk' }, g);
+      // Les ailes tournent : dessinées dans le calque animé (voir buildLive).
     },
     field: function (g) {
       var wrap = el('g', { transform: 'skewX(-18)' }, g);
@@ -773,7 +765,8 @@
   function buildGround(parent, defs) {
     var g = geometry();
     buildDefs(defs);
-    el('rect', { x: -3000, y: -3000, width: W + 6000, height: H + 6000, class: 'm-sea' }, parent);
+    // La mer elle-même est le fond de #mapOverlay : un rectangle géant ici agrandirait
+    // d'autant le calque composité de la carte (voir applyView dans map.js).
     var rand = rng(77);
     var sea = el('g', {}, parent);
     for (var i = 0; i < 170; i++) {
@@ -817,6 +810,55 @@
       el('path', { d: r.d, class: 'm-river' }, parent);
     });
     LANDMARKS.forEach(function (m) { if (m.ground) drawLandmark(parent, m); });
+  }
+
+  // Calque animé : tout ce qui bouge en continu. map.js le place dans un SVG à part, au-dessus
+  // de la carte, pour que ces animations ne fassent jamais redessiner le reste (voir le
+  // calque composité dans applyView).
+  function buildLive(parent) {
+    buildBoatLoop(parent);
+    LANDMARKS.forEach(function (m) {
+      if (m.type !== 'windmill') return;
+      var blades = el('g', { transform: 'translate(' + m.x + ' ' + (m.y - 42) + ')' }, parent);
+      var spin = el('g', { class: 'm-windmill-blades' }, blades);
+      for (var a = 0; a < 4; a++) {
+        var b = el('g', { transform: 'rotate(' + (a * 90 + 20) + ')' }, spin);
+        el('rect', { x: -1, y: -30, width: 2, height: 30, class: 'm-wood-dk' }, b);
+        el('rect', { x: 1, y: -29, width: 7, height: 20, class: 'm-sail' }, b);
+      }
+      el('circle', { r: 2.5, class: 'm-wood-dk' }, blades);
+    });
+  }
+
+  // Bateau qui fait lentement le tour de l'île du Port (animations SVG, cadencées sur
+  // l'horloge du document). Il se retourne quand il change de sens horizontal.
+  var BOAT_LAP_S = 140, BOAT_OFFSET = 80;
+  function buildBoatLoop(parent) {
+    var base = ISLANDS[0].pts, cx = 0, cy = 0;
+    base.forEach(function (p) { cx += p[0] / base.length; cy += p[1] / base.length; });
+    var pts = base.map(function (p) {
+      var dx = p[0] - cx, dy = p[1] - cy, l = Math.sqrt(dx * dx + dy * dy) || 1;
+      return [p[0] + dx / l * BOAT_OFFSET, p[1] + dy / l * BOAT_OFFSET];
+    });
+    var segs = splineSegments(pts, true), d = segmentsD(segs, true), line = sampleSegments(segs, 12);
+    // Sens horizontal le long du tour, en fraction de la longueur (animateMotion avance à
+    // vitesse constante).
+    var lens = [0];
+    for (var i = 1; i < line.length; i++) lens.push(lens[i - 1] + Math.hypot(line[i][0] - line[i - 1][0], line[i][1] - line[i - 1][1]));
+    var total = lens[lens.length - 1], times = [], values = [], cur = 0;
+    for (var k = 1; k < line.length; k++) {
+      var dx = line[k][0] - line[k - 1][0];
+      if (Math.abs(dx) < 0.4) continue;
+      var sgn = dx > 0 ? 1 : -1;
+      if (sgn !== cur) { times.push(times.length ? f1(lens[k - 1] / total * 1000) / 1000 : 0); values.push(sgn + ' 1'); cur = sgn; }
+    }
+    var g = el('g', { class: 'map-boat' }, parent);
+    el('animateMotion', { path: d, dur: BOAT_LAP_S + 's', repeatCount: 'indefinite' }, g);
+    var bob = el('g', { class: 'map-boat-bob' }, g);
+    var flip = el('g', {}, bob);
+    el('animateTransform', { attributeName: 'transform', type: 'scale', calcMode: 'discrete', values: values.join(';'),
+      keyTimes: times.join(';'), dur: BOAT_LAP_S + 's', repeatCount: 'indefinite' }, flip);
+    LANDMARK_DRAW.boat(flip);
   }
 
   function drawLandmark(parent, m) {
@@ -963,6 +1005,7 @@
     buildGround: buildGround,
     buildDecor: buildDecor,
     buildLabels: buildLabels,
+    buildLive: buildLive,
     buildSkyClouds: buildSkyClouds,
     drawEdge: drawEdge,
     drawObstacle: drawObstacle,

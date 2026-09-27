@@ -242,6 +242,12 @@ path kinds per region (`PATH_KIND`/`EDGE_VIA` to route around), barriers on path
 level still waiting on another prerequisite, clouds over closed regions. Colors are CSS
 classes over `--m-*` variables on `#mapOverlay`, with a night palette in both dark blocks.
 Ground/decor/labels are built once; paths, nodes and clouds are rebuilt on each `open()`.
+Performance: pan/zoom move the HTML plane `.map-world` (a `will-change: transform` composited
+layer, re-rasterized after a zoom by `resharpenSoon`), never an SVG group. Anything that
+animates continuously (boat around the Port island, windmill blades, current-level pulse)
+lives in the second SVG `.map-svg-live` (`App.MapArt.buildLive`) so it never repaints the
+static map; use SVG `<animate>`/`<animateMotion>` there rather than CSS `transform-box`
+animations (measured much costlier). The "x" token follows its path with `<animateMotion>`.
 `tests/campaign_map.js` checks that no two paths cross and that each level lies in its
 region — move levels or add `EDGE_VIA` points if it fails.
 `App.Campaign` runs a level on the normal canvas: it wins when

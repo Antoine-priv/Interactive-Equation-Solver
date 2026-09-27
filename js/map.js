@@ -8,7 +8,7 @@
   'use strict';
 
   var NS = 'http://www.w3.org/2000/svg';
-  var overlay, viewport, svg, world, card, badgePanel;
+  var overlay, viewport, plane, svg, liveSvg, world, card, badgePanel;
   var view = { x: 0, y: 0, s: 1 };
   var zoomInBtn = null, zoomOutBtn = null;
   var selectedId = null;
@@ -45,17 +45,37 @@
     return App.Levels.LEVELS.some(function (l) { return l.zone === zone.id && App.Progress.isAvailable(l); });
   }
 
-  // Transform CSS (pas l'attribut SVG) pour pouvoir l'animer comme le canevas (voir
-  // .map-world-animated dans style.css, même courbe que .canvas-panning-animated).
+  // Transform CSS pour pouvoir l'animer comme le canevas (voir .map-world-animated dans
+  // style.css, même courbe que .canvas-panning-animated). Il porte sur le plan HTML qui
+  // contient le SVG, pas sur un groupe SVG : le plan est un calque composité (will-change),
+  // dessiné une fois puis seulement déplacé par le GPU, au lieu de repeindre les milliers
+  // de décors à chaque image du glisser.
+  var lastScale = null;
   function applyView(animated) {
-    world.classList.toggle('map-world-animated', !!animated);
+    plane.classList.toggle('map-world-animated', !!animated);
     card.classList.toggle('map-card-animated', !!animated);
     // Translation arrondie au pixel écran : sinon Firefox rend les textes décalés
     // pendant le glisser puis les recale au repos (les titres des régions sautaient).
     var dpr = window.devicePixelRatio || 1;
-    world.style.transform = 'translate(' + Math.round(view.x * dpr) / dpr + 'px, ' + Math.round(view.y * dpr) / dpr + 'px) scale(' + view.s + ')';
+    plane.style.transform = 'translate(' + Math.round(view.x * dpr) / dpr + 'px, ' + Math.round(view.y * dpr) / dpr + 'px) scale(' + view.s + ')';
+    if (lastScale !== null && lastScale !== view.s) resharpenSoon(animated);
+    lastScale = view.s;
     positionCard();
     refreshZoomButtons();
+  }
+
+  // Un calque composité garde la résolution à laquelle il a été dessiné : après un zoom, on
+  // le fait redessiner à la nouvelle échelle (sinon flou en zoom avant) en retirant
+  // will-change le temps d'une image, une fois le zoom (et son animation) terminé.
+  var sharpenTimer = null;
+  function resharpenSoon(animated) {
+    clearTimeout(sharpenTimer);
+    sharpenTimer = setTimeout(function () {
+      plane.style.willChange = 'auto';
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { plane.style.willChange = ''; });
+      });
+    }, animated ? 380 : 180);
   }
 
   var MIN_FACTOR = 0.9, MAX_SCALE = 3;
@@ -134,13 +154,15 @@
     App.MapArt.buildDecor(layers.decor);
     App.MapArt.buildSkyClouds(layers.sky);
     App.MapArt.buildLabels(layers.labels);
+    App.MapArt.buildLive(el('g', {}, liveSvg));
+    layers.pulse = el('g', {}, liveSvg);
   }
 
   function buildWorld(opts) {
     var P = App.Progress;
     var fresh = (opts && opts.unlocked) || [];
     if (!layers) buildLayers();
-    ['edges', 'obstacles', 'nodes', 'token', 'clouds'].forEach(function (k) { layers[k].innerHTML = ''; });
+    ['edges', 'obstacles', 'nodes', 'token', 'clouds', 'pulse'].forEach(function (k) { layers[k].innerHTML = ''; });
 
     // Nuages : une région encore fermée (ou qui s'ouvre à l'instant) en est couverte ;
     // ils s'écartent quand elle s'ouvre (classe `revealed`, voir playUnlock).
@@ -190,7 +212,13 @@
         el('path', { d: 'M' + (-r + 4) + ' -4V' + (-r - 20), class: 'map-node-pole' }, g);
         el('path', { d: 'M' + (-r + 4) + ' ' + (-r - 20) + 'l14 4.5l-14 4.5Z', class: 'map-node-flag' }, g);
       }
-      if (st === 'open' && !isFresh && cur && cur.id === l.id) el('circle', { r: 18, class: 'map-node-pulse' }, g);
+      if (st === 'open' && !isFresh && cur && cur.id === l.id) {
+        // Animation SVG (rayon, opacité) : la même en CSS (scale + transform-box) coûtait
+        // une image sur deux pendant le glisser.
+        var pulse = el('circle', { r: 18, class: 'map-node-pulse' }, el('g', { transform: 'translate(' + l.x + ' ' + l.y + ')' }, layers.pulse));
+        el('animate', { attributeName: 'r', values: '18;34', dur: '1.8s', repeatCount: 'indefinite', calcMode: 'spline', keyTimes: '0;1', keySplines: '0 0 0.58 1' }, pulse);
+        el('animate', { attributeName: 'opacity', values: '0.7;0', dur: '1.8s', repeatCount: 'indefinite', calcMode: 'spline', keyTimes: '0;1', keySplines: '0 0 0.58 1' }, pulse);
+      }
       el('circle', { cy: 5, r: r, class: 'map-node-side' }, g);
       el('circle', { r: r, class: 'map-node-body' }, g);
       var t = el('text', { class: 'map-node-label' }, g);
@@ -257,8 +285,7 @@
         var lock = n.querySelector('.map-node-lock');
         if (lock) lock.remove();
       });
-      var tok = world.querySelector('.map-token');
-      if (tok && target) tok.setAttribute('transform', 'translate(' + target.x + ' ' + target.y + ')');
+      moveToken(opts.from, target);
       world.querySelectorAll('.map-zone.fogged').forEach(function (z) {
         var zone = App.Levels.ZONES.filter(function (zz) { return zz.id === z.getAttribute('data-zone'); })[0];
         if (zone && zoneOpen(zone)) {
@@ -268,11 +295,43 @@
         }
       });
     }, 1250 * delay);
-    // Fin de l'animation : le jeton a fini d'avancer (transition de 0,9 s, voir .map-token).
+    // Fin de l'animation : le jeton a fini d'avancer (voir moveToken).
     unlockTimer = setTimeout(function () {
       unlockTimer = null;
       if (opts.onUnlockEnd) opts.onUnlockEnd();
-    }, 2250 * delay);
+    }, (1350 + tokenTravelMs(opts.from, target)) * delay);
+  }
+
+  function tokenEdge(fromId, target) {
+    if (!fromId || !target) return null;
+    return App.MapArt.edges().filter(function (e) { return e.from === fromId && e.to === target.id; })[0] || null;
+  }
+  // Durée du trajet : proportionnelle à la longueur du chemin (la traversée en bateau est
+  // plus longue qu'un pas d'une région).
+  function tokenTravelMs(fromId, target) {
+    var e = tokenEdge(fromId, target);
+    if (!e) return 900;
+    var len = 0;
+    for (var i = 1; i < e.line.length; i++) len += Math.hypot(e.line[i][0] - e.line[i - 1][0], e.line[i][1] - e.line[i - 1][1]);
+    return Math.round(Math.max(900, Math.min(2000, len * 5)));
+  }
+  // Le jeton suit le tracé du chemin (<animateMotion> : animation SVG cadencée sur
+  // l'horloge du document, comme une transition CSS, pas sur requestAnimationFrame).
+  function moveToken(fromId, target) {
+    var tok = world.querySelector('.map-token');
+    if (!tok || !target) return;
+    var e = tokenEdge(fromId, target);
+    var anim = el('animateMotion', {
+      path: e ? e.d : '', dur: tokenTravelMs(fromId, target) + 'ms', begin: 'indefinite', fill: 'freeze',
+      calcMode: 'spline', keyTimes: '0;1', keyPoints: '0;1', keySplines: '0.45 0.05 0.3 1'
+    });
+    if (!e || reducedMotion() || typeof anim.beginElement !== 'function') {
+      tok.setAttribute('transform', 'translate(' + target.x + ' ' + target.y + ')');
+      return;
+    }
+    tok.removeAttribute('transform');
+    tok.appendChild(anim);
+    anim.beginElement();
   }
   var unlockTimer = null;
 
@@ -580,8 +639,14 @@
     onPlay = options && options.onPlay;
     overlay = document.getElementById('mapOverlay');
     viewport = overlay.querySelector('.map-viewport');
+    plane = overlay.querySelector('.map-world');
     svg = overlay.querySelector('svg.map-svg');
-    world = el('g', { class: 'map-world' }, svg);
+    svg.setAttribute('width', App.MapArt.W);
+    svg.setAttribute('height', App.MapArt.H);
+    world = el('g', { class: 'map-root' }, svg);
+    // Deuxième SVG, par-dessus : ce qui s'anime en continu (bateau, moulin, pulsation du
+    // niveau courant), dans son propre calque (voir applyView).
+    liveSvg = el('svg', { class: 'map-svg map-svg-live', width: App.MapArt.W, height: App.MapArt.H, 'aria-hidden': 'true' }, plane);
     card = overlay.querySelector('.map-card');
     card.addEventListener('mouseenter', function () { clearTimeout(hoverTimer); });
     card.addEventListener('mouseleave', unhoverSoon);
