@@ -46,14 +46,19 @@ function ok(label, cond) {
     document.querySelector('#opButtons button[data-op="simplify"]').classList.contains('campaign-new')));
   ok('T1: the √ key is locked', await H(page, () => document.body.classList.contains('campaign-lock-key-sqrt')));
 
-  // --- Indice : le niveau est limité à ★ ---
+  // --- Le tutoriel n'a pas d'indices ---
+  ok('T1: no Indice button in the tutorial', await H(page, () => document.querySelector('[data-level-hint]').hidden));
+
+  // --- Indice : le niveau est limité à ★ (L1) ---
   await H(page, () => window.App.History.cancelOp());
+  await H(page, () => { window.App.Progress.recordWin('t7', { stars: 3, steps: 1 }); window.App.Campaign.startLevel('l1'); });
+  await page.waitForTimeout(150);
   const hintShown = () => H(page, () => !document.getElementById('levelHint').hidden);
   const hintText = () => H(page, () => document.querySelector('[data-hint-text]').textContent);
   const ctrlOpacity = () => H(page, () => getComputedStyle(document.querySelector('.level-hint-ctrl')).opacity);
   await page.click('[data-level-hint]');
   await page.waitForTimeout(300);
-  ok('hint bubble shows the first hint', await hintShown() && (await hintText()).indexOf('+3') !== -1);
+  ok('hint bubble shows the first hint', await hintShown() && (await hintText()).indexOf('rassembler') !== -1);
   ok('the hint bubble sits under the Indice button, its arrow on the button center', await H(page, () => {
     var b = document.querySelector('[data-level-hint]').getBoundingClientRect(), h = document.getElementById('levelHint');
     var r = h.getBoundingClientRect(), ax = parseFloat(h.style.getPropertyValue('--hint-arrow-x'));
@@ -67,10 +72,10 @@ function ok(label, cond) {
   ok('‹ › ✕ shown while the mouse is inside the bubble', await ctrlOpacity() === '1');
   ok('‹ disabled on the first hint', await H(page, () => document.querySelector('[data-hint-prev]').disabled));
   await page.click('[data-hint-next]');
-  ok('› shows the next hint', (await hintText()).indexOf('Opération') !== -1 &&
+  ok('› shows the next hint', (await hintText()).indexOf('Ajoute 2x') !== -1 &&
     await H(page, () => document.querySelector('[data-hint-next]').disabled));
   await page.click('[data-hint-prev]');
-  ok('‹ goes back', (await hintText()).indexOf('+3') !== -1);
+  ok('‹ goes back', (await hintText()).indexOf('rassembler') !== -1);
   await page.click('[data-hint-text]');
   ok('clicking inside the hint bubble keeps it open', await hintShown());
   await page.click('[data-level-hint]');
@@ -79,10 +84,12 @@ function ok(label, cond) {
   ok('then it is closed', !(await hintShown()));
   await page.click('[data-level-hint]');
   await page.waitForTimeout(300);
-  ok('reopening shows the last hint seen, with a pop-in', await hintShown() && (await hintText()).indexOf('+3') !== -1);
+  ok('reopening shows the last hint seen, with a pop-in', await hintShown() && (await hintText()).indexOf('rassembler') !== -1);
   await page.mouse.click(200, 700);
   await page.waitForTimeout(300);
   ok('clicking outside the hint bubble closes it', !(await hintShown()));
+  await H(page, () => window.App.Campaign.startLevel('t1'));
+  await page.waitForTimeout(150);
   await H(page, () => {
     var Hs = window.App.History;
     Hs.selectOp('expr'); Hs.setExprChainText('-3'); Hs.confirm();
@@ -90,7 +97,7 @@ function ok(label, cond) {
     Hs.toggleTermSelection('right', 0); Hs.toggleTermSelection('right', 1); Hs.confirmSimplifySelection();
   });
   await page.waitForTimeout(150);
-  ok('tutorial level: no stars at the end, even with a hint', await H(page, () => document.querySelector('#levelWin .win-stars').hidden));
+  ok('tutorial level: no stars at the end', await H(page, () => document.querySelector('#levelWin .win-stars').hidden));
   await page.close();
 
   page = await freshPage(true);

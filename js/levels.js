@@ -16,7 +16,8 @@
      voir App.Levels.starred ;
    - `feat` : actions présentées par ce niveau (boutons/touches masqués avant, voir
      campaign.js) ;
-   - `hints` : indices, de la notion vers l'action précise. */
+   - `hints` : indices, de la notion vers l'action précise (aucun dans le Port : le
+     tutoriel a ses bulles, voir coach.js). */
 (function (App) {
   'use strict';
 
@@ -75,22 +76,16 @@
     // l'ancien T5 « Rassembler » (t6) dans T6 ; les ids restent ceux des sauvegardes, seul
     // l'affichage est renuméroté).
     { id: 't1', zone: 'port', x: 200, y: 790, req: [], title: 'Premier pas', latex: 'x+3=7', sol: P(4),
-      feat: ['simplify'], learn: 'Ajouter ou retirer la même chose des deux côtés',
-      hints: ['Pour isoler x, il faut faire disparaître le +3.', 'Clique sur Opération, tape −3 dans le pavé, puis Simplifier.'] },
+      feat: ['simplify'], learn: 'Ajouter ou retirer la même chose des deux côtés' },
     { id: 't3', code: 'T2', zone: 'port', x: 300, y: 740, req: ['t1'], title: 'Diviser', latex: '3x=12', sol: P(4),
-      learn: 'Diviser par le coefficient',
-      hints: ['3x veut dire 3 fois x.', 'Opération ÷3, puis Simplifier.'] },
+      learn: 'Diviser par le coefficient' },
     { id: 't4', code: 'T3', zone: 'port', x: 225, y: 650, req: ['t3'], title: 'Faire glisser', latex: 'x+8=3', sol: P(-5),
       enables: 'autoSimplify',
-      learn: 'Passer un terme de l\'autre côté',
-      hints: ['Un terme peut passer de l\'autre côté du « = ».', 'Attrape le 8 et lâche-le de l\'autre côté du « = ».'] },
+      learn: 'Passer un terme de l\'autre côté' },
     { id: 't5', code: 'T4', zone: 'port', x: 320, y: 585, req: ['t4'], title: 'Deux étapes', latex: '2x+5=11', sol: P(3),
-      learn: 'Soustraire puis diviser',
-      hints: ['Commence par le terme sans x.', 'Retire 5, puis glisse le 2 de 2x de l\'autre côté.'] },
+      learn: 'Soustraire puis diviser' },
     { id: 't7', code: 'T5', zone: 'port', x: 455, y: 560, req: ['t5'], title: 'Grand large', latex: '3x+2x+3=2x+12', sol: P(3),
-      boss: true, badge: 'premiers-pas', learn: 'Regrouper les termes semblables, des x des deux côtés',
-      hints: ['3x et 2x peuvent se réunir, puis rassemble tous les x du même côté.',
-        'Sélectionne 3x et 2x, puis Simplifier. Retire ensuite 2x des deux côtés, puis 3, puis divise par 3.'] },
+      boss: true, badge: 'premiers-pas', learn: 'Regrouper les termes semblables, des x des deux côtés' },
 
     // ---- La Plaine ----
     { id: 'l1', zone: 'plaine', x: 820, y: 560, req: ['t7'], title: 'Les négatifs', latex: '4x-7=-2x+5', sol: P(2), par: 3,
