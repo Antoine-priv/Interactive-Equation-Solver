@@ -8,7 +8,6 @@
   'use strict';
 
   var NS = 'http://www.w3.org/2000/svg';
-  var WORLD_W = 1710, WORLD_H = 650;
   var overlay, viewport, svg, world, card, badgePanel;
   var view = { x: 0, y: 0, s: 1 };
   var zoomInBtn = null, zoomOutBtn = null;
@@ -92,12 +91,12 @@
 
   function fitScale() {
     var w = viewport.clientWidth || 1, h = viewport.clientHeight || 1;
-    return Math.min(w / WORLD_W, h / WORLD_H);
+    return Math.min(w / App.MapArt.W, h / App.MapArt.H);
   }
 
   function clampView() {
     var w = viewport.clientWidth, h = viewport.clientHeight;
-    var mw = WORLD_W * view.s, mh = WORLD_H * view.s;
+    var mw = App.MapArt.W * view.s, mh = App.MapArt.H * view.s;
     var margin = 120;
     view.x = mw < w ? (w - mw) / 2 : Math.min(margin, Math.max(w - mw - margin, view.x));
     view.y = mh < h ? (h - mh) / 2 : Math.min(margin, Math.max(h - mh - margin, view.y));
@@ -121,38 +120,59 @@
   }
 
   // ---- Construction du SVG ----
+  // Calques, du sol vers le ciel (voir mapArt.js pour le dessin) : sol (mer, îles,
+  // régions), chemins, décors en relief, obstacles, nœuds, jeton, nuages, panneaux. Sol,
+  // décors et panneaux ne dépendent pas de la progression : construits une seule fois.
+  var layers = null;
+  function buildLayers() {
+    var defs = el('defs', {}, svg);
+    layers = {};
+    ['ground', 'edges', 'decor', 'obstacles', 'nodes', 'token', 'clouds', 'sky', 'labels'].forEach(function (k) {
+      layers[k] = el('g', { class: 'map-layer-' + k }, world);
+    });
+    App.MapArt.buildGround(layers.ground, defs);
+    App.MapArt.buildDecor(layers.decor);
+    App.MapArt.buildSkyClouds(layers.sky);
+    App.MapArt.buildLabels(layers.labels);
+  }
+
   function buildWorld(opts) {
     var P = App.Progress;
     var fresh = (opts && opts.unlocked) || [];
-    world.innerHTML = '';
-    el('rect', { x: -2000, y: -2000, width: WORLD_W + 4000, height: WORLD_H + 4000, class: 'map-land' }, world);
+    if (!layers) buildLayers();
+    ['edges', 'obstacles', 'nodes', 'token', 'clouds'].forEach(function (k) { layers[k].innerHTML = ''; });
 
+    // Nuages : une région encore fermée (ou qui s'ouvre à l'instant) en est couverte ;
+    // ils s'écartent quand elle s'ouvre (classe `revealed`, voir playUnlock).
     App.Levels.ZONES.forEach(function (z) {
       var freshZone = App.Levels.LEVELS.some(function (l) { return l.zone === z.id && fresh.indexOf(l.id) !== -1; }) &&
         !App.Levels.LEVELS.some(function (l) { return l.zone === z.id && fresh.indexOf(l.id) === -1 && P.isAvailable(l); });
-      var g = el('g', { class: 'map-zone map-zone-' + z.id + (zoneOpen(z) && !freshZone ? '' : ' fogged'), 'data-zone': z.id }, world);
-      el('rect', { x: z.x, y: z.y, width: z.w, height: z.h, rx: 30, class: 'map-zone-shape' }, g);
-      var mark = el('text', { x: z.mx || z.x + z.w - 16, y: z.my || z.y + z.h - 16, class: 'map-zone-mark', 'text-anchor': z.mx ? 'middle' : 'end' }, g);
-      mark.textContent = z.mark;
-      var bottom = z.label === 'br' || z.label === 'bl';
-      var lx = z.label === 'br' ? z.x + z.w - 18 : (z.lx || z.x + 18);
-      var ly = bottom ? z.y + z.h - 34 : z.y + 28;
-      var anchor = z.label === 'br' ? 'end' : 'start';
-      var name = el('text', { x: lx, y: ly, class: 'map-zone-name', 'text-anchor': anchor }, g);
-      name.textContent = z.name;
-      var sub = el('text', { x: lx, y: ly + 16, class: 'map-zone-sub', 'text-anchor': anchor }, g);
-      sub.textContent = z.sub;
+      var fogged = !zoneOpen(z) || freshZone;
+      var g = el('g', { class: 'map-zone map-zone-' + z.id + (fogged ? ' fogged' : ''), 'data-zone': z.id }, layers.clouds);
+      if (fogged) App.MapArt.drawClouds(g, z.id);
     });
 
-    App.Levels.LEVELS.forEach(function (l) {
-      l.req.forEach(function (r) {
-        var a = App.Levels.get(r);
-        var mx = (a.x + l.x) / 2 + (l.y - a.y) * 0.18, my = (a.y + l.y) / 2 - (l.x - a.x) * 0.18;
-        var cls = P.isSolved(l.id) ? 'walked' : (P.isSolved(r) ? 'open' : '');
-        var drawIn = fresh.indexOf(l.id) !== -1 && opts && opts.from === r;
-        el('path', { d: 'M' + a.x + ' ' + a.y + ' Q' + mx + ' ' + my + ' ' + l.x + ' ' + l.y,
-          class: 'map-edge ' + cls + (drawIn ? ' draw-in' : ''), 'data-edge': r + '-' + l.id }, world);
-      });
+    App.MapArt.edges().forEach(function (e) {
+      var l = App.Levels.get(e.to);
+      var state = P.isSolved(l.id) ? 'walked' : (P.isSolved(e.from) ? 'open' : 'locked');
+      var drawIn = fresh.indexOf(l.id) !== -1 && opts && opts.from === e.from;
+      var g = App.MapArt.drawEdge(layers.edges, e, state, drawIn ? 'draw-in' : '');
+      if (drawIn) {
+        // Tracé progressif : masque dont le trait se déroule (voir playUnlock).
+        var id = 'map-reveal-' + e.key;
+        var mask = el('mask', { id: id, maskUnits: 'userSpaceOnUse', x: -500, y: -500,
+          width: App.MapArt.W + 1000, height: App.MapArt.H + 1000 }, layers.edges);
+        el('path', { d: e.d, class: 'map-edge-reveal' }, mask);
+        g.setAttribute('mask', 'url(#' + id + ')');
+      }
+      // Chemin entravé : le niveau d'arrivée attend encore d'autres prérequis.
+      var waiting = l.req.filter(function (r) { return !P.isSolved(r); });
+      if (l.req.length > 1 && (waiting.length || fresh.indexOf(l.id) !== -1) && !P.isSolved(l.id)) {
+        var names = waiting.map(function (r) { return App.Levels.code(App.Levels.get(r)); });
+        App.MapArt.drawObstacle(layers.obstacles, e, names.length
+          ? 'Réussis aussi ' + names.join(' et ') + ' pour passer' : 'Passage libre');
+        if (fresh.indexOf(l.id) !== -1) layers.obstacles.lastChild.classList.add('will-clear');
+      }
     });
 
     var cur = currentLevel();
@@ -163,9 +183,16 @@
         class: 'map-node ' + (isFresh ? 'locked will-open' : st) + (l.boss ? ' boss' : '') + (selectedId === l.id ? ' selected' : ''),
         transform: 'translate(' + l.x + ' ' + l.y + ')', tabindex: '0', role: 'button',
         'data-level': l.id, 'aria-label': l.title
-      }, world);
+      }, layers.nodes);
+      var r = l.boss ? 21 : 17;
+      el('ellipse', { cx: 0, cy: 8, rx: r + 3, ry: 6, class: 'map-node-shadow' }, g);
+      if (l.boss) {
+        el('path', { d: 'M' + (-r + 4) + ' -4V' + (-r - 20), class: 'map-node-pole' }, g);
+        el('path', { d: 'M' + (-r + 4) + ' ' + (-r - 20) + 'l14 4.5l-14 4.5Z', class: 'map-node-flag' }, g);
+      }
       if (st === 'open' && !isFresh && cur && cur.id === l.id) el('circle', { r: 18, class: 'map-node-pulse' }, g);
-      el('circle', { r: l.boss ? 21 : 17, class: 'map-node-body' }, g);
+      el('circle', { cy: 5, r: r, class: 'map-node-side' }, g);
+      el('circle', { r: r, class: 'map-node-body' }, g);
       var t = el('text', { class: 'map-node-label' }, g);
       t.textContent = l.daily ? '★' : App.Levels.code(l);
       if (st === 'locked' || isFresh) {
@@ -177,7 +204,7 @@
         el('path', { d: 'M-3 0h6v4h-6zM-2 0v-2a2 2 0 0 1 4 0v2', class: 'map-node-lock-icon' }, shake);
       }
       if (st === 'done' && App.Levels.starred(l)) {
-        var s = el('text', { class: 'map-node-stars', y: l.boss ? 36 : 32 }, g);
+        var s = el('text', { class: 'map-node-stars', y: l.boss ? 38 : 34 }, g);
         var n = P.stars(l.id);
         s.textContent = '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
       }
@@ -191,7 +218,7 @@
 
     var tokenAt = (opts && opts.from && App.Levels.get(opts.from)) || cur;
     if (tokenAt) {
-      var tok = el('g', { class: 'map-token', transform: 'translate(' + tokenAt.x + ' ' + tokenAt.y + ')' }, world);
+      var tok = el('g', { class: 'map-token', transform: 'translate(' + tokenAt.x + ' ' + tokenAt.y + ')' }, layers.token);
       var inner = el('g', { transform: 'translate(0 -40)' }, tok);
       el('path', { d: 'M-5 11 L0 19 L5 11 Z', class: 'map-token-body' }, inner);
       el('circle', { r: 13, class: 'map-token-body' }, inner);
@@ -206,7 +233,7 @@
     var fresh = opts.unlocked || [];
     var target = fresh.length ? App.Levels.get(fresh[0]) : null;
     var delay = reducedMotion() ? 0 : 1;
-    world.querySelectorAll('.map-edge.draw-in').forEach(function (p) {
+    world.querySelectorAll('.map-edge-reveal').forEach(function (p) {
       var len = p.getTotalLength();
       p.style.strokeDasharray = len;
       p.style.strokeDashoffset = len;
@@ -225,6 +252,7 @@
         var n = world.querySelector('[data-level="' + id + '"]');
         if (!n) return;
         n.classList.remove('locked', 'will-open', 'unlocking');
+        world.querySelectorAll('.map-obstacle.will-clear').forEach(function (o) { o.classList.add('clearing'); });
         n.classList.add('open', 'just-opened');
         var lock = n.querySelector('.map-node-lock');
         if (lock) lock.remove();

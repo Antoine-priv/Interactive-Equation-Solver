@@ -47,21 +47,6 @@
 
   /* Carte de la campagne (voir map.js) */
   --star: #f59e0b;
-  --map-land: #eef0f6;
-  --map-path: #b9bdd0;
-  --map-lock: #c4c8d4;
-  --map-lock-fill: #eceef4;
-  --zone-port: #e2ebff;
-  --zone-plaine: #e1f4e7;
-  --zone-foret: #d9eee0;
-  --zone-coll: #fbeddb;
-  --zone-mont: #e9e6fb;
-  --zone-grotte: #ebe4f8;
-  --zone-source: #dff1f7;
-  --zone-marais: #ecf2df;
-  --zone-cit: #fae6e8;
-  --zone-obs: #e6eaf6;
-  --zone-som: #fff4d1;
 }
 
 /* Mode sombre : suit la préférence système par défaut (aucun choix explicite encore
@@ -88,21 +73,6 @@
     --arrow-color: #4a4e5e;
 
     --star: #fbbf24;
-    --map-land: #181a23;
-    --map-path: #4b4f63;
-    --map-lock: #4a4e5e;
-    --map-lock-fill: #262833;
-    --zone-port: #1b2436;
-    --zone-plaine: #1a2a22;
-    --zone-foret: #18291f;
-    --zone-coll: #2e2619;
-    --zone-mont: #23213a;
-    --zone-grotte: #261f36;
-    --zone-source: #172a31;
-    --zone-marais: #232a1b;
-    --zone-cit: #321d20;
-    --zone-obs: #1d2231;
-    --zone-som: #2f2a16;
   }
 }
 :root[data-theme="dark"] {
@@ -125,21 +95,6 @@
   --arrow-color: #4a4e5e;
 
   --star: #fbbf24;
-  --map-land: #181a23;
-  --map-path: #4b4f63;
-  --map-lock: #4a4e5e;
-  --map-lock-fill: #262833;
-  --zone-port: #1b2436;
-  --zone-plaine: #1a2a22;
-  --zone-foret: #18291f;
-  --zone-coll: #2e2619;
-  --zone-mont: #23213a;
-  --zone-grotte: #261f36;
-  --zone-source: #172a31;
-  --zone-marais: #232a1b;
-  --zone-cit: #321d20;
-  --zone-obs: #1d2231;
-  --zone-som: #2f2a16;
 }
 
 html, body {
@@ -2561,52 +2516,292 @@ button {
 .map-pill:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* ---- Carte ---- */
+/* Palette de la carte (voir mapArt.js) : jour ici, nuit dans les deux blocs sombres
+   juste en dessous. */
 #mapOverlay {
+  --m-sea: #86cdea; --m-shallow: #b3e2f2; --m-wave: rgba(255, 255, 255, 0.75);
+  --m-sand: #f2dca2; --m-cliff1: #cf9160; --m-cliff2: #a96c43; --m-cliff-line: #8e5733;
+  --m-grass: #b5dc86;
+  --m-z-port: #c2e39a; --m-z-plaine: #b5dc86; --m-z-foret: #86c276; --m-z-coll: #d5dc8c;
+  --m-z-mont: #d3c9b6; --m-z-grotte: #b1a79f; --m-z-source: #a6dcc0; --m-z-marais: #a1b688;
+  --m-z-cit: #e6d5a8; --m-z-obs: #c2bde0; --m-z-som: #eef1f6;
+  --m-tex-dark: rgba(40, 60, 20, 0.2); --m-tex-light: rgba(255, 255, 255, 0.45);
+  --m-water: #62bde3; --m-water-hi: #c4ecfa; --m-murk: #7fae9a; --m-foam: #ffffff;
+  --m-shadow: rgba(50, 60, 30, 0.2);
+  --m-leaf: #5eae59; --m-leaf-dk: #3f9150; --m-leaf-hi: #8bd06f;
+  --m-pine: #34845a; --m-pine-hi: #54a86e; --m-trunk: #8a5a3b;
+  --m-bush: #62b35c; --m-bush-hi: #92d274; --m-tuft: #6f9f4d;
+  --m-flower-a: #ff8fa3; --m-flower-b: #ffd166; --m-flower-c: #ffffff;
+  --m-rock: #bdb4a6; --m-rock-dk: #928a7e; --m-peak: #b3a896; --m-peak-dk: #8a7f70;
+  --m-snow: #ffffff; --m-snow-dk: #dde6f1;
+  --m-hill: #c9d57e; --m-hill-dk: #a7b862;
+  --m-wall: #fbf4e6; --m-wall-dk: #e2d4bb; --m-roof: #e4704f; --m-roof-dk: #c2553a; --m-roof-b: #5a7fc0;
+  --m-door: #6b4a33; --m-window: #6fa8cc; --m-stripe: #e5484d;
+  --m-stone: #dccfb2; --m-stone-dk: #b9aa8b; --m-flag: #e5484d;
+  --m-wood: #c08a55; --m-wood-dk: #8a5a34; --m-thatch: #d8b565;
+  --m-barn: #d9534f; --m-barn-dk: #b23f3c;
+  --m-reed: #5f8f3f; --m-cattail: #8a5a34; --m-deadwood: #7a5a45; --m-lily: #5eae59;
+  --m-crystal: #a58ee0; --m-crystal-hi: #d6c9f6; --m-cave: #3d3340;
+  --m-sheep: #ffffff; --m-sheep-head: #3b3b3b; --m-mush: #e5484d;
+  --m-dome: #eef1f8; --m-dome-dk: #c9d1e2; --m-scope: #5d6374;
+  --m-hull: #b8683f; --m-sail: #ffffff; --m-sail-dk: #e6ebf2; --m-mast: #6b4a33;
+  --m-lamp: #ffd166; --m-field: #e8cf7a; --m-field-line: #d2b35a;
+  --m-cloud: #ffffff; --m-cloud-sh: #d9e6f2;
+  --m-sign: #fffdf8; --m-sign-sh: rgba(40, 50, 60, 0.18);
+  --m-p-dirt-edge: #caa66c; --m-p-dirt: #f0d9a2;
+  --m-p-trail-edge: #9a7247; --m-p-trail: #c9a26f;
+  --m-p-stone-edge: #8b8478; --m-p-stone: #dcd5c9;
+  --m-p-plank-edge: #7a5230; --m-p-plank: #c79360;
+  --m-p-road-edge: #5c6170; --m-p-road: #7d8291; --m-p-road-line: #ffffff;
+  --m-p-sea: #ffffff;
+  --m-barrier: #ffffff; --m-barrier-stripe: #e5484d; --m-post: #6b4a33;
+  --m-node-side-open: #4f46e5; --m-node-side-done: #2f9e62; --m-node-side-boss: #d08a10;
+  --m-node-locked: #e9ebe4; --m-node-side-locked: #a9ad9f; --m-halo: rgba(255, 255, 255, 0.9);
   position: fixed;
   inset: 0;
   z-index: 60;
-  background: var(--map-land);
+  background: var(--m-sea);
 }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) #mapOverlay {
+    --m-sea: #11263d; --m-shallow: #1a3a57; --m-wave: rgba(140, 180, 220, 0.35);
+    --m-sand: #6d6043; --m-cliff1: #4d3727; --m-cliff2: #37261a; --m-cliff-line: #2a1c12;
+    --m-grass: #365532;
+    --m-z-port: #3a5a36; --m-z-plaine: #365532; --m-z-foret: #284a2e; --m-z-coll: #4a5433;
+    --m-z-mont: #4a4640; --m-z-grotte: #3b3838; --m-z-source: #2c5048; --m-z-marais: #34452f;
+    --m-z-cit: #544a37; --m-z-obs: #3b3a58; --m-z-som: #5c6475;
+    --m-tex-dark: rgba(0, 0, 0, 0.22); --m-tex-light: rgba(200, 220, 255, 0.12);
+    --m-water: #245784; --m-water-hi: #4c85b8; --m-murk: #2f4d44; --m-foam: #9fb8d4;
+    --m-shadow: rgba(0, 0, 0, 0.3);
+    --m-leaf: #2f6b3a; --m-leaf-dk: #22532c; --m-leaf-hi: #3f8249;
+    --m-pine: #1d5034; --m-pine-hi: #2c6a45; --m-trunk: #4a3325;
+    --m-bush: #2f6a38; --m-bush-hi: #43854a; --m-tuft: #4c7a3d;
+    --m-flower-a: #b0647a; --m-flower-b: #b5974e; --m-flower-c: #9aa4b5;
+    --m-rock: #625c55; --m-rock-dk: #47423d; --m-peak: #57504a; --m-peak-dk: #3c3733;
+    --m-snow: #c6d0e0; --m-snow-dk: #97a4b9;
+    --m-hill: #52623b; --m-hill-dk: #404e2e;
+    --m-wall: #b7ad9c; --m-wall-dk: #8b8272; --m-roof: #9b4a35; --m-roof-dk: #783726; --m-roof-b: #3b527d;
+    --m-door: #3b2a1e; --m-window: #ffd66b; --m-stripe: #a8383c;
+    --m-stone: #7c7364; --m-stone-dk: #5d5649; --m-flag: #c43c41;
+    --m-wood: #6f4c2f; --m-wood-dk: #4e3520; --m-thatch: #7d6a3e;
+    --m-barn: #8a3533; --m-barn-dk: #6c2826;
+    --m-reed: #3d5a2c; --m-cattail: #5e3f25; --m-deadwood: #4a382c; --m-lily: #2f6b3a;
+    --m-crystal: #8a74d0; --m-crystal-hi: #b7a6ee; --m-cave: #120e15;
+    --m-sheep: #c9ced8; --m-sheep-head: #1f1f1f; --m-mush: #a8383c;
+    --m-dome: #a9b3c7; --m-dome-dk: #7e889c; --m-scope: #c9ced8;
+    --m-hull: #6b3b24; --m-sail: #c9d0dc; --m-sail-dk: #9aa4b5; --m-mast: #3b2a1e;
+    --m-lamp: #ffe08a; --m-field: #6e6238; --m-field-line: #5a502d;
+    --m-cloud: #3b4863; --m-cloud-sh: #2b3550;
+    --m-sign: #232734; --m-sign-sh: rgba(0, 0, 0, 0.4);
+    --m-p-dirt-edge: #5e4d33; --m-p-dirt: #857252;
+    --m-p-trail-edge: #45331f; --m-p-trail: #6b5539;
+    --m-p-stone-edge: #3c3935; --m-p-stone: #6d6860;
+    --m-p-plank-edge: #3d2918; --m-p-plank: #7a5835;
+    --m-p-road-edge: #1d2027; --m-p-road: #393d47; --m-p-road-line: #c9ccd4;
+    --m-p-sea: #9fb6d4;
+    --m-barrier: #c9ccd4; --m-barrier-stripe: #b8383c; --m-post: #3b2a1e;
+    --m-node-side-open: #3a33b0; --m-node-side-done: #1e6b43; --m-node-side-boss: #8a5c0c;
+    --m-node-locked: #3a3d44; --m-node-side-locked: #25272d; --m-halo: rgba(20, 22, 30, 0.85);
+  }
+  :root:not([data-theme="light"]) #mapOverlay .m-night { display: inline; }
+}
+:root[data-theme="dark"] #mapOverlay {
+  --m-sea: #11263d; --m-shallow: #1a3a57; --m-wave: rgba(140, 180, 220, 0.35);
+  --m-sand: #6d6043; --m-cliff1: #4d3727; --m-cliff2: #37261a; --m-cliff-line: #2a1c12;
+  --m-grass: #365532;
+  --m-z-port: #3a5a36; --m-z-plaine: #365532; --m-z-foret: #284a2e; --m-z-coll: #4a5433;
+  --m-z-mont: #4a4640; --m-z-grotte: #3b3838; --m-z-source: #2c5048; --m-z-marais: #34452f;
+  --m-z-cit: #544a37; --m-z-obs: #3b3a58; --m-z-som: #5c6475;
+  --m-tex-dark: rgba(0, 0, 0, 0.22); --m-tex-light: rgba(200, 220, 255, 0.12);
+  --m-water: #245784; --m-water-hi: #4c85b8; --m-murk: #2f4d44; --m-foam: #9fb8d4;
+  --m-shadow: rgba(0, 0, 0, 0.3);
+  --m-leaf: #2f6b3a; --m-leaf-dk: #22532c; --m-leaf-hi: #3f8249;
+  --m-pine: #1d5034; --m-pine-hi: #2c6a45; --m-trunk: #4a3325;
+  --m-bush: #2f6a38; --m-bush-hi: #43854a; --m-tuft: #4c7a3d;
+  --m-flower-a: #b0647a; --m-flower-b: #b5974e; --m-flower-c: #9aa4b5;
+  --m-rock: #625c55; --m-rock-dk: #47423d; --m-peak: #57504a; --m-peak-dk: #3c3733;
+  --m-snow: #c6d0e0; --m-snow-dk: #97a4b9;
+  --m-hill: #52623b; --m-hill-dk: #404e2e;
+  --m-wall: #b7ad9c; --m-wall-dk: #8b8272; --m-roof: #9b4a35; --m-roof-dk: #783726; --m-roof-b: #3b527d;
+  --m-door: #3b2a1e; --m-window: #ffd66b; --m-stripe: #a8383c;
+  --m-stone: #7c7364; --m-stone-dk: #5d5649; --m-flag: #c43c41;
+  --m-wood: #6f4c2f; --m-wood-dk: #4e3520; --m-thatch: #7d6a3e;
+  --m-barn: #8a3533; --m-barn-dk: #6c2826;
+  --m-reed: #3d5a2c; --m-cattail: #5e3f25; --m-deadwood: #4a382c; --m-lily: #2f6b3a;
+  --m-crystal: #8a74d0; --m-crystal-hi: #b7a6ee; --m-cave: #120e15;
+  --m-sheep: #c9ced8; --m-sheep-head: #1f1f1f; --m-mush: #a8383c;
+  --m-dome: #a9b3c7; --m-dome-dk: #7e889c; --m-scope: #c9ced8;
+  --m-hull: #6b3b24; --m-sail: #c9d0dc; --m-sail-dk: #9aa4b5; --m-mast: #3b2a1e;
+  --m-lamp: #ffe08a; --m-field: #6e6238; --m-field-line: #5a502d;
+  --m-cloud: #3b4863; --m-cloud-sh: #2b3550;
+  --m-sign: #232734; --m-sign-sh: rgba(0, 0, 0, 0.4);
+  --m-p-dirt-edge: #5e4d33; --m-p-dirt: #857252;
+  --m-p-trail-edge: #45331f; --m-p-trail: #6b5539;
+  --m-p-stone-edge: #3c3935; --m-p-stone: #6d6860;
+  --m-p-plank-edge: #3d2918; --m-p-plank: #7a5835;
+  --m-p-road-edge: #1d2027; --m-p-road: #393d47; --m-p-road-line: #c9ccd4;
+  --m-p-sea: #9fb6d4;
+  --m-barrier: #c9ccd4; --m-barrier-stripe: #b8383c; --m-post: #3b2a1e;
+  --m-node-side-open: #3a33b0; --m-node-side-done: #1e6b43; --m-node-side-boss: #8a5c0c;
+  --m-node-locked: #3a3d44; --m-node-side-locked: #25272d; --m-halo: rgba(20, 22, 30, 0.85);
+}
+:root[data-theme="dark"] #mapOverlay .m-night { display: inline; }
 .map-viewport { position: absolute; inset: 0; overflow: hidden; cursor: grab; }
 .map-viewport.dragging { cursor: grabbing; }
 .map-svg { width: 100%; height: 100%; display: block; user-select: none; }
 /* Pas d'accrochage des glyphes à la grille de pixels : même rendu pendant et après un glisser. */
 .map-svg text { text-rendering: geometricPrecision; }
-.map-land { fill: var(--map-land); }
-.map-zone { transition: opacity 0.7s ease, filter 0.7s ease; }
-.map-zone.fogged { opacity: 0.45; filter: saturate(0.15) blur(1.2px); }
-.map-zone-shape { stroke: none; }
-.map-zone-port .map-zone-shape { fill: var(--zone-port); }
-.map-zone-plaine .map-zone-shape { fill: var(--zone-plaine); }
-.map-zone-foret .map-zone-shape { fill: var(--zone-foret); }
-.map-zone-coll .map-zone-shape { fill: var(--zone-coll); }
-.map-zone-mont .map-zone-shape { fill: var(--zone-mont); }
-.map-zone-grotte .map-zone-shape { fill: var(--zone-grotte); }
-.map-zone-source .map-zone-shape { fill: var(--zone-source); }
-.map-zone-marais .map-zone-shape { fill: var(--zone-marais); }
-.map-zone-cit .map-zone-shape { fill: var(--zone-cit); }
-.map-zone-obs .map-zone-shape { fill: var(--zone-obs); }
-.map-zone-som .map-zone-shape { fill: var(--zone-som); }
-.map-zone-name { font: 700 14px "Inter", sans-serif; fill: var(--text); opacity: 0.8; }
-.map-zone-sub { font: 500 11px "Inter", sans-serif; fill: var(--text-muted); }
-.map-zone-mark { font: italic 34px "KaTeX_Math", "Times New Roman", serif; fill: var(--text); opacity: 0.1; pointer-events: none; }
-.map-edge { fill: none; stroke: var(--map-path); stroke-width: 3; stroke-dasharray: 1 8; stroke-linecap: round; }
-.map-edge.open { stroke: var(--accent-soft-border); stroke-dasharray: none; }
-.map-edge.walked { stroke: var(--success); stroke-dasharray: none; opacity: 0.5; }
-.map-edge.draw-in { stroke: var(--accent); opacity: 1; }
-.map-edge.drawing { transition: stroke-dashoffset 0.8s ease; }
+
+/* Sol (mapArt.js) */
+.m-night { display: none; }
+.m-sea { fill: var(--m-sea); }
+.m-wave { fill: none; stroke: var(--m-wave); stroke-width: 1.6; stroke-linecap: round; }
+.m-star { fill: #fff; opacity: 0.6; }
+.m-shallow { fill: var(--m-shallow); stroke: var(--m-shallow); stroke-width: 44; stroke-linejoin: round; }
+.m-cliff1 { fill: var(--m-cliff1); }
+.m-cliff2 { fill: var(--m-cliff2); }
+.m-cliff-line { fill: none; stroke: var(--m-cliff-line); stroke-width: 2; opacity: 0.5; }
+.m-beach { fill: var(--m-sand); stroke: var(--m-sand); stroke-width: 16; stroke-linejoin: round; }
+.m-grass { fill: var(--m-grass); stroke: var(--m-sand); stroke-width: 0; }
+.m-beach-inner { fill: none; stroke: var(--m-sand); stroke-width: 12; stroke-linejoin: round; }
+.m-biome { stroke-width: 2; }
+.m-z-port { fill: var(--m-z-port); stroke: var(--m-z-port); }
+.m-z-plaine { fill: var(--m-z-plaine); stroke: var(--m-z-plaine); }
+.m-z-foret { fill: var(--m-z-foret); stroke: var(--m-z-foret); }
+.m-z-coll { fill: var(--m-z-coll); stroke: var(--m-z-coll); }
+.m-z-mont { fill: var(--m-z-mont); stroke: var(--m-z-mont); }
+.m-z-grotte { fill: var(--m-z-grotte); stroke: var(--m-z-grotte); }
+.m-z-source { fill: var(--m-z-source); stroke: var(--m-z-source); }
+.m-z-marais { fill: var(--m-z-marais); stroke: var(--m-z-marais); }
+.m-z-cit { fill: var(--m-z-cit); stroke: var(--m-z-cit); }
+.m-z-obs { fill: var(--m-z-obs); stroke: var(--m-z-obs); }
+.m-z-som { fill: var(--m-z-som); stroke: var(--m-z-som); }
+.m-tex-dark { fill: var(--m-tex-dark); }
+.m-tex-light { fill: var(--m-tex-light); }
+.m-tex-faint { fill: var(--m-tex-dark); opacity: 0.45; }
+.m-tex-stroke { fill: none; stroke: var(--m-tex-dark); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+.m-tex-line { fill: none; stroke: var(--m-tex-dark); stroke-width: 1.3; stroke-linecap: round; }
+.m-water { fill: var(--m-water); }
+.m-water-line { fill: none; stroke: var(--m-water-hi); stroke-width: 1.6; stroke-linecap: round; }
+.m-water-jet { fill: none; stroke: var(--m-water-hi); stroke-width: 2.4; stroke-linecap: round; }
+.m-lake-rim { fill: var(--m-sand); }
+.m-foam { fill: var(--m-foam); opacity: 0.8; }
+.m-river-bank { fill: none; stroke: var(--m-sand); stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }
+.m-river { fill: none; stroke: var(--m-water); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
+.m-murk { fill: var(--m-murk); }
+.m-field { fill: var(--m-field); }
+.m-field-line { stroke: var(--m-field-line); stroke-width: 1.5; }
+
+/* Décors */
+.m-shadow { fill: var(--m-shadow); }
+.m-leaf { fill: var(--m-leaf); } .m-leaf-dk { fill: var(--m-leaf-dk); } .m-leaf-hi { fill: var(--m-leaf-hi); }
+.m-pine { fill: var(--m-pine); } .m-pine-hi { fill: var(--m-pine-hi); }
+.m-trunk { fill: var(--m-trunk); }
+.m-bush { fill: var(--m-bush); } .m-bush-hi { fill: var(--m-bush-hi); }
+.m-tuft { fill: none; stroke: var(--m-tuft); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.m-flower-a { fill: var(--m-flower-a); } .m-flower-b { fill: var(--m-flower-b); } .m-flower-c { fill: var(--m-flower-c); }
+.m-rock { fill: var(--m-rock); } .m-rock-dk { fill: var(--m-rock-dk); }
+.m-peak { fill: var(--m-peak); } .m-peak-dk { fill: var(--m-peak-dk); }
+.m-snow { fill: var(--m-snow); } .m-snow-dk { fill: var(--m-snow-dk); }
+.m-hill { fill: var(--m-hill); } .m-hill-dk { fill: var(--m-hill-dk); }
+.m-wall { fill: var(--m-wall); } .m-wall-dk { fill: var(--m-wall-dk); }
+.m-roof { fill: var(--m-roof); } .m-roof-dk { fill: var(--m-roof-dk); } .m-roof-b { fill: var(--m-roof-b); }
+.m-door { fill: var(--m-door); } .m-window { fill: var(--m-window); } .m-stripe { fill: var(--m-stripe); }
+.m-stone { fill: var(--m-stone); } .m-stone-dk { fill: var(--m-stone-dk); } .m-flag { fill: var(--m-flag); }
+.m-wood { fill: var(--m-wood); } .m-wood-dk { fill: var(--m-wood-dk); } .m-thatch { fill: var(--m-thatch); }
+.m-barn { fill: var(--m-barn); } .m-barn-dk { fill: var(--m-barn-dk); }
+.m-barn-line { fill: none; stroke: var(--m-wall); stroke-width: 1.2; }
+.m-plank-line { stroke: var(--m-wood-dk); stroke-width: 1; }
+.m-rail { stroke: var(--m-wood-dk); stroke-width: 2.4; stroke-linecap: round; }
+.m-reed { fill: none; stroke: var(--m-reed); stroke-width: 1.5; stroke-linecap: round; }
+.m-cattail { fill: var(--m-cattail); }
+.m-deadwood { fill: none; stroke: var(--m-deadwood); stroke-width: 2.2; stroke-linecap: round; }
+.m-lily { fill: var(--m-lily); }
+.m-crystal { fill: var(--m-crystal); } .m-crystal-hi { fill: var(--m-crystal-hi); }
+.m-cave { fill: var(--m-cave); }
+.m-sheep { fill: var(--m-sheep); } .m-sheep-head { fill: var(--m-sheep-head); }
+.m-sheep-leg { stroke: var(--m-sheep-head); stroke-width: 1.4; }
+.m-mush { fill: var(--m-mush); }
+.m-dome { fill: var(--m-dome); } .m-dome-dk { fill: var(--m-dome-dk); }
+.m-scope { stroke: var(--m-scope); stroke-width: 4; stroke-linecap: round; }
+.m-hull { fill: var(--m-hull); } .m-sail { fill: var(--m-sail); } .m-sail-dk { fill: var(--m-sail-dk); }
+.m-mast { fill: none; stroke: var(--m-mast); stroke-width: 1.6; stroke-linecap: round; }
+.m-lamp { fill: var(--m-lamp); }
+.m-beam { fill: var(--m-lamp); opacity: 0.22; }
+.m-palm-trunk { fill: none; stroke: var(--m-trunk); stroke-width: 3; stroke-linecap: round; }
+.m-palm-leaf { fill: none; stroke: var(--m-leaf-hi); stroke-width: 4; stroke-linecap: round; }
+.m-palm-leaf-dk { fill: none; stroke: var(--m-leaf); stroke-width: 4; stroke-linecap: round; }
+.m-windmill-blades { animation: map-spin 14s linear infinite; }
+@keyframes map-spin { to { transform: rotate(360deg); } }
+.m-lm-map-ferry, .map-ferry { animation: map-bob 3.2s ease-in-out infinite; }
+@keyframes map-bob { 50% { transform: translate(0, -2px); } }
+
+/* Panneaux des régions */
+.m-sign { fill: var(--m-sign); }
+.m-sign-sh { fill: var(--m-sign-sh); }
+.map-sign { pointer-events: none; }
+.map-sign-mark { font: italic 700 13px "KaTeX_Math", "Times New Roman", serif; fill: var(--text); text-anchor: middle; dominant-baseline: central; opacity: 0.75; }
+.map-sign-mark.long { font-size: 8.5px; }
+.map-zone-name { font: 700 13px "Inter", sans-serif; fill: var(--text); }
+.map-zone-sub { font: 500 10px "Inter", sans-serif; fill: var(--text-muted); }
+
+/* Chemins */
+.map-edge path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.map-edge-dirt .m-p-edge { stroke: var(--m-p-dirt-edge); } .map-edge-dirt .m-p-fill { stroke: var(--m-p-dirt); }
+.map-edge-trail .m-p-edge { stroke: var(--m-p-trail-edge); } .map-edge-trail .m-p-fill { stroke: var(--m-p-trail); }
+.map-edge-trail .m-p-dots { stroke: var(--m-p-trail-edge); stroke-dasharray: 0 9; stroke-width: 3.2 !important; opacity: 0.6; }
+.map-edge-stone .m-p-edge { stroke: var(--m-p-stone-edge); stroke-dasharray: 0.1 12.5; }
+.map-edge-stone .m-p-fill { stroke: var(--m-p-stone); stroke-dasharray: 0.1 12.5; }
+.map-edge-plank .m-p-edge { stroke: var(--m-p-plank-edge); } .map-edge-plank .m-p-fill { stroke: var(--m-p-plank); }
+.map-edge-plank .m-p-steps { stroke: var(--m-p-plank-edge); stroke-dasharray: 1.2 4.2; stroke-linecap: butt !important; }
+.map-edge-road .m-p-edge { stroke: var(--m-p-road-edge); } .map-edge-road .m-p-fill { stroke: var(--m-p-road); }
+.map-edge-road .m-p-line { stroke: var(--m-p-road-line); stroke-dasharray: 7 7; stroke-linecap: butt !important; }
+.map-edge-sea .m-p-line { stroke: var(--m-p-sea); stroke-dasharray: 2 9; }
+.map-edge { transition: opacity 0.5s ease; }
+.map-edge.locked { opacity: 0.4; }
+.map-edge-reveal { fill: none; stroke: #fff; stroke-width: 40; stroke-linecap: round; }
+.map-edge-reveal.drawing { transition: stroke-dashoffset 0.8s ease; }
+.m-bridge rect { stroke: none; }
+
+/* Obstacles */
+.map-obstacle { cursor: help; }
+.map-obstacle-inner { transition: transform 0.5s ease, opacity 0.5s ease; transform-box: fill-box; transform-origin: center; }
+.map-obstacle.clearing .map-obstacle-inner { transform: translate(0, 10px) scale(0.6); opacity: 0; }
+.m-barrier { fill: var(--m-barrier); }
+.m-barrier-stripe { fill: none; stroke: var(--m-barrier-stripe); stroke-width: 2.6; }
+.m-post { fill: none; stroke: var(--m-post); stroke-width: 2.4; stroke-linecap: round; }
+
+/* Nuages : couvrent une région fermée, s'écartent quand elle s'ouvre. */
+.m-cloud { fill: var(--m-cloud); }
+.m-cloud-sh { fill: var(--m-cloud-sh); }
+.map-layer-clouds, .map-layer-sky { pointer-events: none; }
+.map-cloud { transition: transform 1.5s cubic-bezier(0.4, 0, 0.3, 1), opacity 1.3s ease; transition-delay: var(--cloud-delay, 0s); }
+.map-zone.revealed .map-cloud { transform: translate(var(--cloud-dx), var(--cloud-dy)) scale(1.15); opacity: 0; }
+.map-sky-cloud { opacity: 0.85; }
+
+/* Niveaux : pastilles avec tranche. */
 .map-node { cursor: pointer; outline: none; }
+.map-node-shadow { fill: var(--m-shadow); }
 .map-node-body { stroke-width: 3; transition: fill 0.3s ease, stroke 0.3s ease; }
-.map-node.done .map-node-body { fill: var(--success-soft); stroke: var(--success); }
-.map-node.open .map-node-body { fill: var(--surface); stroke: var(--accent); }
-.map-node.open.boss .map-node-body { fill: var(--warning-soft); stroke: var(--warning); }
-.map-node.locked .map-node-body { fill: var(--map-lock-fill); stroke: var(--map-lock); }
+.map-node-side { transition: fill 0.3s ease; }
+.map-node.done .map-node-body { fill: var(--success-soft); stroke: var(--m-node-side-done); }
+.map-node.done .map-node-side { fill: var(--m-node-side-done); }
+.map-node.open .map-node-body { fill: var(--surface); stroke: var(--m-node-side-open); }
+.map-node.open .map-node-side { fill: var(--m-node-side-open); }
+.map-node.open.boss .map-node-body { fill: var(--warning-soft); stroke: var(--m-node-side-boss); }
+.map-node.open.boss .map-node-side { fill: var(--m-node-side-boss); }
+.map-node.locked .map-node-body { fill: var(--m-node-locked); stroke: var(--m-node-side-locked); }
+.map-node.locked .map-node-side { fill: var(--m-node-side-locked); }
 .map-node.selected .map-node-body { stroke-width: 5; }
 .map-node:focus-visible .map-node-body { stroke-width: 5; stroke: var(--accent); }
+.map-node-pole { stroke: var(--m-mast); stroke-width: 2; stroke-linecap: round; }
+.map-node-flag { fill: var(--m-flag); }
+.map-node.locked .map-node-flag { fill: var(--m-node-side-locked); }
 .map-node-label { font: 700 11px "Inter", sans-serif; text-anchor: middle; dominant-baseline: central; fill: var(--text); pointer-events: none; }
 .map-node.locked .map-node-label { fill: var(--text-faint); }
-.map-node-stars { font-size: 11px; text-anchor: middle; fill: var(--star); letter-spacing: 1px; pointer-events: none; }
-.map-node-lock-bg { fill: var(--surface); stroke: var(--map-lock); stroke-width: 1.5; }
+.map-node-stars { font-size: 11px; text-anchor: middle; fill: var(--star); letter-spacing: 1px; pointer-events: none;
+  paint-order: stroke; stroke: var(--m-halo); stroke-width: 3px; stroke-linejoin: round; }
+.map-node-lock-bg { fill: var(--surface); stroke: var(--m-node-side-locked); stroke-width: 1.5; }
 .map-node-lock-icon { fill: none; stroke: var(--text-muted); stroke-width: 1.4; stroke-linejoin: round; }
 .map-node.unlocking .map-node-lock-shake { animation: map-lock-shake 0.35s ease; transform-box: fill-box; transform-origin: center; }
 .map-node.just-opened .map-node-body { animation: map-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); transform-box: fill-box; transform-origin: center; }

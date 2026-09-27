@@ -32,6 +32,43 @@ function ok(label, cond) {
   ok('every level equation parses and every prerequisite exists', parseErrors.length === 0);
   if (parseErrors.length) console.log(parseErrors.join('\n'));
 
+  // Carte (mapArt.js) : aucun chemin n'en croise un autre (hors extrémités communes), et
+  // chaque niveau est dans sa région.
+  const geo = await page.evaluate(() => {
+    var edges = window.App.MapArt.edges(), cross = [];
+    function inter(a, b, c, d) {
+      var r = [b[0] - a[0], b[1] - a[1]], s = [d[0] - c[0], d[1] - c[1]], den = r[0] * s[1] - r[1] * s[0];
+      if (Math.abs(den) < 1e-9) return null;
+      var t = ((c[0] - a[0]) * s[1] - (c[1] - a[1]) * s[0]) / den, u = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den;
+      return t >= 0 && t <= 1 && u >= 0 && u <= 1 ? [a[0] + r[0] * t, a[1] + r[1] * t] : null;
+    }
+    for (var i = 0; i < edges.length; i++) {
+      for (var j = i + 1; j < edges.length; j++) {
+        var A = edges[i], B = edges[j];
+        var shared = [A.from, A.to].filter(function (id) { return id === B.from || id === B.to; });
+        for (var p = 0; p < A.line.length - 1; p++) {
+          for (var q = 0; q < B.line.length - 1; q++) {
+            var x = inter(A.line[p], A.line[p + 1], B.line[q], B.line[q + 1]);
+            if (!x) continue;
+            var nearShared = shared.some(function (id) {
+              var l = window.App.Levels.get(id);
+              return Math.hypot(x[0] - l.x, x[1] - l.y) < 24;
+            });
+            if (!nearShared) cross.push(A.key + ' × ' + B.key);
+          }
+        }
+      }
+    }
+    var misplaced = window.App.Levels.LEVELS.filter(function (l) {
+      return l.zone !== 'port' && window.App.MapArt.zoneAt(l.x, l.y) !== l.zone;
+    }).map(function (l) { return l.id; });
+    return { cross: cross.filter(function (c, k, a) { return a.indexOf(c) === k; }), misplaced: misplaced };
+  });
+  ok('no two map paths cross', geo.cross.length === 0);
+  if (geo.cross.length) console.log(geo.cross.join('\n'));
+  ok('every level lies in its own region', geo.misplaced.length === 0);
+  if (geo.misplaced.length) console.log(geo.misplaced.join(', '));
+
   ok('no auto-open under automation', await page.evaluate(() => document.getElementById('mapOverlay').hidden));
   await page.evaluate(() => window.App.Campaign.boot({ force: true }));
   ok('first launch opens the map', await page.evaluate(() => !document.getElementById('mapOverlay').hidden));
