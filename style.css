@@ -1064,6 +1064,8 @@ button {
 .term.selectable:has(.factor-slot):hover {
   background: none;
 }
+/* ...sauf s'il est sélectionné en entier : il reste jaune sous la souris. */
+.term.selected:has(.factor-slot):hover { background: #fde68a; }
 
 /* Chaque parenthèse d'un produit à ≥2 facteurs, individuellement sélectionnable pour un
    développement partiel (voir toggleFactorSelection dans history.js et

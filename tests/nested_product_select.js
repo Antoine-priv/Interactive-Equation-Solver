@@ -2,9 +2,10 @@ const { chromium } = require('playwright');
 const FILE = 'file:///home/antoine/Developpement/Equations/index.html';
 
 // Numérateur drillé contenant des produits (niveau O1 après "9x²-4" → "(3x-2)(3x+2)") :
-// chaque produit est entièrement couvert par ses facteurs, un clic simple sur l'un d'eux
-// doit donc sélectionner le produit entier (pour le facteur commun), le double-clic
-// continuant d'entrer dans le facteur (voir clickNestedFactor dans history.js).
+// comme au premier niveau, un clic simple marque CE facteur, un produit dont tous les
+// facteurs sont marqués compte comme sélectionné en entier (pour le facteur commun), le
+// double-clic continuant d'entrer dans le facteur (voir clickNestedFactor dans history.js).
+// Un produit sélectionné garde son fond jaune sous la souris.
 
 function ok(label, cond) {
   console.log((cond ? 'OK  ' : 'FAIL') + ' - ' + label);
@@ -40,21 +41,43 @@ function ok(label, cond) {
   };
   ok('both nested products render their factors', !!(await factor(0, 0)) && !!(await factor(1, 1)));
 
+  const state = () => page.evaluate(() => {
+    const p = window.App.History.getPending();
+    const sel = [...document.querySelectorAll('.eq-row.current .factor-slot.selected')].map(e => e.id.replace(/.*-inner-/, ''));
+    return { inner: p.selectedInner.slice().sort(), sel: sel.sort() };
+  });
   await clickFactor(0, 1);
   await page.waitForTimeout(400);
+  let st = await state();
+  ok('a click on a factor selects only that factor', st.inner.length === 0 && st.sel.join() === '0-factor-1');
+
+  await clickFactor(0, 0);
+  await page.waitForTimeout(400);
+  st = await state();
+  ok('marking every factor selects the whole product', st.inner.join() === '0' && st.sel.join() === '0-factor-0,0-factor-1');
+
+  await clickFactor(0, 0);
+  await page.waitForTimeout(400);
+  st = await state();
+  ok('unmarking one factor deselects the product', st.inner.length === 0 && st.sel.join() === '0-factor-1');
+
+  await clickFactor(0, 0);
+  await page.waitForTimeout(400);
   await clickFactor(1, 0);
   await page.waitForTimeout(400);
-  let p = await page.evaluate(() => window.App.History.getPending());
-  ok('a click on a factor selects its whole product', p.drilled && p.selectedInner.length === 2 &&
-    p.selectedInner.includes(0) && p.selectedInner.includes(1));
-
-  await clickFactor(1, 0);
+  await clickFactor(1, 1);
   await page.waitForTimeout(400);
-  p = await page.evaluate(() => window.App.History.getPending());
-  ok('a second click deselects it', p.selectedInner.length === 1 && p.selectedInner[0] === 0);
+  st = await state();
+  ok('two whole products selected factor by factor', st.inner.join() === '0,1');
 
-  await page.evaluate(() => { const h = window.App.History; h.toggleInnerSelection(1); });
-  await page.waitForTimeout(400);
+  // La souris est restée sur le dernier facteur cliqué : le produit reste jaune.
+  const bg = await page.evaluate(() => {
+    const el = document.querySelector('.eq-row.current [data-inner-index="1"]');
+    return [el.matches(':hover'), getComputedStyle(el).backgroundColor];
+  });
+  await page.screenshot({ path: __dirname + '/screenshots/nested_product_select.png', clip: { x: 0, y: 150, width: 1400, height: 450 } });
+  ok('a selected product stays yellow under the mouse', bg[0] && bg[1] === 'rgb(253, 230, 138)');
+
   await page.click('button[data-op="factor"]');
   await page.waitForTimeout(100);
   await page.click('button.factor-choice-btn[data-factor-choice="common"]');

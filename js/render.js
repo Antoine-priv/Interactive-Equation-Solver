@@ -879,7 +879,7 @@
   // Rend tout un membre en UN SEUL appel KaTeX (espacement natif LaTeX correct), chaque
   // noeud de premier niveau (Term ou groupe factorisé) tagué et cliquable pour la
   // sélection libre (simplifier/factoriser/développer) et/ou le glisser-déposer.
-  // options.drilled : { path, branch, part, selectedInner:Set, onInnerClick, onExitDrill } —
+  // options.drilled : { path, branch, part, selectedInner:Set, innerFactors, onInnerClick, onExitDrill } —
   // le groupe à `path` (path[0] = index de premier niveau, path[1..] = descente dans les
   // innerTerms successifs — jamais utilisé avec `branch`/`part`, une seule profondeur là)
   // est alors rendu via drilledGroupLatex (FactorGroup), drilledProductBranchLatex
@@ -985,6 +985,11 @@
       // Clic sur un terme intérieur. Dans un dénominateur-produit drillé, un clic qui
       // tombe sur l'un de ses facteurs compte pour ce facteur (double-clic : y entrer,
       // voir clickNestedFactor/drillIntoNestedProductBranch dans history.js).
+      // Facteur marqué un par un dans un produit intérieur (voir clickNestedFactor).
+      function isInnerFactorSelected(i, j) {
+        var f = drilled.innerFactors;
+        return !!f && f.index === i && f.branches.indexOf(j) !== -1;
+      }
       function innerClick(i, target) {
         if (drilled.part === 'den' && typeof drilled.branch !== 'number') {
           var slot = target && target.closest && target.closest('[id^="' + idPrefix + '-' + topIdx + '-inner-' + i + '-factor-"]');
@@ -1055,6 +1060,7 @@
             var factorEl = container.querySelector('#' + escId(idPrefix + '-' + topIdx + '-inner-' + i + '-factor-' + j));
             if (!factorEl) return;
             factorEl.classList.add('factor-slot');
+            if (isInnerFactorSelected(i, j)) factorEl.classList.add('selected');
           });
         });
       }
@@ -1085,6 +1091,7 @@
             var factorEl = container.querySelector('#' + escId(nestedIdBase + '-factor-' + j));
             if (!factorEl) return;
             factorEl.classList.add('factor-slot', 'draggable-term');
+            if (isInnerFactorSelected(i, j)) factorEl.classList.add('selected');
             factorEl.setAttribute('data-drag-id', String(j));
             attachPointerDrag(factorEl, container, t.factors, {
               getSelected: function () { return new Set(); },
@@ -1812,6 +1819,7 @@
           branch: pending.drilled.branch,
           part: pending.drilled.part,
           selectedInner: new Set(pending.selectedInner),
+          innerFactors: pending.innerFactors,
           draggable: innerDraggable,
           onInnerClick: function (innerIdx) {
             // Colonne pas encore focalisée à ce rendu (voir le même garde-fou dans

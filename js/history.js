@@ -29,6 +29,10 @@
       // selectedInner (ci-dessous) sélectionne alors les termes du niveau le plus profond.
       drilled: null,
       selectedInner: [],    // indices sélectionnés dans les innerTerms du niveau le plus profond de `drilled`
+      // Facteurs marqués un par un dans UN produit de ces innerTerms ({ index, branches }),
+      // comme selectedFactors au premier niveau : le produit entre dans selectedInner dès
+      // que tous ses facteurs sont marqués (voir clickNestedFactor).
+      innerFactors: null,
       // Sélection PAR FACTEUR d'un ProductGroup à ≥2 facteurs (voir toggleFactorSelection) :
       // { left: {index, branches: number[]}|null, right: idem|null } — un clic simple sur
       // une parenthèse précise (jamais un FactorGroup classique, ni un produit à un seul
@@ -479,6 +483,7 @@
       if (i !== -1) arr.splice(i, 1);
       pending.drilled = { side: side, path: [index] };
       pending.selectedInner = [];
+      pending.innerFactors = null;
       pending.selectedFactors[side] = null;
       removeFromFactorGroups(side, index);
       pending.error = null;
@@ -498,6 +503,7 @@
       if (i !== -1) arr.splice(i, 1);
       pending.drilled = { side: side, path: [index], branch: branch };
       pending.selectedInner = [];
+      pending.innerFactors = null;
       pending.selectedFactors[side] = null;
       removeFromFactorGroups(side, index);
       pending.error = null;
@@ -520,6 +526,7 @@
       if (i !== -1) arr.splice(i, 1);
       pending.drilled = { side: side, path: [index], part: 'den' };
       pending.selectedInner = [];
+      pending.innerFactors = null;
       pending.selectedFactors[side] = null;
       removeFromFactorGroups(side, index);
       pending.error = null;
@@ -542,6 +549,7 @@
       if (i !== -1) arr.splice(i, 1);
       pending.drilled = { side: side, path: [index], part: 'sqrt' };
       pending.selectedInner = [];
+      pending.innerFactors = null;
       pending.selectedFactors[side] = null;
       removeFromFactorGroups(side, index);
       pending.error = null;
@@ -567,6 +575,7 @@
       if (!pending.drilled) return;
       if (pending.opType !== null && pending.opType !== 'factor') return;
       var isDouble = consumeDoubleClick('inner:' + pending.drilled.path.join(',') + ':' + innerIndex);
+      if (pending.innerFactors && pending.innerFactors.index === innerIndex) pending.innerFactors = null;
       var i = pending.selectedInner.indexOf(innerIndex);
       if (i === -1) pending.selectedInner.push(innerIndex);
       else pending.selectedInner.splice(i, 1);
@@ -610,6 +619,7 @@
       if (i !== -1) pending.selectedInner.splice(i, 1);
       pending.drilled = { side: pending.drilled.side, path: pending.drilled.path.concat([innerIndex]) };
       pending.selectedInner = [];
+      pending.innerFactors = null;
       pending.error = null;
       notify();
     }
@@ -637,6 +647,7 @@
         if (!denBranch || (denBranch.length < 2 && !isLoneSqrt(denBranch))) return;
         pending.drilled = { side: pending.drilled.side, path: pending.drilled.path, part: 'den', branch: branch };
         pending.selectedInner = [];
+        pending.innerFactors = null;
         pending.error = null;
         notify();
         return;
@@ -647,6 +658,7 @@
       if (!branchArr || (branchArr.length < 2 && !isLoneSqrt(branchArr))) return;
       pending.drilled = { side: pending.drilled.side, path: pending.drilled.path.concat([innerIndex]), branch: branch };
       pending.selectedInner = [];
+      pending.innerFactors = null;
       pending.error = null;
       notify();
     }
@@ -663,13 +675,26 @@
         drillIntoNestedProductBranch(innerIndex, branch);
         if (pending.drilled !== before) return;
       }
-      // Clic simple : un produit niché est entièrement couvert par ses facteurs, c'est
-      // donc le seul moyen de le sélectionner EN ENTIER (ex. pour le mettre en facteur
-      // commun avec un autre produit du numérateur).
+      // Clic simple : marque CE facteur, comme au premier niveau (toggleFactorSelection) ;
+      // un produit dont tous les facteurs sont marqués compte comme sélectionné en entier
+      // (ex. pour le mettre en facteur commun avec un autre produit du numérateur).
       if (pending.opType !== null && pending.opType !== 'factor') return;
+      var sel = pending.innerFactors;
+      if (!sel || sel.index !== innerIndex) {
+        sel = pending.innerFactors = { index: innerIndex, branches: [branch] };
+      } else {
+        var b = sel.branches.indexOf(branch);
+        if (b === -1) sel.branches.push(branch);
+        else sel.branches.splice(b, 1);
+        if (!sel.branches.length) pending.innerFactors = null;
+      }
+      var node = Expr.nodeAtPath(lastEquation()[pending.drilled.side], pending.drilled.path);
+      var product = node && Expr.drilledWorkingArray(node, pending.drilled)[innerIndex];
+      var complete = !!pending.innerFactors && Expr.isProductGroup(product) &&
+        sel.branches.length === product.factors.length;
       var i = pending.selectedInner.indexOf(innerIndex);
-      if (i === -1) pending.selectedInner.push(innerIndex);
-      else pending.selectedInner.splice(i, 1);
+      if (complete && i === -1) pending.selectedInner.push(innerIndex);
+      else if (!complete && i !== -1) pending.selectedInner.splice(i, 1);
       pending.error = null;
       notify();
     }
@@ -687,6 +712,7 @@
       if (pending.drilled.part === 'den' && typeof pending.drilled.branch === 'number') {
         pending.drilled = { side: side, path: path, part: 'den' };
         pending.selectedInner = [];
+        pending.innerFactors = null;
         pending.error = null;
         notify();
         return;
@@ -697,6 +723,7 @@
         pending.drilled = { side: side, path: path.slice(0, -1) };
       }
       pending.selectedInner = [];
+      pending.innerFactors = null;
       pending.error = null;
       notify();
     }
