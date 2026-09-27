@@ -198,9 +198,9 @@ const S = {
     R.innerIdentity([0, 1, 2], 2, 'x', '7'); R.exit(); R.pn(); R.eachBranch(R.linear);
   },
   g6: () => {
-    R.identity('left', [0, 1], 3, 'x^2', '5'); R.pn();
-    R.branch([0], () => { R.op('+5'); R.sqrt1(); R.sqrt2(); });
-    R.branch([1], () => { R.op('-5'); R.sqrt1(); R.sqrt2(); });
+    R.identity('left', [0, 1, 2], 2, 'x^2', '4'); R.pn();
+    R.branch([0], () => { R.identity('left', [0, 1], 3, 'x', '2'); R.pn(); });
+    R.branch([0, 0], R.linear); R.branch([0, 1], R.linear);
   },
   gB: () => { R.identity('left', [0, 1], 3, '2x+1', 'x-3'); R.tidy(); R.pn(); R.eachBranch(R.linear); },
   r1: () => { R.sqrt1(); R.sqrt2(); },

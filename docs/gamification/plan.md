@@ -125,7 +125,7 @@
 | g3 | Différence de carrés | `x² − 9 = 0` | a² − b² = (a − b)(a + b) | 4 | g2, p3 |  |
 | g4 | Moins moins | `9 − (−x²) − 6x = 0` | Simplifier −(−x²), remettre dans l'ordre, reconnaître (x − 3)² | 3 | g3 | Source : Inspiré de l'exercice 4 (J) |
 | g5 | Factoriser par −1 | `−49 − x² + 14x = 0` | Mettre −1 en facteur pour retrouver x² − 14x + 49 = (x − 7)² | 4 | g4 | Piège : Sans le −1, aucune identité ne s'applique. · Source : Inspiré de l'exercice 4 (K) · **À développer :** À vérifier : factoriser par −1, puis appliquer l'identité dans la parenthèse. |
-| g6 | Puissance 4 | `x⁴ − 25 = 0` | a = x² : (x² − 5)(x² + 5), puis √ sur x² = 5 | 6 | g5 | Piège : x² + 5 = 0 n'a pas de solution. · Source : Inspiré de l'exercice 4 (I) |
+| g6 | Puissance 4 | `x⁴ − 8x² + 16 = 0` | a = x² : (x² − 4)², puis a² − b² sur x² − 4 (sans √, pas encore abordée dans la Grotte) | 6 | g5 | Piège : x² − 4 se factorise encore. |
 | gB | Deux carrés | `(2x + 1)² − (x − 3)² = 0` | a² − b² avec des expressions | 6 | g6 | Épreuve |
 
 ### La Source — Racine carrée
