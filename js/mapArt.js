@@ -175,7 +175,7 @@
     '.m-mast { fill: none; stroke: var(--m-mast); stroke-width: 1.6; stroke-linecap: round; }',
     '.m-lamp { fill: var(--m-lamp); }',
     '.m-beam { fill: var(--m-lamp); opacity: 0.22; }',
-    '.m-cloud-shadow { fill: var(--m-cloud-shadow); }',
+    '.map-sky-cloud { opacity: 0.85; }',
     '.m-gull { fill: none; stroke: var(--m-gull); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }',
     '.m-sparkle { fill: var(--m-sparkle); }',
     '.m-water-streak { fill: none; stroke: var(--m-water-hi); stroke-width: 1.8; stroke-linecap: round; }',
@@ -1143,24 +1143,10 @@
     return el(tag, attrs, parent);
   }
 
-  // Nuages du ciel qui dérivent lentement, avec leur ombre au sol (décalée vers le bas, en
-  // vue de 3/4).
-  var SKY_CLOUDS = [[640, 330, 34, 260], [150, 330, 28, 220], [2380, 250, 40, 300], [600, 1000, 30, 240],
-    [2100, 1040, 36, 280], [1150, 50, 30, 320], [2390, 960, 26, 200], [1500, 1010, 34, 380], [1900, 90, 32, 360]];
-  function buildSky(parent) {
-    var rand = rng(404);
-    SKY_CLOUDS.forEach(function (c, i) {
-      var g = el('g', { transform: 'translate(' + c[0] + ' ' + c[1] + ')' }, parent);
-      var drift = el('g', {}, g);
-      var dur = 160 + rand() * 120;
-      anim('animateTransform', { attributeName: 'transform', type: 'translate', values: '0 0;' + c[3] + ' 0;0 0',
-        dur: f1(dur) + 's', begin: '-' + f1(rand() * dur) + 's', calcMode: 'spline', keyTimes: '0;0.5;1',
-        keySplines: '0.45 0 0.55 1;0.45 0 0.55 1' }, drift);
-      var d = cloudPath(c[2], i / SKY_CLOUDS.length);
-      el('path', { d: d, class: 'm-cloud-shadow', transform: 'translate(' + f1(c[2] * 0.9) + ' ' + f1(c[2] * 2.6) + ') scale(1 0.6)' }, drift);
-      el('path', { d: d, class: 'm-cloud-sh', transform: 'translate(0 ' + f1(c[2] * 0.14) + ')' }, drift);
-      el('path', { d: d, class: 'm-cloud' }, drift);
-    });
+  // Quelques nuages décoratifs au-dessus de la mer (immobiles : dans l'image du décor).
+  function buildSkyClouds(parent) {
+    [[640, 360, 34], [150, 330, 28], [2380, 250, 40], [600, 980, 30], [2100, 1040, 36], [1150, 60, 30], [2390, 960, 26]]
+      .forEach(function (p, i) { drawCloud(parent, p[0], p[1], p[2], i / 7, 'map-sky-cloud'); });
   }
 
   // Mouettes qui planent en cercles (ellipses : vue de 3/4) ; l'une passe au-dessus du Port.
@@ -1248,7 +1234,7 @@
     });
   }
 
-  // Au niveau du sol (sous les nuages des régions fermées) et dans le ciel (au-dessus).
+  // Au niveau du sol (sous les nuages des régions fermées) et dans le ciel (mouettes).
   function buildLive(ground, sky) {
     buildSparkles(ground);
     buildWaterfall(ground);
@@ -1266,7 +1252,6 @@
       }
       el('circle', { r: 2.5, class: 'm-wood-dk' }, blades);
     });
-    buildSky(sky);
     buildGulls(sky);
   }
 
@@ -1279,6 +1264,7 @@
     var ground = detachedSvg(), decor = detachedSvg();
     buildGround(el('g', {}, ground), el('defs', {}, ground));
     buildDecor(el('g', {}, decor));
+    buildSkyClouds(el('g', {}, decor));
     return { ground: ground, decor: decor };
   }
   // list : [{ edge, state }]

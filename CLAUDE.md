@@ -251,8 +251,8 @@ resolved), merged into only two big displayed canvases (`below`/`above`) plus sh
 `detail` images of the visible area when zoomed past `BASE_RES`; everything is redrawn
 from code (first open, theme change, state change) — no image file to regenerate. The live
 SVG keeps only what moves or reacts (`App.MapArt.buildLive(ground, sky)`: sparkles, waterfall,
-boat, cabin smoke, night lighthouse beam, windmill; drifting sky clouds with their ground
-shadow and gulls above), the path being drawn in (masked off the two level pads), the
+boat, cabin smoke, night lighthouse beam, windmill; gulls above; the sky clouds stay still,
+in the decor image — the user removed their drift), the path being drawn in (masked off the two level pads), the
 waving flags of solved boss levels (raised on return from the win), the current-level pulse (SVG
 `<animate>`/`<animateMotion>`, never CSS `transform-box` animations), the bouncing token, clouds
 parting, sign symbols (KaTeX font, unavailable to an image), and the level/obstacle

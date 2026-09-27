@@ -2547,7 +2547,7 @@ button {
   --m-hull: #b8683f; --m-sail: #ffffff; --m-sail-dk: #e6ebf2; --m-mast: #6b4a33;
   --m-lamp: #ffd166; --m-field: #e8cf7a; --m-field-line: #d2b35a;
   --m-cloud: #ffffff; --m-cloud-sh: #d9e6f2;
-  --m-cloud-shadow: rgba(30, 60, 90, 0.13); --m-gull: #ffffff; --m-sparkle: #ffffff; --m-smoke: #eef1f5;
+  --m-gull: #ffffff; --m-sparkle: #ffffff; --m-smoke: #eef1f5;
   --m-sign: #fffdf8; --m-sign-sh: rgba(40, 50, 60, 0.18);
   --m-p-dirt-edge: #caa66c; --m-p-dirt: #f0d9a2;
   --m-p-trail-edge: #9a7247; --m-p-trail: #c9a26f;
@@ -2593,7 +2593,7 @@ button {
     --m-hull: #6b3b24; --m-sail: #c9d0dc; --m-sail-dk: #9aa4b5; --m-mast: #3b2a1e;
     --m-lamp: #ffe08a; --m-field: #6e6238; --m-field-line: #5a502d;
     --m-cloud: #3b4863; --m-cloud-sh: #2b3550;
-    --m-cloud-shadow: rgba(0, 0, 0, 0.28); --m-gull: #aab6c8; --m-sparkle: #c9dcf5; --m-smoke: #7b8494;
+    --m-gull: #aab6c8; --m-sparkle: #c9dcf5; --m-smoke: #7b8494;
     --m-sign: #232734; --m-sign-sh: rgba(0, 0, 0, 0.4);
     --m-p-dirt-edge: #5e4d33; --m-p-dirt: #857252;
     --m-p-trail-edge: #45331f; --m-p-trail: #6b5539;
@@ -2636,7 +2636,7 @@ button {
   --m-hull: #6b3b24; --m-sail: #c9d0dc; --m-sail-dk: #9aa4b5; --m-mast: #3b2a1e;
   --m-lamp: #ffe08a; --m-field: #6e6238; --m-field-line: #5a502d;
   --m-cloud: #3b4863; --m-cloud-sh: #2b3550;
-  --m-cloud-shadow: rgba(0, 0, 0, 0.28); --m-gull: #aab6c8; --m-sparkle: #c9dcf5; --m-smoke: #7b8494;
+  --m-gull: #aab6c8; --m-sparkle: #c9dcf5; --m-smoke: #7b8494;
   --m-sign: #232734; --m-sign-sh: rgba(0, 0, 0, 0.4);
   --m-p-dirt-edge: #5e4d33; --m-p-dirt: #857252;
   --m-p-trail-edge: #45331f; --m-p-trail: #6b5539;
