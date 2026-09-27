@@ -42,5 +42,5 @@
     });
   }
 
-  App.Theme = { init: init };
+  App.Theme = { init: init, current: currentTheme };
 })(window.App = window.App || {});

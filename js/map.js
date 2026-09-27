@@ -8,7 +8,7 @@
   'use strict';
 
   var NS = 'http://www.w3.org/2000/svg';
-  var overlay, viewport, plane, svg, liveSvg, world, card, badgePanel;
+  var overlay, viewport, plane, svg, topSvg, world, card, badgePanel;
   var view = { x: 0, y: 0, s: 1 };
   var zoomInBtn = null, zoomOutBtn = null;
   var selectedId = null;
@@ -60,6 +60,7 @@
     plane.style.transform = 'translate(' + Math.round(view.x * dpr) / dpr + 'px, ' + Math.round(view.y * dpr) / dpr + 'px) scale(' + view.s + ')';
     if (lastScale !== null && lastScale !== view.s) resharpenSoon(animated);
     lastScale = view.s;
+    App.MapRaster.updateDetail(view, viewport.clientWidth, viewport.clientHeight);
     positionCard();
     refreshZoomButtons();
   }
@@ -139,23 +140,54 @@
     applyView(animated);
   }
 
-  // ---- Construction du SVG ----
-  // Calques, du sol vers le ciel (voir mapArt.js pour le dessin) : sol (mer, îles,
-  // régions), chemins, décors en relief, obstacles, nœuds, jeton, nuages, panneaux. Sol,
-  // décors et panneaux ne dépendent pas de la progression : construits une seule fois.
-  var layers = null;
+  // ---- Construction ----
+  // Du sol vers le ciel (voir mapArt.js pour le dessin, mapRaster.js pour les images) :
+  // image du sol, des chemins et des niveaux ; SVG principal (chemin qui se trace, bateau
+  // et moulin, niveaux et obstacles invisibles pour les clics, jeton, nuages qui
+  // s'écartent) ; image des nuages et des panneaux ; SVG du dessus (symboles des
+  // panneaux). Les SVG ne gardent que peu d'éléments visibles : glisser et zoomer restent
+  // fluides.
+  var layers = null, rasterClouds = [], rasterEdges = [];
   function buildLayers() {
-    var defs = el('defs', {}, svg);
     layers = {};
-    ['ground', 'edges', 'decor', 'obstacles', 'nodes', 'token', 'clouds', 'sky', 'labels'].forEach(function (k) {
-      layers[k] = el('g', { class: 'map-layer-' + k }, world);
+    ['edges', 'live', 'obstacles', 'nodes', 'pulse', 'token', 'clouds'].forEach(function (k) {
+      layers[k] = el('g', { class: 'map-layer-' + k }, svg);
     });
-    App.MapArt.buildGround(layers.ground, defs);
-    App.MapArt.buildDecor(layers.decor);
-    App.MapArt.buildSkyClouds(layers.sky);
-    App.MapArt.buildLabels(layers.labels);
-    App.MapArt.buildLive(el('g', {}, liveSvg));
-    layers.pulse = el('g', {}, liveSvg);
+    layers.labels = el('g', { class: 'map-layer-labels' }, topSvg);
+    App.MapArt.buildLive(layers.live);
+    // Panneaux : en image, sauf leur symbole (police KaTeX, inaccessible à une image).
+    App.MapArt.buildLabels(layers.labels, 'mark');
+    App.MapRaster.renderGround();
+    App.MapRaster.renderLabels();
+  }
+
+  // Une pastille de niveau (sans écouteurs) : sert au SVG vivant et à l'image des niveaux.
+  function drawNode(parent, l, cls, st, isFresh) {
+    var g = el('g', { class: 'map-node ' + cls, transform: 'translate(' + l.x + ' ' + l.y + ')', 'data-level': l.id }, parent);
+    var r = l.boss ? 21 : 17;
+    el('ellipse', { cx: 0, cy: 8, rx: r + 3, ry: 6, class: 'map-node-shadow' }, g);
+    if (l.boss) {
+      el('path', { d: 'M' + (-r + 4) + ' -4V' + (-r - 20), class: 'map-node-pole' }, g);
+      el('path', { d: 'M' + (-r + 4) + ' ' + (-r - 20) + 'l14 4.5l-14 4.5Z', class: 'map-node-flag' }, g);
+    }
+    el('circle', { cy: 5, r: r, class: 'map-node-side' }, g);
+    el('circle', { r: r, class: 'map-node-body' }, g);
+    var t = el('text', { class: 'map-node-label' }, g);
+    t.textContent = l.daily ? '★' : App.Levels.code(l);
+    if (st === 'locked' || isFresh) {
+      // Le tremblement (transform CSS) est sur un groupe intérieur : sur celui qui porte
+      // l'attribut transform, il l'écraserait et ramènerait le cadenas au centre du nœud.
+      var lock = el('g', { class: 'map-node-lock', transform: 'translate(' + (l.boss ? 14 : 12) + ' ' + (l.boss ? -14 : -12) + ')' }, g);
+      var shake = el('g', { class: 'map-node-lock-shake' }, lock);
+      el('circle', { r: 7, class: 'map-node-lock-bg' }, shake);
+      el('path', { d: 'M-3 0h6v4h-6zM-2 0v-2a2 2 0 0 1 4 0v2', class: 'map-node-lock-icon' }, shake);
+    }
+    if (st === 'done' && App.Levels.starred(l)) {
+      var s = el('text', { class: 'map-node-stars', y: l.boss ? 38 : 34 }, g);
+      var n = App.Progress.stars(l.id);
+      s.textContent = '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
+    }
+    return g;
   }
 
   function buildWorld(opts) {
@@ -164,22 +196,31 @@
     if (!layers) buildLayers();
     ['edges', 'obstacles', 'nodes', 'token', 'clouds', 'pulse'].forEach(function (k) { layers[k].innerHTML = ''; });
 
-    // Nuages : une région encore fermée (ou qui s'ouvre à l'instant) en est couverte ;
-    // ils s'écartent quand elle s'ouvre (classe `revealed`, voir playUnlock).
+    // Nuages : une région encore fermée en est couverte (image, voir mapRaster.js) ; celle
+    // qui s'ouvre à l'instant garde des nuages SVG, qui s'écartent (classe `revealed`, voir
+    // playUnlock).
+    rasterClouds = [];
     App.Levels.ZONES.forEach(function (z) {
       var freshZone = App.Levels.LEVELS.some(function (l) { return l.zone === z.id && fresh.indexOf(l.id) !== -1; }) &&
         !App.Levels.LEVELS.some(function (l) { return l.zone === z.id && fresh.indexOf(l.id) === -1 && P.isAvailable(l); });
       var fogged = !zoneOpen(z) || freshZone;
       var g = el('g', { class: 'map-zone map-zone-' + z.id + (fogged ? ' fogged' : ''), 'data-zone': z.id }, layers.clouds);
-      if (fogged) App.MapArt.drawClouds(g, z.id);
+      if (freshZone) App.MapArt.drawClouds(g, z.id);
+      else if (fogged) rasterClouds.push(z.id);
     });
+    App.MapRaster.setClouds(rasterClouds);
 
+    // Chemins : en image (mapRaster.js), sauf celui qui se trace à l'instant.
+    rasterEdges = [];
+    // Obstacles et niveaux : aussi en image (SVG détaché, voir drawNode).
+    var rasterNodes = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     App.MapArt.edges().forEach(function (e) {
       var l = App.Levels.get(e.to);
       var state = P.isSolved(l.id) ? 'walked' : (P.isSolved(e.from) ? 'open' : 'locked');
       var drawIn = fresh.indexOf(l.id) !== -1 && opts && opts.from === e.from;
-      var g = App.MapArt.drawEdge(layers.edges, e, state, drawIn ? 'draw-in' : '');
-      if (drawIn) {
+      if (!drawIn) rasterEdges.push({ edge: e, state: state });
+      else {
+        var g = App.MapArt.drawEdge(layers.edges, e, state, 'draw-in');
         // Tracé progressif : masque dont le trait se déroule (voir playUnlock).
         var id = 'map-reveal-' + e.key;
         var mask = el('mask', { id: id, maskUnits: 'userSpaceOnUse', x: -500, y: -500,
@@ -191,50 +232,32 @@
       var waiting = l.req.filter(function (r) { return !P.isSolved(r); });
       if (l.req.length > 1 && (waiting.length || fresh.indexOf(l.id) !== -1) && !P.isSolved(l.id)) {
         var names = waiting.map(function (r) { return App.Levels.code(App.Levels.get(r)); });
-        App.MapArt.drawObstacle(layers.obstacles, e, names.length
-          ? 'Réussis aussi ' + names.join(' et ') + ' pour passer' : 'Passage libre');
-        if (fresh.indexOf(l.id) !== -1) layers.obstacles.lastChild.classList.add('will-clear');
+        var title = names.length ? 'Réussis aussi ' + names.join(' et ') + ' pour passer' : 'Passage libre';
+        var ob = App.MapArt.drawObstacle(layers.obstacles, e, title);
+        if (fresh.indexOf(l.id) !== -1) ob.classList.add('will-clear');
+        else App.MapArt.drawObstacle(rasterNodes, e, title);
       }
     });
+    App.MapRaster.setEdges(rasterEdges);
 
     var cur = currentLevel();
     App.Levels.LEVELS.forEach(function (l) {
       var st = nodeState(l);
       var isFresh = fresh.indexOf(l.id) !== -1;
-      var g = el('g', {
-        class: 'map-node ' + (isFresh ? 'locked will-open' : st) + (l.boss ? ' boss' : '') + (selectedId === l.id ? ' selected' : ''),
-        transform: 'translate(' + l.x + ' ' + l.y + ')', tabindex: '0', role: 'button',
-        'data-level': l.id, 'aria-label': l.title
-      }, layers.nodes);
-      var r = l.boss ? 21 : 17;
-      el('ellipse', { cx: 0, cy: 8, rx: r + 3, ry: 6, class: 'map-node-shadow' }, g);
-      if (l.boss) {
-        el('path', { d: 'M' + (-r + 4) + ' -4V' + (-r - 20), class: 'map-node-pole' }, g);
-        el('path', { d: 'M' + (-r + 4) + ' ' + (-r - 20) + 'l14 4.5l-14 4.5Z', class: 'map-node-flag' }, g);
-      }
+      var cls = (isFresh ? 'locked will-open' : st) + (l.boss ? ' boss' : '') + (selectedId === l.id ? ' selected' : '');
+      var g = drawNode(layers.nodes, l, cls, st, isFresh);
+      g.setAttribute('tabindex', '0');
+      g.setAttribute('role', 'button');
+      g.setAttribute('aria-label', l.title);
+      // Dans l'image des niveaux (mapRaster.js), sauf celui qui s'ouvre à l'instant : lui
+      // reste dessiné en SVG, son état va changer sous les yeux.
+      if (!isFresh) drawNode(rasterNodes, l, st + (l.boss ? ' boss' : ''), st, false);
       if (st === 'open' && !isFresh && cur && cur.id === l.id) {
         // Animation SVG (rayon, opacité) : la même en CSS (scale + transform-box) coûtait
         // une image sur deux pendant le glisser.
         var pulse = el('circle', { r: 18, class: 'map-node-pulse' }, el('g', { transform: 'translate(' + l.x + ' ' + l.y + ')' }, layers.pulse));
         el('animate', { attributeName: 'r', values: '18;34', dur: '1.8s', repeatCount: 'indefinite', calcMode: 'spline', keyTimes: '0;1', keySplines: '0 0 0.58 1' }, pulse);
         el('animate', { attributeName: 'opacity', values: '0.7;0', dur: '1.8s', repeatCount: 'indefinite', calcMode: 'spline', keyTimes: '0;1', keySplines: '0 0 0.58 1' }, pulse);
-      }
-      el('circle', { cy: 5, r: r, class: 'map-node-side' }, g);
-      el('circle', { r: r, class: 'map-node-body' }, g);
-      var t = el('text', { class: 'map-node-label' }, g);
-      t.textContent = l.daily ? '★' : App.Levels.code(l);
-      if (st === 'locked' || isFresh) {
-        // Le tremblement (transform CSS) est sur un groupe intérieur : sur celui qui porte
-        // l'attribut transform, il l'écraserait et ramènerait le cadenas au centre du nœud.
-        var lock = el('g', { class: 'map-node-lock', transform: 'translate(' + (l.boss ? 14 : 12) + ' ' + (l.boss ? -14 : -12) + ')' }, g);
-        var shake = el('g', { class: 'map-node-lock-shake' }, lock);
-        el('circle', { r: 7, class: 'map-node-lock-bg' }, shake);
-        el('path', { d: 'M-3 0h6v4h-6zM-2 0v-2a2 2 0 0 1 4 0v2', class: 'map-node-lock-icon' }, shake);
-      }
-      if (st === 'done' && App.Levels.starred(l)) {
-        var s = el('text', { class: 'map-node-stars', y: l.boss ? 38 : 34 }, g);
-        var n = P.stars(l.id);
-        s.textContent = '★★★'.slice(0, n) + '☆☆☆'.slice(0, 3 - n);
       }
       g.addEventListener('click', function (e) { e.stopPropagation(); toggle(l.id); });
       g.addEventListener('keydown', function (e) {
@@ -243,6 +266,7 @@
       g.addEventListener('mouseenter', function () { hover(l.id); });
       g.addEventListener('mouseleave', unhoverSoon);
     });
+    App.MapRaster.setNodes(rasterNodes);
 
     var tokenAt = (opts && opts.from && App.Levels.get(opts.from)) || cur;
     if (tokenAt) {
@@ -635,6 +659,25 @@
     window.addEventListener('resize', function () { if (isOpen()) { clampView(); applyView(); } });
   }
 
+  // Changement de thème : les images de la carte sont refaites avec les nouvelles couleurs.
+  function watchTheme() {
+    function redraw() {
+      App.MapRaster.invalidate();
+      if (!layers) return;
+      App.MapRaster.renderGround();
+      App.MapRaster.renderLabels();
+      App.MapRaster.setEdges(rasterEdges);
+      App.MapRaster.setNodes(null);
+      App.MapRaster.setClouds(rasterClouds);
+      App.MapRaster.updateDetail(view, viewport.clientWidth, viewport.clientHeight);
+    }
+    new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    if (window.matchMedia) {
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      if (mq.addEventListener) mq.addEventListener('change', redraw);
+    }
+  }
+
   function init(options) {
     onPlay = options && options.onPlay;
     overlay = document.getElementById('mapOverlay');
@@ -643,10 +686,12 @@
     svg = overlay.querySelector('svg.map-svg');
     svg.setAttribute('width', App.MapArt.W);
     svg.setAttribute('height', App.MapArt.H);
-    world = el('g', { class: 'map-root' }, svg);
-    // Deuxième SVG, par-dessus : ce qui s'anime en continu (bateau, moulin, pulsation du
-    // niveau courant), dans son propre calque (voir applyView).
-    liveSvg = el('svg', { class: 'map-svg map-svg-live', width: App.MapArt.W, height: App.MapArt.H, 'aria-hidden': 'true' }, plane);
+    topSvg = el('svg', { class: 'map-svg map-svg-top', width: App.MapArt.W, height: App.MapArt.H, 'aria-hidden': 'true' }, plane);
+    App.MapRaster.init(plane, svg, topSvg);
+    // Toutes les recherches de nœuds, chemins, nuages… se font dans le plan entier.
+    world = plane;
+    App.MapArt.injectStyles();
+    watchTheme();
     card = overlay.querySelector('.map-card');
     card.addEventListener('mouseenter', function () { clearTimeout(hoverTimer); });
     card.addEventListener('mouseleave', unhoverSoon);

@@ -98,6 +98,153 @@
     som: { step: 42, items: [['snowpeak', 5], ['rock', 2]] }
   };
 
+  // Règles de dessin de la carte (couleurs : variables --m-* de style.css, jour et nuit).
+  // Elles vivent ici plutôt que dans style.css parce que mapRaster.js doit aussi les
+  // intégrer dans les images qu'il dessine, et qu'une page ouverte en file:// ne peut pas
+  // relire ses propres feuilles de style. injectStyles() les ajoute à la page.
+  var MAP_CSS = [
+    '.m-night { display: none; }',
+    '.m-wave { fill: none; stroke: var(--m-wave); stroke-width: 1.6; stroke-linecap: round; }',
+    '.m-star { fill: #fff; opacity: 0.6; }',
+    '.m-shallow { fill: var(--m-shallow); stroke: var(--m-shallow); stroke-width: 44; stroke-linejoin: round; }',
+    '.m-cliff1 { fill: var(--m-cliff1); }',
+    '.m-cliff2 { fill: var(--m-cliff2); }',
+    '.m-cliff-line { fill: none; stroke: var(--m-cliff-line); stroke-width: 2; opacity: 0.5; }',
+    '.m-beach { fill: var(--m-sand); stroke: var(--m-sand); stroke-width: 16; stroke-linejoin: round; }',
+    '.m-grass { fill: var(--m-grass); stroke: var(--m-sand); stroke-width: 0; }',
+    '.m-beach-inner { fill: none; stroke: var(--m-sand); stroke-width: 12; stroke-linejoin: round; }',
+    '.m-biome { stroke-width: 2; }',
+    '.m-z-port { fill: var(--m-z-port); stroke: var(--m-z-port); }',
+    '.m-z-plaine { fill: var(--m-z-plaine); stroke: var(--m-z-plaine); }',
+    '.m-z-foret { fill: var(--m-z-foret); stroke: var(--m-z-foret); }',
+    '.m-z-coll { fill: var(--m-z-coll); stroke: var(--m-z-coll); }',
+    '.m-z-mont { fill: var(--m-z-mont); stroke: var(--m-z-mont); }',
+    '.m-z-grotte { fill: var(--m-z-grotte); stroke: var(--m-z-grotte); }',
+    '.m-z-source { fill: var(--m-z-source); stroke: var(--m-z-source); }',
+    '.m-z-marais { fill: var(--m-z-marais); stroke: var(--m-z-marais); }',
+    '.m-z-cit { fill: var(--m-z-cit); stroke: var(--m-z-cit); }',
+    '.m-z-obs { fill: var(--m-z-obs); stroke: var(--m-z-obs); }',
+    '.m-z-som { fill: var(--m-z-som); stroke: var(--m-z-som); }',
+    '.m-tex-dark { fill: var(--m-tex-dark); }',
+    '.m-tex-light { fill: var(--m-tex-light); }',
+    '.m-tex-faint { fill: var(--m-tex-dark); opacity: 0.45; }',
+    '.m-tex-stroke { fill: none; stroke: var(--m-tex-dark); stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }',
+    '.m-tex-line { fill: none; stroke: var(--m-tex-dark); stroke-width: 1.3; stroke-linecap: round; }',
+    '.m-water { fill: var(--m-water); }',
+    '.m-water-line { fill: none; stroke: var(--m-water-hi); stroke-width: 1.6; stroke-linecap: round; }',
+    '.m-water-jet { fill: none; stroke: var(--m-water-hi); stroke-width: 2.4; stroke-linecap: round; }',
+    '.m-lake-rim { fill: var(--m-sand); }',
+    '.m-foam { fill: var(--m-foam); opacity: 0.8; }',
+    '.m-river-bank { fill: none; stroke: var(--m-sand); stroke-width: 15; stroke-linecap: round; stroke-linejoin: round; }',
+    '.m-river { fill: none; stroke: var(--m-water); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }',
+    '.m-murk { fill: var(--m-murk); }',
+    '.m-field { fill: var(--m-field); }',
+    '.m-field-line { stroke: var(--m-field-line); stroke-width: 1.5; }',
+    '.m-shadow { fill: var(--m-shadow); }',
+    '.m-leaf { fill: var(--m-leaf); } .m-leaf-dk { fill: var(--m-leaf-dk); } .m-leaf-hi { fill: var(--m-leaf-hi); }',
+    '.m-pine { fill: var(--m-pine); } .m-pine-hi { fill: var(--m-pine-hi); }',
+    '.m-trunk { fill: var(--m-trunk); }',
+    '.m-bush { fill: var(--m-bush); } .m-bush-hi { fill: var(--m-bush-hi); }',
+    '.m-tuft { fill: none; stroke: var(--m-tuft); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }',
+    '.m-flower-a { fill: var(--m-flower-a); } .m-flower-b { fill: var(--m-flower-b); } .m-flower-c { fill: var(--m-flower-c); }',
+    '.m-rock { fill: var(--m-rock); } .m-rock-dk { fill: var(--m-rock-dk); }',
+    '.m-peak { fill: var(--m-peak); } .m-peak-dk { fill: var(--m-peak-dk); }',
+    '.m-snow { fill: var(--m-snow); } .m-snow-dk { fill: var(--m-snow-dk); }',
+    '.m-hill { fill: var(--m-hill); } .m-hill-dk { fill: var(--m-hill-dk); }',
+    '.m-wall { fill: var(--m-wall); } .m-wall-dk { fill: var(--m-wall-dk); }',
+    '.m-roof { fill: var(--m-roof); } .m-roof-dk { fill: var(--m-roof-dk); } .m-roof-b { fill: var(--m-roof-b); }',
+    '.m-door { fill: var(--m-door); } .m-window { fill: var(--m-window); } .m-stripe { fill: var(--m-stripe); }',
+    '.m-stone { fill: var(--m-stone); } .m-stone-dk { fill: var(--m-stone-dk); } .m-flag { fill: var(--m-flag); }',
+    '.m-wood { fill: var(--m-wood); } .m-wood-dk { fill: var(--m-wood-dk); } .m-thatch { fill: var(--m-thatch); }',
+    '.m-barn { fill: var(--m-barn); } .m-barn-dk { fill: var(--m-barn-dk); }',
+    '.m-barn-line { fill: none; stroke: var(--m-wall); stroke-width: 1.2; }',
+    '.m-plank-line { stroke: var(--m-wood-dk); stroke-width: 1; }',
+    '.m-rail { stroke: var(--m-wood-dk); stroke-width: 2.4; stroke-linecap: round; }',
+    '.m-reed { fill: none; stroke: var(--m-reed); stroke-width: 1.5; stroke-linecap: round; }',
+    '.m-cattail { fill: var(--m-cattail); }',
+    '.m-deadwood { fill: none; stroke: var(--m-deadwood); stroke-width: 2.2; stroke-linecap: round; }',
+    '.m-lily { fill: var(--m-lily); }',
+    '.m-crystal { fill: var(--m-crystal); } .m-crystal-hi { fill: var(--m-crystal-hi); }',
+    '.m-cave { fill: var(--m-cave); }',
+    '.m-sheep { fill: var(--m-sheep); } .m-sheep-head { fill: var(--m-sheep-head); }',
+    '.m-sheep-leg { stroke: var(--m-sheep-head); stroke-width: 1.4; }',
+    '.m-mush { fill: var(--m-mush); }',
+    '.m-dome { fill: var(--m-dome); } .m-dome-dk { fill: var(--m-dome-dk); }',
+    '.m-scope { stroke: var(--m-scope); stroke-width: 4; stroke-linecap: round; }',
+    '.m-hull { fill: var(--m-hull); } .m-sail { fill: var(--m-sail); } .m-sail-dk { fill: var(--m-sail-dk); }',
+    '.m-mast { fill: none; stroke: var(--m-mast); stroke-width: 1.6; stroke-linecap: round; }',
+    '.m-lamp { fill: var(--m-lamp); }',
+    '.m-beam { fill: var(--m-lamp); opacity: 0.22; }',
+    '.m-palm-trunk { fill: none; stroke: var(--m-trunk); stroke-width: 3; stroke-linecap: round; }',
+    '.m-palm-leaf { fill: none; stroke: var(--m-leaf-hi); stroke-width: 4; stroke-linecap: round; }',
+    '.m-palm-leaf-dk { fill: none; stroke: var(--m-leaf); stroke-width: 4; stroke-linecap: round; }',
+    '.m-windmill-blades { animation: map-spin 14s linear infinite; }',
+    '.m-sign { fill: var(--m-sign); }',
+    '.m-sign-sh { fill: var(--m-sign-sh); }',
+    '.map-edge-dirt .m-p-edge { stroke: var(--m-p-dirt-edge); } .map-edge-dirt .m-p-fill { stroke: var(--m-p-dirt); }',
+    '.map-edge-trail .m-p-edge { stroke: var(--m-p-trail-edge); } .map-edge-trail .m-p-fill { stroke: var(--m-p-trail); }',
+    '.map-edge-trail .m-p-dots { stroke: var(--m-p-trail-edge); stroke-dasharray: 0 9; stroke-width: 3.2 !important; opacity: 0.6; }',
+    '.map-edge-stone .m-p-edge { stroke: var(--m-p-stone-edge); stroke-dasharray: 0.1 12.5; }',
+    '.map-edge-stone .m-p-fill { stroke: var(--m-p-stone); stroke-dasharray: 0.1 12.5; }',
+    '.map-edge-plank .m-p-edge { stroke: var(--m-p-plank-edge); } .map-edge-plank .m-p-fill { stroke: var(--m-p-plank); }',
+    '.map-edge-plank .m-p-steps { stroke: var(--m-p-plank-edge); stroke-dasharray: 1.2 4.2; stroke-linecap: butt !important; }',
+    '.map-edge-road .m-p-edge { stroke: var(--m-p-road-edge); } .map-edge-road .m-p-fill { stroke: var(--m-p-road); }',
+    '.map-edge-road .m-p-line { stroke: var(--m-p-road-line); stroke-dasharray: 7 7; stroke-linecap: butt !important; }',
+    '.map-edge-sea .m-p-line { stroke: var(--m-p-sea); stroke-dasharray: 2 9; }',
+    '.m-bridge rect { stroke: none; }',
+    '.m-barrier { fill: var(--m-barrier); }',
+    '.m-barrier-stripe { fill: none; stroke: var(--m-barrier-stripe); stroke-width: 2.6; }',
+    '.m-post { fill: none; stroke: var(--m-post); stroke-width: 2.4; stroke-linecap: round; }',
+    '.m-cloud { fill: var(--m-cloud); }',
+    '.m-cloud-sh { fill: var(--m-cloud-sh); }',
+    '.map-sky-cloud { opacity: 0.85; }'
+,
+    '.map-edge path { fill: none; stroke-linecap: round; stroke-linejoin: round; }',
+    '.map-edge.locked { opacity: 0.4; }'
+,
+    '.map-sign { pointer-events: none; }',
+    '.map-sign-mark { font: italic 700 13px "KaTeX_Math", "Times New Roman", serif; fill: var(--text); text-anchor: middle; dominant-baseline: central; opacity: 0.75; }',
+    '.map-sign-mark.long { font-size: 8.5px; }',
+    '.map-zone-name { font: 700 13px "Inter", sans-serif; fill: var(--text); }',
+    '.map-zone-sub { font: 500 10px "Inter", sans-serif; fill: var(--text-muted); }',
+    '.map-obstacle { cursor: help; }',
+    '.map-obstacle-inner { transition: transform 0.5s ease, opacity 0.5s ease; transform-box: fill-box; transform-origin: center; }',
+    '.map-obstacle.clearing .map-obstacle-inner { transform: translate(0, 10px) scale(0.6); opacity: 0; }',
+    '.map-node { cursor: pointer; outline: none; }',
+    '.map-node-shadow { fill: var(--m-shadow); }',
+    '.map-node-body { stroke-width: 3; transition: fill 0.3s ease, stroke 0.3s ease; }',
+    '.map-node-side { transition: fill 0.3s ease; }',
+    '.map-node.done .map-node-body { fill: var(--success-soft); stroke: var(--m-node-side-done); }',
+    '.map-node.done .map-node-side { fill: var(--m-node-side-done); }',
+    '.map-node.open .map-node-body { fill: var(--surface); stroke: var(--m-node-side-open); }',
+    '.map-node.open .map-node-side { fill: var(--m-node-side-open); }',
+    '.map-node.open.boss .map-node-body { fill: var(--warning-soft); stroke: var(--m-node-side-boss); }',
+    '.map-node.open.boss .map-node-side { fill: var(--m-node-side-boss); }',
+    '.map-node.locked .map-node-body { fill: var(--m-node-locked); stroke: var(--m-node-side-locked); }',
+    '.map-node.locked .map-node-side { fill: var(--m-node-side-locked); }',
+    '.map-node.selected .map-node-body { stroke-width: 5; }',
+    '.map-node:focus-visible .map-node-body { stroke-width: 5; stroke: var(--accent); }',
+    '.map-node-pole { stroke: var(--m-mast); stroke-width: 2; stroke-linecap: round; }',
+    '.map-node-flag { fill: var(--m-flag); }',
+    '.map-node.locked .map-node-flag { fill: var(--m-node-side-locked); }',
+    '.map-node-label { font: 700 11px "Inter", sans-serif; text-anchor: middle; dominant-baseline: central; fill: var(--text); pointer-events: none; }',
+    '.map-node.locked .map-node-label { fill: var(--text-faint); }',
+    '.map-node-stars { font-size: 11px; text-anchor: middle; fill: var(--star); letter-spacing: 1px; pointer-events: none; paint-order: stroke; stroke: var(--m-halo); stroke-width: 3px; stroke-linejoin: round; }',
+    '.map-node-lock-bg { fill: var(--surface); stroke: var(--m-node-side-locked); stroke-width: 1.5; }',
+    '.map-node-lock-icon { fill: none; stroke: var(--text-muted); stroke-width: 1.4; stroke-linejoin: round; }',
+    '.map-node.unlocking .map-node-lock-shake { animation: map-lock-shake 0.35s ease; transform-box: fill-box; transform-origin: center; }',
+    '.map-node.just-opened .map-node-body { animation: map-pop 0.45s cubic-bezier(0.3, 1.6, 0.5, 1); transform-box: fill-box; transform-origin: center; }',
+    '.map-node-pulse { fill: none; stroke: var(--accent); stroke-width: 2; pointer-events: none; }'
+  ].join('\n');
+
+  function injectStyles() {
+    if (document.getElementById('map-art-style')) return;
+    var st = document.createElement('style');
+    st.id = 'map-art-style';
+    st.textContent = MAP_CSS;
+    document.head.appendChild(st);
+  }
+
   // ---- Outils ----
   function el(tag, attrs, parent) {
     var e = document.createElementNS(NS, tag);
@@ -691,20 +838,25 @@
   function labelWidth(z) {
     return Math.max(z.name.length * 8.2, z.sub.length * 5.9) + 52;
   }
-  function drawLabel(parent, z) {
+  // part : 'box' (cadre, pastille, nom), 'mark' (symbole seul) ou les deux.
+  function drawLabel(parent, z, part) {
     var p = LABELS[z.id];
     if (!p) return;
     var w = labelWidth(z), h = 36;
     var g = el('g', { class: 'map-sign', 'data-sign': z.id, transform: 'translate(' + f1(p[0] - w / 2) + ' ' + f1(p[1] - h / 2) + ')' }, parent);
-    el('rect', { x: 0, y: 3, width: w, height: h, rx: 10, class: 'm-sign-sh' }, g);
-    el('rect', { x: 0, y: 0, width: w, height: h, rx: 10, class: 'm-sign' }, g);
-    el('circle', { cx: 20, cy: h / 2, r: 12, class: 'm-z-' + z.id }, g);
-    var mk = el('text', { x: 20, y: h / 2 + 0.5, class: 'map-sign-mark' + (z.mark.length > 3 ? ' long' : '') }, g);
-    mk.textContent = z.mark;
-    var n = el('text', { x: 40, y: 15, class: 'map-zone-name' }, g);
-    n.textContent = z.name;
-    var s = el('text', { x: 40, y: 28, class: 'map-zone-sub' }, g);
-    s.textContent = z.sub;
+    if (part !== 'mark') {
+      el('rect', { x: 0, y: 3, width: w, height: h, rx: 10, class: 'm-sign-sh' }, g);
+      el('rect', { x: 0, y: 0, width: w, height: h, rx: 10, class: 'm-sign' }, g);
+      el('circle', { cx: 20, cy: h / 2, r: 12, class: 'm-z-' + z.id }, g);
+      var n = el('text', { x: 40, y: 15, class: 'map-zone-name' }, g);
+      n.textContent = z.name;
+      var s = el('text', { x: 40, y: 28, class: 'map-zone-sub' }, g);
+      s.textContent = z.sub;
+    }
+    if (part !== 'box') {
+      var mk = el('text', { x: 20, y: h / 2 + 0.5, class: 'map-sign-mark' + (z.mark.length > 3 ? ' long' : '') }, g);
+      mk.textContent = z.mark;
+    }
   }
 
   // ---- Calques statiques ----
@@ -882,8 +1034,13 @@
     });
   }
 
-  function buildLabels(parent) {
-    App.Levels.ZONES.forEach(function (z) { drawLabel(parent, z); });
+  function buildLabels(parent, part) {
+    App.Levels.ZONES.forEach(function (z) { drawLabel(parent, z, part); });
+  }
+  function buildLabelsSvg() {
+    var root = detachedSvg();
+    buildLabels(root, 'box');
+    return root;
   }
 
   // ---- Chemins ----
@@ -998,7 +1155,39 @@
       .forEach(function (p, i) { drawCloud(parent, p[0], p[1], p[2], i / 7, 'map-sky-cloud'); });
   }
 
+  // ---- SVG détachés, dessinés en images par mapRaster.js ----
+  function detachedSvg() { return document.createElementNS(NS, 'svg'); }
+  // Tout ce qui ne dépend pas de la progression : mer, îles, régions, décors, nuages du ciel.
+  // Deux parties, pour que l'image nette du zoom (mapRaster.js) glisse les chemins entre le
+  // sol et les décors.
+  function buildStaticSvg() {
+    var ground = detachedSvg(), decor = detachedSvg();
+    buildGround(el('g', {}, ground), el('defs', {}, ground));
+    buildDecor(el('g', {}, decor));
+    buildSkyClouds(el('g', {}, decor));
+    return { ground: ground, decor: decor };
+  }
+  // list : [{ edge, state }]
+  function buildEdgesSvg(list) {
+    var root = detachedSvg();
+    list.forEach(function (it) { drawEdge(root, it.edge, it.state); });
+    return root;
+  }
+  function buildCloudSvg(zoneIds) {
+    var root = detachedSvg();
+    zoneIds.forEach(function (id) { drawClouds(el('g', {}, root), id); });
+    return root;
+  }
+  function isNight() { return !!App.Theme && App.Theme.current() === 'dark'; }
+
   App.MapArt = {
+    CSS: MAP_CSS,
+    injectStyles: injectStyles,
+    buildStaticSvg: buildStaticSvg,
+    buildCloudSvg: buildCloudSvg,
+    buildEdgesSvg: buildEdgesSvg,
+    buildLabelsSvg: buildLabelsSvg,
+    isNight: isNight,
     W: W,
     H: H,
     geometry: geometry,

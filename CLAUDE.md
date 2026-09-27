@@ -29,7 +29,7 @@ in `(function (App) { ... })(window.App = window.App || {});` IIFEs.
 - Script load order in `index.html` matters and mirrors the dependency graph: `expression.js`
   → `equation.js` → `inequality.js` → `parser.js` → `generator.js` → `history.js` →
   `canvas.js` → `zoom.js` → `render.js` → `arrows.js` → `toolbar.js` → `mathKeypad.js` →
-  `keyboard.js` → `newEquationModal.js` → `theme.js` → `settings.js` → `mapArt.js` → `map.js` → `coach.js` →
+  `keyboard.js` → `newEquationModal.js` → `theme.js` → `settings.js` → `mapArt.js` → `mapRaster.js` → `map.js` → `coach.js` →
   `campaign.js` → `main.js`, with `levels.js` → `progress.js` right after `generator.js`.
 - No lint/build commands exist for this project. A regression test suite does exist (see
   below) — run the targeted test after any change to `js/*.js`.
@@ -228,7 +228,7 @@ thumbs follow the pointer continuously and snap to the nearest integer on releas
 and returns `null` when none match. A new generator form must be added to `FORMS` with
 its tags and degree.
 
-## Campaign (`js/levels.js`, `progress.js`, `mapArt.js`, `map.js`, `coach.js`, `campaign.js`)
+## Campaign (`js/levels.js`, `progress.js`, `mapArt.js`, `mapRaster.js`, `map.js`, `coach.js`, `campaign.js`)
 
 "La Carte des équations" (spec: `docs/gamification/plan.md`). `App.Levels` is pure data:
 regions, levels (`latex`, expected `sol` as `App.Ineq` ranges — or `domain` for a Df-only
@@ -239,15 +239,23 @@ interaction: pan/zoom, cards, unlock animation); `App.MapArt` draws it (flat sty
 ground, 3/4-view decor): the Port island and the main island, regions computed on a grid
 from the levels' `x`/`y` (plus `ANCHORS`) with noisy borders, seeded decor kept off paths,
 path kinds per region (`PATH_KIND`/`EDGE_VIA` to route around), barriers on paths into a
-level still waiting on another prerequisite, clouds over closed regions. Colors are CSS
-classes over `--m-*` variables on `#mapOverlay`, with a night palette in both dark blocks.
-Ground/decor/labels are built once; paths, nodes and clouds are rebuilt on each `open()`.
-Performance: pan/zoom move the HTML plane `.map-world` (a `will-change: transform` composited
-layer, re-rasterized after a zoom by `resharpenSoon`), never an SVG group. Anything that
-animates continuously (boat around the Port island, windmill blades, current-level pulse)
-lives in the second SVG `.map-svg-live` (`App.MapArt.buildLive`) so it never repaints the
-static map; use SVG `<animate>`/`<animateMotion>` there rather than CSS `transform-box`
-animations (measured much costlier). The "x" token follows its path with `<animateMotion>`.
+level still waiting on another prerequisite, clouds over closed regions. Colors are
+`--m-*` variables on `#mapOverlay` in style.css (night palette in both dark blocks); the
+drawing rules themselves (`.m-*`, `.map-node*`, `.map-sign*`, `.map-obstacle*`…) live in
+`MAP_CSS` in mapArt.js, injected into the page AND embedded in the raster images (a
+`file://` page cannot read its own stylesheets).
+Performance (the user is on Firefox, which re-rasterizes every SVG element at each scale
+step of a zoom): `App.MapRaster` draws ground/decor, paths, levels+obstacles, closed-region
+clouds and sign panels into canvases from detached SVGs (serialized with `MAP_CSS`, vars
+resolved), merged into only two big displayed canvases (`below`/`above`) plus sharp
+`detail` images of the visible area when zoomed past `BASE_RES`; everything is redrawn
+from code (first open, theme change, state change) — no image file to regenerate. The live
+SVG keeps only what moves or reacts: the path being drawn in, boat/windmill/pulse (SVG
+`<animate>`/`<animateMotion>`, never CSS `transform-box` animations), the token, clouds
+parting, sign symbols (KaTeX font, unavailable to an image), and the level/obstacle
+elements, `visibility: hidden` but clickable (`pointer-events: all`), shown only while
+their state differs from the image (selected, unlocking, just opened…). Pan/zoom move the
+HTML plane `.map-world`. Measure with Playwright's Firefox when touching this.
 `tests/campaign_map.js` checks that no two paths cross and that each level lies in its
 region — move levels or add `EDGE_VIA` points if it fails.
 `App.Campaign` runs a level on the normal canvas: it wins when
