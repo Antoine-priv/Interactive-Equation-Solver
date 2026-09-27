@@ -984,6 +984,18 @@ button {
   pointer-events: none;
 }
 
+/* Aperçu dans une colonne : mêmes espacements que .produit-nul-split-nested (la vraie
+   scission imbriquée), pour que la ligne validée apparaisse là où était l'aperçu. */
+.produit-nul-preview.produit-nul-preview-nested {
+  gap: 40px;
+  margin: 36px 0 6px;
+}
+.produit-nul-preview-nested .produit-nul-branch {
+  min-width: 220px;
+  max-width: 420px;
+  padding: 16px 28px;
+}
+
 .produit-nul-chain {
   position: relative; /* ancre les flèches internes de cette branche (voir arrows.js) */
 }

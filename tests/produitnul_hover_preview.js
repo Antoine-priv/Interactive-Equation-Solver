@@ -56,6 +56,38 @@ function ok(label, cond) {
   const stillNoRealBranches = await page.evaluate(() => window.App.History.getBranches());
   ok('still no real branches after hover ended', stillNoRealBranches === null);
 
+  // --- Produit nul DANS une colonne (G6) : l'aperçu est à la même place (par rapport à la
+  // ligne scindée) que les sous-colonnes une fois validées ---
+  await page.evaluate(() => {
+    var h = window.App.History;
+    h.startNewEquation(window.App.Parser.parseLatexEquation('x^4-8x^2+16=0'));
+    [0, 1, 2].forEach((i) => h.toggleTermSelection('left', i)); h.enterFactorWithSelection(); h.chooseFactorMode(2);
+    h.setIdentityFieldLatex('x^2'); h.setIdentityFocus('b'); h.setIdentityFieldLatex('4'); h.confirm();
+    h.toggleTermSelection('left', 0); h.confirmProduitNul();
+    var br = h.getBranches()[0]; h.focusBranch(0);
+    br.toggleTermSelection('left', 0); br.toggleTermSelection('left', 1); br.enterFactorWithSelection(); br.chooseFactorMode(3);
+    br.setIdentityFieldLatex('x'); br.setIdentityFocus('b'); br.setIdentityFieldLatex('2'); br.confirm();
+  });
+  await page.waitForTimeout(500);
+  await page.click('.produit-nul-branch .eq-row.current .side[data-side="left"] [data-index="0"]');
+  await page.waitForTimeout(200);
+  await page.hover('button[data-op="produitnul"]');
+  await page.waitForTimeout(600);
+  const offsets = () => page.evaluate(() => {
+    var rows = Array.from(document.querySelectorAll('.produit-nul-branch .eq-row')).filter((r) =>
+      !r.closest('.produit-nul-split-nested') && !r.closest('.produit-nul-preview'));
+    var base = rows[rows.length - 1].getBoundingClientRect();
+    return Array.from(document.querySelectorAll('.produit-nul-preview .eq-line, .produit-nul-split-nested .eq-line'))
+      .map((e) => { var r = e.getBoundingClientRect(); return [Math.round(r.left - base.left), Math.round(r.top - base.top)]; });
+  });
+  const before = await offsets();
+  await page.click('button[data-op="produitnul"]');
+  await page.waitForTimeout(1000);
+  const after = await offsets();
+  console.log('aperçu', JSON.stringify(before), 'validé', JSON.stringify(after));
+  ok('nested Produit nul: confirmed columns land where the preview was', before.length === 2 &&
+    JSON.stringify(before) === JSON.stringify(after));
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;
