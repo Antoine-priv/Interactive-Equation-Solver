@@ -441,6 +441,16 @@
     else App.History.confirm();
   }
 
+  // La chaîne "Opération" se termine-t-elle dans l'opérande d'un ×/÷ (ex. "+3\times",
+  // "\div(-2")? Un "-" collé juste après ×/÷ (ou sa parenthèse) est un signe, pas une
+  // nouvelle opération.
+  function isMulDivOperand(latex) {
+    var s = latex.replace(/(\\times|\\div)\s*\(?\s*-/g, '$1');
+    var ops = s.match(/\\times|\\div|\+|-/g);
+    var last = ops && ops[ops.length - 1];
+    return last === '\\times' || last === '\\div';
+  }
+
   // Lie/délie le <math-field> partagé (voir mathKeypad.js) au mode 'expr' : appelé à
   // CHAQUE rendu, mais ne fait quelque chose que sur une vraie transition (voir
   // mathKeypadBound) pour ne jamais réinitialiser le champ en cours de frappe. Contrairement
@@ -520,6 +530,15 @@
         pending.squareArmed ? ['square', 'enter'] : ['sqrt', 'enter']);
       App.MathKeypad.setKeyState('sqrt', { disabled: sqrtDisabled, pressed: sqrtPressed, title: sqrtTitle });
       App.MathKeypad.setKeyState('square', { disabled: squareDisabled, pressed: squarePressed, title: squareTitle });
+
+      // Inéquation : "x" grisée tant que l'opération en cours de saisie est un ×/÷ — le
+      // signe d'une expression en x est inconnu, le sens de l'inégalité ne se déciderait pas
+      // (commitExprOps le refuse de toute façon, y compris au clavier physique).
+      var xDisabled = !!App.History.getCurrentOperator() && isMulDivOperand(pending.exprLatex || '');
+      App.MathKeypad.setKeyState('x', {
+        disabled: xDisabled || pending.sqrtArmed || pending.squareArmed,
+        title: xDisabled ? 'Dans une inéquation, on ne multiplie ni ne divise par une expression en x.' : ''
+      });
     } else if (mathKeypadBound) {
       App.MathKeypad.clearActiveField();
       mathKeypadBound = false;

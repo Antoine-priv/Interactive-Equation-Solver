@@ -449,6 +449,10 @@
     onSqrtCb = (opts && opts.onSqrt) || null;
     onSquareCb = (opts && opts.onSquare) || null;
     onTabCb = (opts && opts.onTab) || null;
+    // Un nouveau champ repart de toutes les touches actives : celles grisées par un autre
+    // appelant (ex. "x" dans une inéquation, voir bindMathKeypad dans toolbar.js) ne le
+    // restent pas dans la modale.
+    setAllKeysDisabled(false, []);
     setError(null);
     render();
     focusField();

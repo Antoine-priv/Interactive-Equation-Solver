@@ -1145,7 +1145,7 @@
       // aveuglément comme pour un simple nombre (voir CLAUDE.md/le plan). Vérifié AVANT
       // d'appliquer quoi que ce soit : un rejet clair plutôt qu'un résultat mal posé.
       if (currentOperator && ops.some(function (op) { return (op.symbol === '×' || op.symbol === '÷') && op.terms; })) {
-        pending.error = 'Multiplier ou diviser par une expression n\'est pas encore pris en charge dans une inégalité.';
+        pending.error = 'Dans une inéquation, on ne multiplie ni ne divise par une expression : son signe dépend de x.';
         notify();
         return false;
       }
