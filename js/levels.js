@@ -233,7 +233,7 @@
     { id: 's2', zone: 'cit', x: 1320, y: 470, req: ['s1'], title: 'Facteur inversé', latex: '(2-x)(x+4)\\leq0',
       sol: U(I(-INF, false, -4, true), I(2, true, INF, false)), par: 4, learn: 'Un facteur décroissant',
       hints: ['2 − x est positif avant 2.', 'Attention au sens quand tu résous 2 − x > 0.'] },
-    { id: 's3', zone: 'cit', x: 1260, y: 535, req: ['s2'], title: 'Le moins devant', latex: '-\\frac{(x+1)(x-2)}{1-x}\\geq0',
+    { id: 's3', zone: 'cit', x: 1260, y: 535, req: ['s2', 'm5'], title: 'Le moins devant', latex: '-\\frac{(x+1)(x-2)}{1-x}\\geq0',
       sol: U(I(-1, true, 1, false), I(2, true, INF, false)), par: 8, learn: 'Signe de tête, valeur interdite',
       hints: ['N\'oublie pas le − devant la fraction.', 'Condition d\'existence sur 1 − x, puis tableau de signes.'] },
     { id: 's4', zone: 'cit', x: 1355, y: 575, req: ['s3'], title: 'Trois facteurs', latex: 'x(x-1)(x+2)<0',
