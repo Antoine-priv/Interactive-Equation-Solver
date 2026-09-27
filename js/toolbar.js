@@ -110,6 +110,10 @@
     3: { math: 'a^2-b^2=(a-b)(a+b)' }
   };
 
+  function identitiesLocked() {
+    return !!(App.Campaign && App.Campaign.isFeatureLocked && App.Campaign.isFeatureLocked('identities'));
+  }
+
   // Petite flèche "retour" en haut à gauche du pavé (étape 2 -> étape 1, voir
   // goBackToFactorChoice) : partagée entre facteur commun et identité remarquable.
   function buildFactorBackRow() {
@@ -167,22 +171,9 @@
     }
 
     addChoice('common', 'Facteur commun', null);
-    [1, 2, 3].forEach(function (n) { addChoice(n, null, IDENTITY_INFO[n].math); });
+    if (!identitiesLocked()) [1, 2, 3].forEach(function (n) { addChoice(n, null, IDENTITY_INFO[n].math); });
 
     wrap.appendChild(list);
-    return wrap;
-  }
-
-  // Étape 2 (cas facteur commun, factorMode === 'common') : le <math-field> partagé vit
-  // désormais dans le pavé "live" de la ligne "pending" (voir bindLiveOpField dans
-  // mathKeypad.js/bindFactorKeypad ci-dessous), pas ici — #controlPanel n'a donc plus
-  // qu'un simple bouton "retour" pendant cette saisie. L'élève tape directement la valeur
-  // ("6", "-3", "2x", ...) et la voit apparaître, curseur inclus, à même l'étiquette de la
-  // flèche (voir positionLiveField dans arrows.js).
-  function buildCommonFactorKeypad() {
-    var wrap = document.createElement('div');
-    wrap.className = 'keypad';
-    wrap.appendChild(buildFactorBackRow());
     return wrap;
   }
 
@@ -589,12 +580,10 @@
     factorPanelSig = sig;
     panel.innerHTML = '';
     if (sig === 'common') {
-      var wrapC = buildCommonFactorKeypad();
-      panel.appendChild(wrapC);
-      // Comme pour 'expr' (voir bindMathKeypad) : le champ vit désormais dans le pavé
-      // "live" de la ligne "pending", pas dans #controlPanel — le facteur tapé apparaît
-      // directement, curseur inclus, sur l'étiquette de la flèche (voir
-      // positionLiveField dans arrows.js).
+      // Comme pour 'expr' (voir bindMathKeypad) : le champ vit dans le pavé "live" de la
+      // ligne "pending", pas dans #controlPanel (caché, sauf erreur : voir needsPanel) — le
+      // facteur tapé apparaît directement, curseur inclus, sur l'étiquette de la flèche
+      // (voir positionLiveField dans arrows.js).
       App.MathKeypad.bindLiveOpField({
         onEnter: function () { App.History.confirm(); },
         onEscape: function () { App.History.cancelOp(); },
@@ -864,7 +853,7 @@
     // entièrement dans le pavé ancré (voir bindMathKeypad/mathKeypad.js), "Simplifier" et
     // "Développer" ne font que sélectionner des termes sur l'équation elle-même — donc pas
     // de panneau tant qu'il n'y a pas d'erreur à signaler.
-    var needsPanel = pending.opType === 'factor' ||
+    var needsPanel = (pending.opType === 'factor' && pending.factorMode !== 'common') ||
       (!!pending.error && pending.opType !== 'expr');
     panel.hidden = !needsPanel;
 
@@ -1165,7 +1154,11 @@
           // facteurs) — contrairement à un clic en dehors de la fenêtre, qui efface tout
           // via cancelOp (voir le gestionnaire "click en dehors" plus bas).
           if (pending.opType === 'factor') App.History.exitFactorKeepSelection();
-          else App.History.enterFactorWithSelection();
+          else if (App.History.enterFactorWithSelection() && identitiesLocked()) {
+            // Campagne, identités pas encore abordées : seul le facteur commun reste,
+            // l'étape de choix est sautée.
+            App.History.chooseFactorMode('common');
+          }
         } else if (op === 'expand') {
           // Développe entièrement l'unique groupe factorisé sélectionné, immédiatement.
           App.History.confirmExpandFullSelection();

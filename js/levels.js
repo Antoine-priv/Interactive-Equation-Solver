@@ -150,7 +150,7 @@
       learn: 'Ramener à 0 avant de factoriser', trap: 'Diviser par x fait perdre la solution 0.',
       hints: ['Un produit nul demande un « = 0 ».', 'Retire 5x des deux côtés, puis factorise par x.'] },
     { id: 'pB', zone: 'mont', x: 1060, y: 280, req: ['p5'], title: 'Épreuve de la Montagne', latex: 'x^3-4x=0', sol: P(-2, 0, 2), par: 6,
-      boss: true, badge: 'alpiniste', learn: 'Degré 3 : factoriser deux fois',
+      boss: true, badge: 'alpiniste', feat: ['identities'], learn: 'Degré 3 : factoriser deux fois',
       hints: ['Commence par le facteur commun x.', 'x(x²−4) : x²−4 est une différence de carrés.'] },
 
     // ---- La Grotte ----
@@ -161,7 +161,7 @@
       learn: '(a + b)(a − b) = a² − b²', trap: 'Les x disparaissent des deux côtés.',
       hints: ['Développe le produit.', '25 − x² = 9 − x² : ajoute x² des deux côtés.'] },
     { id: 'g3', zone: 'grotte', x: 955, y: 200, req: ['g2', 'p3'], title: 'Différence de carrés', latex: 'x^2-9=0', sol: P(-3, 3), par: 4,
-      learn: 'a² − b² = (a − b)(a + b)',
+      feat: ['identities'], learn: 'a² − b² = (a − b)(a + b)',
       hints: ['9 = 3².', 'Factoriser, identité a² − b² avec a = x et b = 3.'] },
     { id: 'g4', zone: 'grotte', x: 990, y: 150, req: ['g3'], title: 'Moins moins', latex: '9-(-x^2)-6x=0', sol: P(3), par: 4,
       learn: 'Simplifier −(−x²), puis reconnaître (x − 3)²',
@@ -284,7 +284,9 @@
     existence: { op: 'existence', label: 'Condition d\'existence' },
     signchart: { op: 'signchart', label: 'Tableau de signes' },
     sqrt: { key: 'sqrt', label: 'Racine carrée' },
-    square: { key: 'square', label: 'Carré' }
+    square: { key: 'square', label: 'Carré' },
+    // Choix « identité remarquable » dans Factoriser (voir buildFactorChoiceStep, toolbar.js).
+    identities: { label: 'Identités remarquables' }
   };
 
   App.Levels = {

@@ -83,6 +83,10 @@
     return Object.keys(locked).some(function (f) { return App.Levels.FEATURES[f].op === op; });
   }
 
+  function isFeatureLocked(f) {
+    return !!run && !!lockedFeatures()[f];
+  }
+
   function applyKeyLocks() {
     var locked = lockedFeatures();
     Object.keys(App.Levels.FEATURES).forEach(function (f) {
@@ -96,6 +100,7 @@
     (run.level.feat || []).forEach(function (f) {
       if (known[f] || usedFeatures[f]) return;
       var def = App.Levels.FEATURES[f];
+      if (!def.op && !def.key) return;
       var sel = def.op ? '#opButtons button[data-op="' + def.op + '"]' : '[data-key="' + def.key + '"]';
       document.querySelectorAll(sel).forEach(function (e) { e.classList.add('campaign-new'); });
     });
@@ -554,6 +559,7 @@
     startLevel: startLevel,
     exitLevel: exitLevel,
     isOpLocked: isOpLocked,
+    isFeatureLocked: isFeatureLocked,
     stepCount: stepCount,
     rangesEqual: rangesEqual,
     current: function () { return run ? { id: run.level.id, part: run.part, undos: run.undos, hints: run.hints, won: run.won, message: run.message, enabled: run.enabled || null } : null; },

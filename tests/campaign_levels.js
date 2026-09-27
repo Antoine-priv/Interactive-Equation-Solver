@@ -176,6 +176,62 @@ function ok(label, cond) {
   ok('M8: steps from both parts are counted', await H(page, () => window.App.Campaign.stepCount()) >= 3);
   await page.screenshot({ path: SCRATCH + '/campaign_levels_m8.png' });
 
+  // --- P5 : identités pas encore abordées -> Factoriser va droit au facteur commun, sans
+  // fenêtre ; le piège ÷x puis Simplifier (x²/x, 5x/x, "valide si x≠0") perd la solution 0 ---
+  page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  page.on('pageerror', (e) => errs.push('[pageerror] ' + e.message));
+  await page.addInitScript(() => {
+    var levels = {};
+    ['t1', 't3', 't4', 't5', 't7', 'l1', 'l2', 'l3', 'l4', 'l5', 'lB', 'p1', 'p2', 'p3', 'p4']
+      .forEach(function (id) { levels[id] = { stars: 1, bestSteps: 9, solvedAt: '2026-09-25' }; });
+    if (!sessionStorage.getItem('seeded')) {
+      localStorage.setItem('equations-progress', JSON.stringify({ version: 1, levels: levels, badges: [] }));
+      sessionStorage.setItem('seeded', '1');
+    }
+  });
+  await page.goto(FILE);
+  await H(page, () => window.App.Campaign.startLevel('p5'));
+  await H(page, () => { var h = window.App.History; h.selectOp('expr'); h.setExprChainText('-5x'); h.confirm(); });
+  await page.waitForTimeout(150);
+  await page.click('.eq-row.current .side[data-side="left"] [data-index="0"]');
+  await page.click('.eq-row.current .side[data-side="left"] [data-index="1"]');
+  await page.click('button[data-op="factor"]');
+  await page.waitForTimeout(150);
+  ok('P5: Factoriser goes straight to the common factor (identities not met yet)', await H(page, () =>
+    window.App.History.getPending().factorMode === 'common'));
+  ok('P5: no empty window with only a back arrow', await H(page, () =>
+    document.getElementById('controlPanel').hidden && !document.querySelector('.factor-back-btn')));
+  await H(page, () => { window.App.History.cancelOp(); window.App.History.undo(); });
+  await H(page, () => {
+    var h = window.App.History;
+    h.selectOp('expr'); h.setExprChainText('\\div x'); h.confirm();
+    h.toggleTermSelection('left', 0); h.toggleTermSelection('right', 0);
+  });
+  ok('P5: Simplifier is offered on x²/x and 5x/x', await H(page, () => window.App.Toolbar.computeSelectionInfo().canSimplify));
+  await H(page, () => window.App.History.confirmSimplifySelection());
+  await page.waitForTimeout(200);
+  const trap = await H(page, () => { var s = window.App.History.getSteps().slice(-1)[0]; return { eq: s.equation, nz: s.opLeft.nonZero }; });
+  ok('P5: x²/x = 5x/x simplifies to x = 5, "valide si x≠0"', JSON.stringify(trap.eq) === JSON.stringify({ left: [{ coeff: 1, pow: 1 }], right: [{ coeff: 5, pow: 0 }] }) &&
+    JSON.stringify(trap.nz) === JSON.stringify([[{ coeff: 1, pow: 1 }]]));
+  ok('P5: that loses the solution 0, the level is not won', !(await cur(page)).won);
+
+  // Identités abordées (G3 réussi) : les trois formules sont proposées.
+  await H(page, () => {
+    var p = JSON.parse(localStorage.getItem('equations-progress'));
+    p.levels.g3 = { stars: 1, bestSteps: 9, solvedAt: '2026-09-25' };
+    localStorage.setItem('equations-progress', JSON.stringify(p));
+  });
+  await page.goto(FILE);
+  await H(page, () => window.App.Campaign.startLevel('p5'));
+  await H(page, () => { var h = window.App.History; h.selectOp('expr'); h.setExprChainText('-5x'); h.confirm(); });
+  await page.waitForTimeout(150);
+  await page.click('.eq-row.current .side[data-side="left"] [data-index="0"]');
+  await page.click('.eq-row.current .side[data-side="left"] [data-index="1"]');
+  await page.click('button[data-op="factor"]');
+  await page.waitForTimeout(150);
+  ok('identities met: the choice lists the 3 identities', await H(page, () =>
+    document.querySelectorAll('.factor-choice-btn').length === 4));
+
   ok('no page errors', errs.length === 0);
   if (errs.length) console.log(errs.join('\n'));
   await browser.close();
