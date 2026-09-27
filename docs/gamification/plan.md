@@ -165,8 +165,8 @@ De m3 à mB, une solution trouvée sans condition d'existence posée et résolue
 |---|---|---|---|---|---|---|
 | s1 | Signe d'un produit | `(x − 1)(x + 3) > 0` | Lire un tableau de signes | 3 | iB, pB | Découvre : « Tableau de signes » |
 | s2 | Facteur inversé | `(2 − x)(x + 4) ≤ 0` | Un facteur décroissant | 3 | s1 |  |
-| s3 | Le moins devant | `−(x + 1)(x − 2)/(1 − x) ≥ 0` | Signe de tête, valeur interdite en double barre | 4 | s2, m5 | Source : Exercice 23, question 1 |
-| s4 | Trois facteurs | `x(x − 1)(x + 2) < 0` | Degré 3 | 4 | s3 |  |
+| s3 | Trois facteurs | `x(x − 1)(x + 2) < 0` | Degré 3 | 4 | s2 |  |
+| s4 | Le moins devant | `−(x + 1)(x − 2)/(1 − x) ≥ 0` | Signe de tête, valeur interdite en double barre | 4 | s3, m5 | Source : Exercice 23, question 1 |
 | s5 | Toujours positif | `(2x − 1)(x − 1)/(x² + 1) ≤ 0` | Numérateur donné déjà factorisé (l'exercice fait développer (2x − 1)(x − 1) pour le vérifier) ; x² + 1 est toujours positif | 4 | s4 | Source : Exercice 23, question 2 (adapté) · **À développer :** Tableau de signes avec un facteur de signe constant de degré 2 (x² + 1). Sans cette évolution, remplacer x² + 1 par un dénominateur du 1er degré. |
 | sB | Épreuve de la Citadelle | `(x² − 4)/(x − 1) ≤ 0` | Factoriser puis étudier le signe | 5 | s5 | Épreuve · Badge « Stratège » |
 
