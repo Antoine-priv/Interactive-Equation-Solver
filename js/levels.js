@@ -217,7 +217,7 @@
     { id: 'm7', zone: 'marais', x: 1170, y: 310, req: ['m6'], domainStar: true, title: 'Racine d\'expression', latex: '\\sqrt{x+2}=3', sol: P(7), par: 4,
       feat: ['square'], learn: 'Élever au carré les deux côtés',
       hints: ['Condition d\'existence d\'abord, puis : le contraire d\'une racine carrée, c\'est le carré.', 'x+2 ≥ 0, puis touche (‥)² du pavé et résous x+2 = 9.'] },
-    { id: 'm8', zone: 'marais', x: 1260, y: 330, req: ['m7'], domainStar: true, title: 'Les jumeaux', par: 4,
+    { id: 'm8', zone: 'marais', x: 1260, y: 330, req: ['m7'], domainStar: true, title: 'Les jumeaux', par: 6,
       parts: [
         { latex: '\\sqrt{x}=0', sol: P(0) },
         { latex: '\\frac{\\sqrt{x}\\sqrt{x}}{\\sqrt{x}}=0', sol: E, requireDomain: true }
@@ -264,7 +264,7 @@
       hints: ['Deux facteurs : x + 5 et 4 − x.', 'Condition d\'existence, puis tableau de signes.'] },
     { id: 'oB', zone: 'obs', x: 1520, y: 320, req: ['o3'], title: 'Épreuve de l\'Observatoire',
       latex: '\\frac{\\sqrt{x+8}(x^2+10x+25)(-x+3)}{(x^2-4)\\sqrt{-x+6}}\\geq0',
-      sol: U(I(-8, true, -2, false), I(2, false, 3, true)), par: 22, boss: true, badge: 'astronome',
+      sol: U(I(-8, true, -2, false), I(2, false, 3, true)), par: 26, boss: true, badge: 'astronome',
       learn: 'Domaine puis signe, avec des racines', trap: 'Racine au dénominateur : −x + 6 > 0. −5 est une racine double.',
       hints: ['Factorise x² + 10x + 25 et x² − 4.', 'Conditions d\'existence de chaque racine et de x² − 4, puis tableau de signes.'] },
 

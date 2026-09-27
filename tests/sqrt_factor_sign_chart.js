@@ -82,10 +82,19 @@ function ok(label, cond) {
   const conds = await page.evaluate(() => window.App.History.getDomainConditions().map(function (c) {
     return { kind: c.kind, operator: c.operator, arr: c.capturedArray };
   }));
-  ok('two domain columns: "x-6 ≠ 0" and "x+2 > 0" (strict: √ in a denominator)',
+  ok('two domain columns: "x-6 ≠ 0" and "√(x+2) ≠ 0" (a denominator is ≠ 0)',
     JSON.stringify(conds) === JSON.stringify([
       { kind: 'den', operator: '\\neq', arr: LIN(-6) },
-      { kind: 'sqrt', operator: '>', arr: LIN(2) }]));
+      { kind: 'den', operator: '\\neq', arr: [{ sign: 1, radicand: LIN(2) }] }]));
+  // La racine elle-même : double-clic sur son facteur dans le dénominateur drillé.
+  await page.evaluate(() => {
+    var Hist = window.App.History;
+    Hist.toggleTermSelection('left', 0, null, true); Hist.toggleTermSelection('left', 0, null, true);
+    Hist.clickNestedFactor(0, 1); Hist.clickNestedFactor(0, 1);
+    Hist.existenceConditionAction();
+  });
+  const conds3 = await page.evaluate(() => window.App.History.getDomainConditions().map(function (c) { return c.kind + ' ' + c.operator; }));
+  ok('the √ factor of the denominator gives "x+2 ≥ 0"', JSON.stringify(conds3) === JSON.stringify(['den \\neq', 'den \\neq', 'sqrt \\geq']));
 
   await page.evaluate(() => {
     var Hist = window.App.History;
@@ -97,7 +106,8 @@ function ok(label, cond) {
       Hist.confirmSimplifySelection();
     }
     Hist.setFocusedDomain(0); solve('+6');
-    Hist.setFocusedDomain(1); solve('-2');
+    Hist.setFocusedDomain(1); Hist.confirmSquareBothSides(); solve('-2');
+    Hist.setFocusedDomain(2); solve('-2');
     Hist.focusMain();
   });
   await page.waitForTimeout(150);
@@ -105,8 +115,9 @@ function ok(label, cond) {
     var a = document.querySelector('.domain-df-result annotation');
     return a ? a.textContent : null;
   });
-  ok('Df combines both columns: ℝ∖{6} ∩ ]-2;+∞[',
-    !!dfLatex && dfLatex.indexOf('\\setminus\\left\\{6\\right\\}') !== -1 && dfLatex.indexOf('\\left]-2;+\\infty\\right[') !== -1);
+  ok('Df combines the three columns: ℝ∖{6} ∩ ℝ∖{-2} ∩ [-2;+∞[',
+    !!dfLatex && dfLatex.indexOf('\\setminus\\left\\{6\\right\\}') !== -1 && dfLatex.indexOf('\\setminus\\left\\{-2\\right\\}') !== -1 &&
+    dfLatex.indexOf('\\left[-2;+\\infty\\right[') !== -1);
   if (!dfLatex) console.log('  Df latex missing');
 
   // --- Tableau de signes ---

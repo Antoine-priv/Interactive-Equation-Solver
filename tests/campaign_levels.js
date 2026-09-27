@@ -186,7 +186,8 @@ function ok(label, cond) {
   await H(page, () => {
     var Hs = window.App.History;
     Hs.toggleTermSelection('left', 0, null, true); Hs.toggleTermSelection('left', 0, null, true);
-    Hs.existenceConditionAction();
+    Hs.existenceConditionAction(); // √x ≠ 0
+    Hs.setFocusedDomain(0); Hs.confirmSquareBothSides();
     Hs.focusMain();
     Hs.toggleTermSelection('left', 0); Hs.confirmSimplifySelection();
     Hs.confirmSquareBothSides();

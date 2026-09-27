@@ -576,6 +576,16 @@
       // (pending.drilled.part==='den', voir drillIntoQuotientDenominator) OU un radicand de
       // racine carrée (part==='sqrt', voir drillIntoSqrt) sont toujours une profondeur
       // terminale, leurs termes sont supposés plats.
+      // Double-clic sur une racine du dénominateur drillé : elle reste sélectionnée — sa
+      // condition "radicand ≥ 0" se pose alors à part de "dénominateur ≠ 0" (voir
+      // existenceConditionsFor).
+      if (isDouble && pending.drilled.part === 'den') {
+        var denNode = Expr.nodeAtPath(lastEquation()[pending.drilled.side], pending.drilled.path);
+        var denInner = denNode && Expr.drilledWorkingArray(denNode, pending.drilled)[innerIndex];
+        if (denInner && Expr.isSqrtGroup(denInner) && pending.selectedInner.indexOf(innerIndex) === -1) {
+          pending.selectedInner.push(innerIndex);
+        }
+      }
       if (isDouble && typeof pending.drilled.branch !== 'number' && pending.drilled.part !== 'den' && pending.drilled.part !== 'sqrt') {
         var currentNode = Expr.nodeAtPath(lastEquation()[pending.drilled.side], pending.drilled.path);
         var innerNode = currentNode && Expr.drilledWorkingArray(currentNode, pending.drilled)[innerIndex];
@@ -624,7 +634,7 @@
         var den = currentNode && Expr.isExpressionQuotient(currentNode) ? currentNode.factorTerms : null;
         if (!den || den.length !== 1 || innerIndex !== 0 || !Expr.isProductGroup(den[0])) return;
         var denBranch = den[0].factors[branch] && den[0].factors[branch].terms;
-        if (!denBranch || denBranch.length < 2) return;
+        if (!denBranch || (denBranch.length < 2 && !isLoneSqrt(denBranch))) return;
         pending.drilled = { side: pending.drilled.side, path: pending.drilled.path, part: 'den', branch: branch };
         pending.selectedInner = [];
         pending.error = null;
@@ -2453,14 +2463,16 @@
 
     // Conditions d'existence portées par le membre drillé (voir pending.drilled) :
     // [{ arr, kind:'den'|'sqrt', operator }] — `arr` l'expression étudiée (dénominateur
-    // "≠ 0" ou radicand), `operator` celui de sa colonne. Un dénominateur qui contient une
-    // racine carrée comme facteur (ex. "(x-6)√(x+2)") se décompose facteur par facteur :
-    // "x-6 ≠ 0" et "x+2 > 0" (strict : une racine nulle au dénominateur est interdite) —
-    // sans racine, le dénominateur reste étudié en bloc comme avant. Un radicand drillé
-    // directement, une branche de produit réduite à une racine, ou un membre (numérateur)
-    // dont le produit contient des racines donnent chacun "radicand ≥ 0". Seuls les
-    // radicands linéaires sont retenus (voir isLinearRadicand).
-    function existenceConditionsFor(groupNode, d) {
+    // "≠ 0" ou radicand), `operator` celui de sa colonne. Un dénominateur donne toujours
+    // "≠ 0", y compris une racine ("√x ≠ 0") ; s'il contient une racine comme facteur (ex.
+    // "(x-6)√(x+2)"), il se décompose facteur par facteur : "x-6 ≠ 0" et "√(x+2) ≠ 0" —
+    // sans racine, il reste étudié en bloc. La racine elle-même se traite À PART, comme
+    // partout ailleurs : sélectionnée (double-clic) dans le dénominateur drillé, ou facteur
+    // du dénominateur drillé réduit à une racine, elle donne "radicand ≥ 0" — de même
+    // qu'un radicand drillé directement, une branche de produit réduite à une racine, ou
+    // un membre (numérateur) dont le produit contient des racines. Seuls les radicands
+    // linéaires sont retenus (voir isLinearRadicand).
+    function existenceConditionsFor(groupNode, d, selectedInner) {
       var out = [];
       function sqrtCondition(node, operator) {
         if (!isLinearRadicand(node.radicand) || !Expr.sideHasVariable(node.radicand)) return false;
@@ -2476,18 +2488,22 @@
       if (d.part === 'den') {
         if (!Expr.isExpressionQuotient(groupNode)) return out;
         var den = groupNode.factorTerms;
+        var work = Expr.drilledWorkingArray(groupNode, d);
+        var picked = typeof d.branch === 'number' && isLoneSqrt(work) ? [work[0]]
+          : (selectedInner || []).map(function (i) { return work[i]; }).filter(function (n) { return n && Expr.isSqrtGroup(n); });
+        if (picked.length) {
+          picked.forEach(function (n) { sqrtCondition(n, '\\geq'); });
+          return out;
+        }
         if (!productSqrtNodes(den).length) {
           out.push({ arr: den, kind: 'den', operator: '\\neq' });
           return out;
         }
         var denFactors = Expr.isProductGroup(den[0]) ? den[0].factors.map(function (f) { return f.terms; }) : [den];
-        var ok = denFactors.every(function (terms) {
-          if (isLoneSqrt(terms)) return sqrtCondition(terms[0], '>');
-          if (!Expr.sideHasVariable(terms)) return true;
-          out.push({ arr: terms, kind: 'den', operator: '\\neq' });
-          return true;
+        denFactors.forEach(function (terms) {
+          if (Expr.sideHasVariable(terms)) out.push({ arr: terms, kind: 'den', operator: '\\neq' });
         });
-        return ok ? out : [];
+        return out;
       }
       if (d.part === 'sqrt') {
         if (Expr.isSqrtGroup(groupNode)) sqrtCondition(groupNode, '\\geq');
@@ -2502,7 +2518,7 @@
       if (!d) return [];
       var groupNode = Expr.nodeAtPath(leaf.lastEquation()[d.side], d.path);
       if (!groupNode) return [];
-      return existenceConditionsFor(groupNode, d);
+      return existenceConditionsFor(groupNode, d, leaf.getPending().selectedInner);
     }
 
     // Conditions portées par le membre drillé de la chaîne ACTIVE (à n'importe quelle
@@ -2576,8 +2592,11 @@
       // (pending.drilled.side toujours posé empêche tout nouveau clic sur l'AUTRE membre,
       // voir toggleTermSelection) et ne pourrait jamais drills un second
       // dénominateur/radicand du même côté sans d'abord ressortir manuellement (Échap).
-      // exitDrill() notifie déjà lui-même : pas besoin d'un second notify() ici.
-      if (fromSplit) focusedChild().exitDrill(); else leaf.exitDrill();
+      // exitDrill() notifie déjà lui-même : pas besoin d'un second notify() ici. Depuis un
+      // facteur du dénominateur (ex. sa racine), on ressort jusqu'au bout, pas seulement
+      // jusqu'au dénominateur entier.
+      var drilledEng = fromSplit ? focusedChild() : leaf;
+      for (var guard = 0; guard < 4 && drilledEng.getPending().drilled; guard++) drilledEng.exitDrill();
       return { spawned: true, pan: false, index: domainConditions.length - fresh.length };
     }
 
@@ -2652,14 +2671,20 @@
     // même test). Sans dénominateur ni racine, trivialement prêt : le domaine est alors R
     // tout entier, rien à établir.
     function signChartDomainReady(factors) {
+      function has(kind, terms, operators) {
+        return !!(domainConditions && domainConditions.some(function (cond) {
+          if (cond.kind !== kind || (operators && operators.indexOf(cond.operator) === -1)) return false;
+          return Expr.sidesEquivalent(cond.capturedArray, terms) && Eq.isSolved(cond.engine.lastEquation());
+        }));
+      }
       return factors.every(function (f) {
         if (f.constant) return true; // jamais nul, rien à exclure
         if (!f.sqrt && f.kind !== 'den') return true;
-        return !!(domainConditions && domainConditions.some(function (cond) {
-          if (cond.kind !== (f.sqrt ? 'sqrt' : 'den')) return false;
-          if (f.sqrt && f.kind === 'den' && cond.operator !== '>') return false;
-          return Expr.sidesEquivalent(cond.capturedArray, f.terms) && Eq.isSolved(cond.engine.lastEquation());
-        }));
+        if (!f.sqrt) return has('den', f.terms);
+        if (f.kind !== 'den') return has('sqrt', f.terms);
+        // Racine au dénominateur : "√(radicand) ≠ 0" ET "radicand ≥ 0" (voir
+        // existenceConditionsFor).
+        return has('sqrt', f.terms, ['\\geq']) && has('den', [{ sign: 1, radicand: f.terms }]);
       });
     }
 

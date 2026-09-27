@@ -50,8 +50,21 @@ function ok(label, cond) {
   await page.click('button[data-op="existence"]');
   await page.waitForTimeout(150);
   const conds = await page.evaluate(() => window.App.History.getDomainConditions().map((c) => ({ kind: c.kind, op: c.operator, arr: c.capturedArray })));
-  ok('domain column is "x > 0" (strict: √ in a denominator)', conds.length === 1 && conds[0].kind === 'sqrt' &&
-    conds[0].op === '>' && JSON.stringify(conds[0].arr) === JSON.stringify([{ coeff: 1, pow: 1 }]));
+  ok('denominator column is "√x ≠ 0"', conds.length === 1 && conds[0].kind === 'den' &&
+    conds[0].op === '\\neq' && JSON.stringify(conds[0].arr) === JSON.stringify([SQX]));
+  // Double-clic sur la racine du dénominateur drillé : "x ≥ 0".
+  const conds2 = await page.evaluate(() => {
+    var H = window.App.History;
+    H.focusMain();
+    H.toggleTermSelection('left', 0, null, true); H.toggleTermSelection('left', 0, null, true);
+    H.toggleInnerSelection(0); H.toggleInnerSelection(0);
+    H.existenceConditionAction();
+    H.setFocusedDomain(0); H.confirmSquareBothSides();
+    H.focusMain();
+    return H.getDomainConditions().map((c) => ({ kind: c.kind, op: c.operator, arr: c.capturedArray }));
+  });
+  ok('the √ of the denominator gives "x ≥ 0"', conds2.length === 2 && conds2[1].kind === 'sqrt' &&
+    conds2[1].op === '\\geq' && JSON.stringify(conds2[1].arr) === JSON.stringify([{ coeff: 1, pow: 1 }]));
 
   // Le canevas s'est recentré sur la colonne de domaine : sélection via l'API.
   await page.evaluate(() => {
@@ -67,7 +80,7 @@ function ok(label, cond) {
 
   r = await squareAndReadFinal();
   ok('then x = 0', JSON.stringify(r.eq.left) === JSON.stringify([{ coeff: 1, pow: 1 }]));
-  ok('S = ∅ once intersected with the domain x > 0', !!r.text && r.text.indexOf('∅') !== -1);
+  ok('S = ∅ once intersected with the domain ℝ∖{0} ∩ [0;+∞[', !!r.text && r.text.indexOf('∅') !== -1);
   await page.mouse.click(1250, 850);
   await page.waitForTimeout(100);
   await page.screenshot({ path: SCRATCH + '/sqrt_twin_domains.png' });

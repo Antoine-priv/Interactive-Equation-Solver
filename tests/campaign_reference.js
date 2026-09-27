@@ -83,6 +83,19 @@ function installHelpers() {
     exit: function () { H().exitDrill(); H().cancelOp(); },
     existence: function () { H().existenceConditionAction(); R.check(); },
     inDomain: function (i, fn) { H().setFocusedDomain(i); fn(); H().focusMain(); },
+    // Colonne de domaine : une racine seule ("√x ≠ 0") s'élève d'abord au carré.
+    solveDomain: function () {
+      var eq = H().lastEquation();
+      if (eq.left.length === 1 && window.App.Expr.isSqrtGroup(eq.left[0])) { H().confirmSquareBothSides(); R.check(); }
+      R.linear();
+    },
+    // Racine du dénominateur drillé (double-clic dessus) : sa condition "radicand ≥ 0".
+    denSqrt: function (side, i, branch) {
+      R.drillDen(side, i);
+      if (typeof branch === 'number') { H().clickNestedFactor(0, branch); H().clickNestedFactor(0, branch); }
+      else { H().toggleInnerSelection(0); H().toggleInnerSelection(0); }
+      R.existence();
+    },
     pn: function () { H().confirmProduitNul(); R.check(); },
     // Colonne "Produit nul" (chemin d'index dans l'arbre des scissions).
     branch: function (path, fn) {
@@ -219,7 +232,10 @@ const S = {
   m7: () => { R.drill('left', 0); R.existence(); R.inDomain(0, R.linear); R.square(); R.linear(); },
   m8: [
     () => { R.drill('left', 0); R.existence(); R.square(); },
-    () => { R.drillDen('left', 0); R.existence(); R.simp('left', [0]); R.square(); }
+    () => {
+      R.drillDen('left', 0); R.existence(); R.inDomain(0, R.solveDomain);
+      R.denSqrt('left', 0); R.simp('left', [0]); R.square();
+    }
   ],
   mB: () => {
     R.drillBranch('left', 0, 1); R.existence(); R.inDomain(0, R.linear);
@@ -254,8 +270,8 @@ const S = {
     R.innerIdentity([0, 1, 2], 1, 'x', '5');
     R.drillDen('left', 0); H.clickNestedFactor(0, 0); H.clickNestedFactor(0, 0);
     R.innerIdentity([0, 1], 3, 'x', '2');
-    R.drill('left', 0); R.existence(); R.drillDen('left', 0); R.existence();
-    H.getDomainConditions().forEach((_, i) => R.inDomain(i, R.linear));
+    R.drill('left', 0); R.existence(); R.drillDen('left', 0); R.existence(); R.denSqrt('left', 0, 2);
+    H.getDomainConditions().forEach((_, i) => R.inDomain(i, R.solveDomain));
     R.signChart();
   },
   o2: () => { R.drillDen('left', 0); R.existence(); R.inDomain(0, R.linear); R.op('\\times(4-x)'); R.expandAll(); R.linear(); },
