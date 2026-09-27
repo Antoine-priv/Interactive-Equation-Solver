@@ -175,6 +175,11 @@
     '.m-mast { fill: none; stroke: var(--m-mast); stroke-width: 1.6; stroke-linecap: round; }',
     '.m-lamp { fill: var(--m-lamp); }',
     '.m-beam { fill: var(--m-lamp); opacity: 0.22; }',
+    '.m-cloud-shadow { fill: var(--m-cloud-shadow); }',
+    '.m-gull { fill: none; stroke: var(--m-gull); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }',
+    '.m-sparkle { fill: var(--m-sparkle); }',
+    '.m-water-streak { fill: none; stroke: var(--m-water-hi); stroke-width: 1.8; stroke-linecap: round; }',
+    '.m-smoke { fill: var(--m-smoke); }',
     '.m-palm-trunk { fill: none; stroke: var(--m-trunk); stroke-width: 3; stroke-linecap: round; }',
     '.m-palm-leaf { fill: none; stroke: var(--m-leaf-hi); stroke-width: 4; stroke-linecap: round; }',
     '.m-palm-leaf-dk { fill: none; stroke: var(--m-leaf); stroke-width: 4; stroke-linecap: round; }',
@@ -196,8 +201,7 @@
     '.m-barrier-stripe { fill: none; stroke: var(--m-barrier-stripe); stroke-width: 2.6; }',
     '.m-post { fill: none; stroke: var(--m-post); stroke-width: 2.4; stroke-linecap: round; }',
     '.m-cloud { fill: var(--m-cloud); }',
-    '.m-cloud-sh { fill: var(--m-cloud-sh); }',
-    '.map-sky-cloud { opacity: 0.85; }'
+    '.m-cloud-sh { fill: var(--m-cloud-sh); }'
 ,
     '.map-edge path { fill: none; stroke-linecap: round; stroke-linejoin: round; }',
     '.map-edge.locked { opacity: 0.4; }'
@@ -720,7 +724,6 @@
       el('rect', { x: -8, y: -48, width: 16, height: 3, class: 'm-wall-dk' }, g);
       el('rect', { x: -5, y: -56, width: 10, height: 8, class: 'm-lamp' }, g);
       el('path', { d: 'M-6 -56L0 -63L6 -56Z', class: 'm-stripe' }, g);
-      el('path', { d: 'M5 -52L60 -66L60 -38Z', class: 'm-beam m-night' }, g);
       el('rect', { x: -2, y: -8, width: 4, height: 8, class: 'm-door' }, g);
     },
     house: function (g, m) { DRAW.house(g, 0.7); },
@@ -937,13 +940,11 @@
       el('path', { d: isl.d, class: isl.id === 'port' ? 'm-z-port' : 'm-grass' }, ig);
       if (isl.id === 'port') el('path', { d: isl.d, fill: 'url(#m-pat-port)' }, ig);
     });
-    // Cascade là où la rivière rejoint la mer.
+    // Cascade là où la rivière rejoint la mer (l'eau qui coule : buildWaterfall).
     g.rivers.forEach(function (r) {
       var end = r.line[r.line.length - 1];
       var wf = el('g', { transform: 'translate(' + f1(end[0]) + ' ' + f1(end[1] - 6) + ')' }, parent);
       el('rect', { x: -7, y: 0, width: 14, height: 44, rx: 2, class: 'm-water' }, wf);
-      el('path', { d: 'M-3 4v34M3 10v28', class: 'm-water-line' }, wf);
-      el('ellipse', { cx: 0, cy: 44, rx: 14, ry: 4, class: 'm-foam' }, wf);
     });
     var bio = el('g', { 'clip-path': 'url(#m-clip-main)' }, parent);
     Object.keys(g.biomes.shapes).forEach(function (id) {
@@ -962,24 +963,6 @@
       el('path', { d: r.d, class: 'm-river' }, parent);
     });
     LANDMARKS.forEach(function (m) { if (m.ground) drawLandmark(parent, m); });
-  }
-
-  // Calque animé : tout ce qui bouge en continu. map.js le place dans un SVG à part, au-dessus
-  // de la carte, pour que ces animations ne fassent jamais redessiner le reste (voir le
-  // calque composité dans applyView).
-  function buildLive(parent) {
-    buildBoatLoop(parent);
-    LANDMARKS.forEach(function (m) {
-      if (m.type !== 'windmill') return;
-      var blades = el('g', { transform: 'translate(' + m.x + ' ' + (m.y - 42) + ')' }, parent);
-      var spin = el('g', { class: 'm-windmill-blades' }, blades);
-      for (var a = 0; a < 4; a++) {
-        var b = el('g', { transform: 'rotate(' + (a * 90 + 20) + ')' }, spin);
-        el('rect', { x: -1, y: -30, width: 2, height: 30, class: 'm-wood-dk' }, b);
-        el('rect', { x: 1, y: -29, width: 7, height: 20, class: 'm-sail' }, b);
-      }
-      el('circle', { r: 2.5, class: 'm-wood-dk' }, blades);
-    });
   }
 
   // Bateau qui fait lentement le tour de l'île du Port (animations SVG, cadencées sur
@@ -1117,11 +1100,9 @@
     cloudCache[zoneId] = { pts: pts, cx: cx, cy: cy };
     return cloudCache[zoneId];
   }
-  function drawCloud(parent, x, y, r, v, cls) {
-    var g = el('g', { transform: 'translate(' + f1(x) + ' ' + f1(y) + ')' }, parent);
-    var inner = el('g', { class: cls || 'map-cloud' }, g);
+  // Tracé d'un nuage (cercles + base arrondie), en un seul chemin : il y en a des centaines.
+  function cloudPath(r, v) {
     var puffs = [[-0.75, -0.05, 0.5], [-0.25, -0.38, 0.62 + v * 0.1], [0.35, -0.25, 0.55], [0.8, 0, 0.42]];
-    // Un seul tracé par nuage (cercles + base arrondie) : il y en a des centaines.
     var d = '';
     puffs.forEach(function (p) {
       var cx = p[0] * r, cy = p[1] * r, rr = p[2] * r;
@@ -1131,13 +1112,17 @@
     d += 'M' + f1(-bx + br) + ' ' + f1(by) + 'H' + f1(bx - br) + 'a' + f1(br) + ' ' + f1(br) + ' 0 0 1 ' + f1(br) + ' ' + f1(br) +
       'V' + f1(by + bh - br) + 'a' + f1(br) + ' ' + f1(br) + ' 0 0 1 ' + f1(-br) + ' ' + f1(br) + 'H' + f1(-bx + br) +
       'a' + f1(br) + ' ' + f1(br) + ' 0 0 1 ' + f1(-br) + ' ' + f1(-br) + 'V' + f1(by + br) + 'a' + f1(br) + ' ' + f1(br) + ' 0 0 1 ' + f1(br) + ' ' + f1(-br) + 'Z';
-    function body(dy, c) {
-      el('path', { d: d, class: c, transform: dy ? 'translate(0 ' + f1(dy) + ')' : null }, inner);
-    }
-    body(r * 0.14, 'm-cloud-sh');
-    body(0, 'm-cloud');
+    return d;
+  }
+  function drawCloud(parent, x, y, r, v, cls) {
+    var g = el('g', { transform: 'translate(' + f1(x) + ' ' + f1(y) + ')' }, parent);
+    var inner = el('g', { class: cls || 'map-cloud' }, g);
+    var d = cloudPath(r, v);
+    el('path', { d: d, class: 'm-cloud-sh', transform: 'translate(0 ' + f1(r * 0.14) + ')' }, inner);
+    el('path', { d: d, class: 'm-cloud' }, inner);
     return inner;
   }
+
   function drawClouds(parent, zoneId) {
     var c = cloudsFor(zoneId);
     c.pts.forEach(function (p) {
@@ -1149,10 +1134,140 @@
       inner.style.setProperty('--cloud-delay', f1(p[3] * 0.3) + 's');
     });
   }
-  // Quelques nuages décoratifs au-dessus de la mer.
-  function buildSkyClouds(parent) {
-    [[640, 360, 34], [150, 330, 28], [2380, 250, 40], [600, 980, 30], [2100, 1040, 36], [1150, 60, 30], [2390, 960, 26]]
-      .forEach(function (p, i) { drawCloud(parent, p[0], p[1], p[2], i / 7, 'map-sky-cloud'); });
+  // ---- Calques animés (map.js les place dans ses SVG vivants) ----
+  // Uniquement des animations SVG (<animate…>), cadencées sur l'horloge du document ; pas
+  // d'animation CSS à transform-box (coûteuse, voir map.js). `begin` négatif : chaque
+  // élément démarre déjà en cours de cycle, sans synchronisme visible.
+  function anim(tag, attrs, parent) {
+    attrs.repeatCount = attrs.repeatCount || 'indefinite';
+    return el(tag, attrs, parent);
+  }
+
+  // Nuages du ciel qui dérivent lentement, avec leur ombre au sol (décalée vers le bas, en
+  // vue de 3/4).
+  var SKY_CLOUDS = [[640, 330, 34, 260], [150, 330, 28, 220], [2380, 250, 40, 300], [600, 1000, 30, 240],
+    [2100, 1040, 36, 280], [1150, 50, 30, 320], [2390, 960, 26, 200], [1500, 1010, 34, 380], [1900, 90, 32, 360]];
+  function buildSky(parent) {
+    var rand = rng(404);
+    SKY_CLOUDS.forEach(function (c, i) {
+      var g = el('g', { transform: 'translate(' + c[0] + ' ' + c[1] + ')' }, parent);
+      var drift = el('g', {}, g);
+      var dur = 160 + rand() * 120;
+      anim('animateTransform', { attributeName: 'transform', type: 'translate', values: '0 0;' + c[3] + ' 0;0 0',
+        dur: f1(dur) + 's', begin: '-' + f1(rand() * dur) + 's', calcMode: 'spline', keyTimes: '0;0.5;1',
+        keySplines: '0.45 0 0.55 1;0.45 0 0.55 1' }, drift);
+      var d = cloudPath(c[2], i / SKY_CLOUDS.length);
+      el('path', { d: d, class: 'm-cloud-shadow', transform: 'translate(' + f1(c[2] * 0.9) + ' ' + f1(c[2] * 2.6) + ') scale(1 0.6)' }, drift);
+      el('path', { d: d, class: 'm-cloud-sh', transform: 'translate(0 ' + f1(c[2] * 0.14) + ')' }, drift);
+      el('path', { d: d, class: 'm-cloud' }, drift);
+    });
+  }
+
+  // Mouettes qui planent en cercles (ellipses : vue de 3/4) ; l'une passe au-dessus du Port.
+  var GULLS = [[640, 300, 60, 34], [1050, 45, 50, 30], [2385, 380, 55, 36], [600, 1030, 45, 28], [2250, 980, 50, 32],
+    [400, 610, 250, 70]];
+  function buildGulls(parent) {
+    var rand = rng(99);
+    GULLS.forEach(function (c) {
+      var rx = c[2], ry = c[2] * 0.6;
+      var path = 'M' + (c[0] - rx) + ' ' + c[1] + 'a' + rx + ' ' + f1(ry) + ' 0 1 1 ' + (2 * rx) + ' 0a' + rx + ' ' + f1(ry) + ' 0 1 1 ' + (-2 * rx) + ' 0Z';
+      var g = el('g', { class: 'm-gull-wrap' }, parent);
+      anim('animateMotion', { path: path, dur: c[3] + 's', begin: '-' + f1(rand() * c[3]) + 's' }, g);
+      var wings = el('path', { d: 'M-6 0Q-3 -4 0 0Q3 -4 6 0', class: 'm-gull' }, g);
+      // Deux coups d'ailes, puis vol plané.
+      var flap = f1(2.5 + rand() * 2);
+      anim('animateTransform', { attributeName: 'transform', type: 'scale', values: '1 1;1 0.3;1 1;1 0.3;1 1;1 1',
+        keyTimes: '0;0.08;0.16;0.24;0.32;1', dur: flap + 's', begin: '-' + f1(rand() * 3) + 's' }, wings);
+    });
+  }
+
+  // Reflets qui scintillent sur la mer et le lac de la Source.
+  function buildSparkles(parent) {
+    var g = geometry(), rand = rng(7), pts = [], tries = 0;
+    function nearLand(x, y) {
+      return g.islands.some(function (isl) {
+        return [[0, 0], [40, 0], [-40, 0], [0, 40], [0, -40]].some(function (o) { return inPoly(isl.poly, x + o[0], y + o[1]); });
+      });
+    }
+    while (pts.length < 26 && tries++ < 400) {
+      var x = -100 + rand() * (W + 200), y = -60 + rand() * (H + 120);
+      if (!nearLand(x, y)) pts.push([x, y]);
+    }
+    LAKES.forEach(function (l) { pts.push([l.x - l.rx * 0.4, l.y - 5], [l.x + l.rx * 0.35, l.y + 4], [l.x + 4, l.y - 9]); });
+    pts.forEach(function (p) {
+      var s = el('path', { d: 'M0 -3.2L0.8 0L0 3.2L-0.8 0ZM-3.2 0L0 0.8L3.2 0L0 -0.8Z', class: 'm-sparkle', opacity: 0,
+        transform: 'translate(' + f1(p[0]) + ' ' + f1(p[1]) + ')' }, parent);
+      var dur = 4 + rand() * 4;
+      anim('animate', { attributeName: 'opacity', values: '0;0;0.95;0', keyTimes: '0;0.7;0.82;1', dur: f1(dur) + 's',
+        begin: '-' + f1(rand() * dur) + 's' }, s);
+    });
+  }
+
+  // Cascade : traits d'eau qui défilent vers le bas, écume qui pulse.
+  function buildWaterfall(parent) {
+    geometry().rivers.forEach(function (r, i) {
+      var end = r.line[r.line.length - 1];
+      var wf = el('g', { transform: 'translate(' + f1(end[0]) + ' ' + f1(end[1] - 6) + ')' }, parent);
+      var clipId = 'm-fall-clip-' + i;
+      el('rect', { x: -7, y: 0, width: 14, height: 44 }, el('clipPath', { id: clipId }, wf));
+      var streaks = el('g', { 'clip-path': 'url(#' + clipId + ')' }, wf);
+      var move = el('g', {}, streaks);
+      el('path', { d: 'M-3 -40v12M2 -30v14M-1 -12v10M3 2v12M-3 8v10M1 20v12', class: 'm-water-streak' }, move);
+      anim('animateTransform', { attributeName: 'transform', type: 'translate', values: '0 0;0 44', dur: '1.3s' }, move);
+      var foam = el('ellipse', { cx: 0, cy: 44, rx: 14, ry: 4, class: 'm-foam' }, wf);
+      anim('animate', { attributeName: 'rx', values: '12;17;12', dur: '1.8s' }, foam);
+      anim('animate', { attributeName: 'opacity', values: '0.55;0.95;0.55', dur: '1.8s' }, foam);
+    });
+  }
+
+  // Fumée de la cheminée de la cabane.
+  function buildSmoke(parent) {
+    LANDMARKS.forEach(function (m) {
+      if (m.type !== 'cabin') return;
+      var g = el('g', { transform: 'translate(' + (m.x + 6.5) + ' ' + (m.y - 27) + ')' }, parent);
+      for (var k = 0; k < 3; k++) {
+        var p = el('circle', { r: 2, class: 'm-smoke', opacity: 0 }, g);
+        var begin = '-' + f1(k * 1.3) + 's';
+        anim('animate', { attributeName: 'cy', values: '0;-30', dur: '3.9s', begin: begin }, p);
+        anim('animate', { attributeName: 'cx', values: '0;3;8', dur: '3.9s', begin: begin }, p);
+        anim('animate', { attributeName: 'r', values: '2;7', dur: '3.9s', begin: begin }, p);
+        anim('animate', { attributeName: 'opacity', values: '0;0.8;0', keyTimes: '0;0.2;1', dur: '3.9s', begin: begin }, p);
+      }
+    });
+  }
+
+  // Faisceau du phare (nuit seulement, voir .m-night) : il tourne, aplati en ellipse (3/4).
+  function buildBeam(parent) {
+    LANDMARKS.forEach(function (m) {
+      if (m.type !== 'lighthouse') return;
+      var g = el('g', { class: 'm-night', transform: 'translate(' + m.x + ' ' + (m.y - 52) + ') scale(1 0.42)' }, parent);
+      var rot = el('g', {}, g);
+      anim('animateTransform', { attributeName: 'transform', type: 'rotate', values: '0;360', dur: '10s' }, rot);
+      el('path', { d: 'M0 0L120 -16L120 16Z', class: 'm-beam' }, rot);
+      el('circle', { r: 10, class: 'm-beam' }, g);
+    });
+  }
+
+  // Au niveau du sol (sous les nuages des régions fermées) et dans le ciel (au-dessus).
+  function buildLive(ground, sky) {
+    buildSparkles(ground);
+    buildWaterfall(ground);
+    buildBoatLoop(ground);
+    buildSmoke(ground);
+    buildBeam(ground);
+    LANDMARKS.forEach(function (m) {
+      if (m.type !== 'windmill') return;
+      var blades = el('g', { transform: 'translate(' + m.x + ' ' + (m.y - 42) + ')' }, ground);
+      var spin = el('g', { class: 'm-windmill-blades' }, blades);
+      for (var a = 0; a < 4; a++) {
+        var b = el('g', { transform: 'rotate(' + (a * 90 + 20) + ')' }, spin);
+        el('rect', { x: -1, y: -30, width: 2, height: 30, class: 'm-wood-dk' }, b);
+        el('rect', { x: 1, y: -29, width: 7, height: 20, class: 'm-sail' }, b);
+      }
+      el('circle', { r: 2.5, class: 'm-wood-dk' }, blades);
+    });
+    buildSky(sky);
+    buildGulls(sky);
   }
 
   // ---- SVG détachés, dessinés en images par mapRaster.js ----
@@ -1164,7 +1279,6 @@
     var ground = detachedSvg(), decor = detachedSvg();
     buildGround(el('g', {}, ground), el('defs', {}, ground));
     buildDecor(el('g', {}, decor));
-    buildSkyClouds(el('g', {}, decor));
     return { ground: ground, decor: decor };
   }
   // list : [{ edge, state }]
@@ -1195,7 +1309,6 @@
     buildDecor: buildDecor,
     buildLabels: buildLabels,
     buildLive: buildLive,
-    buildSkyClouds: buildSkyClouds,
     drawEdge: drawEdge,
     drawObstacle: drawObstacle,
     drawClouds: drawClouds,

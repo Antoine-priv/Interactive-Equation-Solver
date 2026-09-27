@@ -150,15 +150,34 @@
   var layers = null, rasterClouds = [], rasterEdges = [];
   function buildLayers() {
     layers = {};
-    ['edges', 'live', 'obstacles', 'nodes', 'pulse', 'token', 'clouds'].forEach(function (k) {
+    ['edges', 'live', 'obstacles', 'nodes', 'flags', 'pulse', 'token', 'clouds', 'sky'].forEach(function (k) {
       layers[k] = el('g', { class: 'map-layer-' + k }, svg);
     });
     layers.labels = el('g', { class: 'map-layer-labels' }, topSvg);
-    App.MapArt.buildLive(layers.live);
+    App.MapArt.buildLive(layers.live, layers.sky);
     // Panneaux : en image, sauf leur symbole (police KaTeX, inaccessible à une image).
     App.MapArt.buildLabels(layers.labels, 'mark');
     App.MapRaster.renderGround();
     App.MapRaster.renderLabels();
+  }
+
+  // Hauteur dont le drapeau d'une épreuve est descendu tant qu'elle n'est pas réussie.
+  function flagDrop(r) { return r + 7; }
+
+  // Drapeau d'une épreuve réussie : flotte en haut du mât ; `raise` le fait d'abord monter
+  // (retour de la carte juste après l'avoir réussie).
+  var WAVE = ['M0 0Q7 -1.5 14 4.5Q7 7.5 0 9Z', 'M0 0Q7 2.5 14 4.5Q7 11 0 9Z'];
+  function drawBossFlag(l, raise) {
+    var r = l.boss ? 21 : 17;
+    var g = el('g', { transform: 'translate(' + (l.x - r + 4) + ' ' + (l.y - r - 20) + ')' }, layers.flags);
+    var lift = el('g', raise ? { transform: 'translate(0 ' + flagDrop(r) + ')' } : {}, g);
+    var flag = el('path', { d: WAVE[0], class: 'map-node-flag' }, lift);
+    el('animate', { attributeName: 'd', values: WAVE[0] + ';' + WAVE[1] + ';' + WAVE[0], dur: '1.6s', repeatCount: 'indefinite',
+      begin: '-' + (Math.random() * 1.6).toFixed(2) + 's' }, flag);
+    if (!raise) return;
+    var up = el('animateTransform', { attributeName: 'transform', type: 'translate', values: '0 ' + flagDrop(r) + ';0 0',
+      dur: '1.2s', begin: 'indefinite', fill: 'freeze', calcMode: 'spline', keyTimes: '0;1', keySplines: '0.3 0 0.2 1' }, lift);
+    setTimeout(function () { if (up.beginElement) up.beginElement(); }, reducedMotion() ? 0 : 500);
   }
 
   // Une pastille de niveau (sans écouteurs) : sert au SVG vivant et à l'image des niveaux.
@@ -167,8 +186,10 @@
     var r = l.boss ? 21 : 17;
     el('ellipse', { cx: 0, cy: 8, rx: r + 3, ry: 6, class: 'map-node-shadow' }, g);
     if (l.boss) {
+      // Mât ; le drapeau reste en bas tant que l'épreuve n'est pas réussie, puis flotte en
+      // haut (SVG vivant, voir drawBossFlag).
       el('path', { d: 'M' + (-r + 4) + ' -4V' + (-r - 20), class: 'map-node-pole' }, g);
-      el('path', { d: 'M' + (-r + 4) + ' ' + (-r - 20) + 'l14 4.5l-14 4.5Z', class: 'map-node-flag' }, g);
+      if (st !== 'done') el('path', { d: 'M' + (-r + 4) + ' ' + (-r - 20 + flagDrop(r)) + 'l14 4.5l-14 4.5Z', class: 'map-node-flag' }, g);
     }
     el('circle', { cy: 5, r: r, class: 'map-node-side' }, g);
     el('circle', { r: r, class: 'map-node-body' }, g);
@@ -194,7 +215,7 @@
     var P = App.Progress;
     var fresh = (opts && opts.unlocked) || [];
     if (!layers) buildLayers();
-    ['edges', 'obstacles', 'nodes', 'token', 'clouds', 'pulse'].forEach(function (k) { layers[k].innerHTML = ''; });
+    ['edges', 'obstacles', 'nodes', 'flags', 'token', 'clouds', 'pulse'].forEach(function (k) { layers[k].innerHTML = ''; });
 
     // Nuages : une région encore fermée en est couverte (image, voir mapRaster.js) ; celle
     // qui s'ouvre à l'instant garde des nuages SVG, qui s'écartent (classe `revealed`, voir
@@ -226,6 +247,11 @@
         var mask = el('mask', { id: id, maskUnits: 'userSpaceOnUse', x: -500, y: -500,
           width: App.MapArt.W + 1000, height: App.MapArt.H + 1000 }, layers.edges);
         el('path', { d: e.d, class: 'map-edge-reveal' }, mask);
+        // Le chemin qui se trace passe au-dessus de l'image des niveaux : le masque le coupe
+        // sur les pastilles de ses deux extrémités (face et tranche).
+        [App.Levels.get(e.from), l].forEach(function (n) {
+          el('circle', { cx: n.x, cy: n.y + 3, r: (n.boss ? 21 : 17) + 6, fill: '#000' }, mask);
+        });
         g.setAttribute('mask', 'url(#' + id + ')');
       }
       // Chemin entravé : le niveau d'arrivée attend encore d'autres prérequis.
@@ -252,6 +278,7 @@
       // Dans l'image des niveaux (mapRaster.js), sauf celui qui s'ouvre à l'instant : lui
       // reste dessiné en SVG, son état va changer sous les yeux.
       if (!isFresh) drawNode(rasterNodes, l, st + (l.boss ? ' boss' : ''), st, false);
+      if (l.boss && st === 'done') drawBossFlag(l, !!(opts && opts.from === l.id && opts.unlocked));
       if (st === 'open' && !isFresh && cur && cur.id === l.id) {
         // Animation SVG (rayon, opacité) : la même en CSS (scale + transform-box) coûtait
         // une image sur deux pendant le glisser.
@@ -272,6 +299,9 @@
     if (tokenAt) {
       var tok = el('g', { class: 'map-token', transform: 'translate(' + tokenAt.x + ' ' + tokenAt.y + ')' }, layers.token);
       var inner = el('g', { transform: 'translate(0 -40)' }, tok);
+      // Rebond doux sur place : c'est ici qu'on joue.
+      el('animateTransform', { attributeName: 'transform', type: 'translate', values: '0 -40;0 -47;0 -40', dur: '1.5s',
+        repeatCount: 'indefinite', calcMode: 'spline', keyTimes: '0;0.5;1', keySplines: '0.4 0 0.6 1;0.4 0 0.6 1' }, inner);
       el('path', { d: 'M-5 11 L0 19 L5 11 Z', class: 'map-token-body' }, inner);
       el('circle', { r: 13, class: 'map-token-body' }, inner);
       var tx = el('text', { class: 'map-token-x' }, inner);
