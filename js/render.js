@@ -122,7 +122,7 @@
     // signChartFactorPowerLatex plus bas).
     function factorLatex(f) {
       if (f.exponent > 1) return signChartFactorPowerLatex(f);
-      return f.sqrt ? signChartFactorLatex(f) : '\\left(' + signChartFactorLatex(f) + '\\right)';
+      return f.sqrt || isBareSignChartFactor(f) ? signChartFactorLatex(f) : '\\left(' + signChartFactorLatex(f) + '\\right)';
     }
     var numFactors = signChart.factors.filter(function (f) { return f.kind === 'num'; });
     var denFactors = signChart.factors.filter(function (f) { return f.kind === 'den'; });
@@ -138,7 +138,15 @@
   // utilisée pour la racine du facteur), TOUJOURS entre \left(\right) pour que l'exposant
   // porte sur l'expression entière plutôt que sur son dernier terme seul.
   function signChartFactorPowerLatex(f) {
+    if (isBareSignChartFactor(f) && f.capturedSide[0].pow === 1) return signChartFactorLatex(f) + '^{' + f.exponent + '}';
     return '\\left(' + signChartFactorLatex(f) + '\\right)^{' + f.exponent + '}';
+  }
+
+  // Facteur réduit à un monôme unitaire ("x", "x²") : écrit sans parenthèses dans le
+  // produit, "x(x-1)(x+2)" et non "(x)(x-1)(x+2)".
+  function isBareSignChartFactor(f) {
+    var t = f.capturedSide.length === 1 ? f.capturedSide[0] : null;
+    return !f.sqrt && !!t && !Expr.isGroup(t) && t.coeff === 1 && t.pow > 0;
   }
 
   // LaTeX nu d'un facteur du tableau : son expression, ou "√(radicand)" pour une racine
