@@ -72,6 +72,19 @@ function ok(label, cond) {
   const nothing = await page.evaluate(() => window.App.Expr.simplifySelection(window.App.History.lastEquation().left, [0]));
   ok('no common factor: nothing to simplify', nothing === null);
 
+  // --- 5. Monômes : x²/x -> x, 5x/x -> 5, 6x/(4x³) -> 3/(2x²), tous "valide si x≠0" ---
+  r = await simplifyLeftQuotient('\\frac{x^2}{x}=0');
+  ok('x²/x -> x', JSON.stringify(r.step.equation.left) === JSON.stringify([T(1, 1)]) &&
+    JSON.stringify(r.step.opLeft.nonZero) === JSON.stringify([[T(1, 1)]]));
+  ok('label reads "valide si x≠0"', await page.evaluate(() => Array.from(document.querySelectorAll('annotation'))
+    .some((a) => a.textContent.indexOf('valide si') !== -1 && a.textContent.indexOf('simplifier') !== -1)));
+  r = await simplifyLeftQuotient('\\frac{5x}{x}=0');
+  ok('5x/x -> 5', JSON.stringify(r.step.equation.left) === JSON.stringify([T(5, 0)]));
+  r = await simplifyLeftQuotient('\\frac{6x}{4x^3}=1');
+  const m = r.step.equation.left[0];
+  ok('6x/(4x³) -> 3/(2x²)', m.isDivision && JSON.stringify(m.innerTerms) === JSON.stringify([T(3, 0)]) &&
+    JSON.stringify(m.factorTerms) === JSON.stringify([T(2, 2)]));
+
   ok('no page errors', errs.length === 0);
   if (errs.length) console.log(errs.join('\n'));
   await browser.close();

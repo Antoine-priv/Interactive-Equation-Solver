@@ -371,7 +371,7 @@
     return !!desc && desc.type === 'expr' && !!desc.ops && desc.ops.some(isZeroRiskOp);
   }
   // Aussi "Simplifier" une fraction de numérateur nul dont le dénominateur dépend de x
-  // (desc.nonZero, voir Expr.simplifySelection) : étiquette orange, "si (…)≠0".
+  // (desc.nonZero, voir Expr.simplifySelection) : étiquette orange, "valide si (…)≠0".
   function descHasZeroRisk(desc) {
     return exprHasZeroRisk(desc) || (!!desc && desc.type === 'simplify' && !!desc.nonZero);
   }
@@ -417,7 +417,7 @@
       var simplifiedLatex = desc.terms.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
       var nonZeroLatex = '';
       if (desc.nonZero) {
-        nonZeroLatex = '\\text{ si }' + desc.nonZero.map(function (den) {
+        nonZeroLatex = '\\text{ valide si }' + desc.nonZero.map(function (den) {
           var denLatex = den.map(function (t, i) { return Expr.nodeLatex(t, i === 0); }).join('');
           return (isSelfDelimitedOperand(den) ? denLatex : '\\left(' + denLatex + '\\right)') + '\\neq0';
         }).join('\\text{ et }');

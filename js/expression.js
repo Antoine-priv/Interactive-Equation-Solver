@@ -984,6 +984,8 @@
   // n'y a aucun facteur commun.
   function cancelCommonQuotientFactor(node) {
     if (!isExpressionQuotient(node)) return null;
+    var mono = cancelMonomialQuotient(node);
+    if (mono) return mono;
     var num = operandFactors(node.innerTerms), den = operandFactors(node.factorTerms);
     var numF = num.factors.map(cloneFactor), denF = den.factors.map(cloneFactor);
     var sign = node.sign * num.sign * den.sign;
@@ -1021,6 +1023,34 @@
       result = { sign: sign, factorTerms: denSide, innerTerms: numSide, isDivision: true };
     }
     return { node: result, cancelled: cancelled };
+  }
+
+  // Monôme sur monôme en x (ex. "x²/x", "5x/x", "6x/(4x³)") : les puissances de x se
+  // simplifient, sous réserve "x≠0" — "x²/x = 5x/x" devient "x = 5", la solution 0
+  // disparaît (le piège de P5). Le coefficient reste une fraction s'il ne tombe pas juste.
+  function cancelMonomialQuotient(node) {
+    var n = node.innerTerms, d = node.factorTerms;
+    if (n.length !== 1 || d.length !== 1 || isGroup(n[0]) || isGroup(d[0])) return null;
+    var a = n[0], b = d[0];
+    if (b.pow < 1 || a.pow < 1 || roundClean(a.coeff) === 0 || roundClean(b.coeff) === 0) return null;
+    var k = Math.min(a.pow, b.pow);
+    var num = { coeff: a.coeff, pow: a.pow - k };
+    var den = { coeff: b.coeff, pow: b.pow - k };
+    var sign = node.sign;
+    if (den.coeff < 0) { sign = -sign; den.coeff = -den.coeff; }
+    var result;
+    var r = toRational(num.coeff / den.coeff);
+    if (den.pow === 0 && r && r[1] === 1) {
+      result = { coeff: sign * r[0], pow: num.pow };
+    } else if (den.pow === 0 && r) {
+      result = { sign: 1, factor: { coeff: r[1], pow: 0 }, innerTerms: [{ coeff: sign * r[0], pow: num.pow }], isDivision: true };
+    } else if (den.pow === 0) {
+      result = { coeff: roundClean(sign * num.coeff / den.coeff), pow: num.pow };
+    } else {
+      if (r) { num.coeff = r[0]; den.coeff = r[1]; }
+      result = { sign: sign, factorTerms: [den], innerTerms: [num], isDivision: true };
+    }
+    return { node: result, cancelled: [[{ coeff: 1, pow: 1 }]] };
   }
 
   function isZeroNumeratorQuotient(node) {
