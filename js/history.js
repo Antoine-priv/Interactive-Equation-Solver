@@ -658,7 +658,20 @@
     function clickNestedFactor(innerIndex, branch) {
       if (!pending.drilled) return;
       var key = 'nestedfactor:' + pending.drilled.side + ':' + pending.drilled.path.join(',') + ':' + innerIndex + ':' + branch;
-      if (consumeDoubleClick(key)) drillIntoNestedProductBranch(innerIndex, branch);
+      if (consumeDoubleClick(key)) {
+        var before = pending.drilled;
+        drillIntoNestedProductBranch(innerIndex, branch);
+        if (pending.drilled !== before) return;
+      }
+      // Clic simple : un produit niché est entièrement couvert par ses facteurs, c'est
+      // donc le seul moyen de le sélectionner EN ENTIER (ex. pour le mettre en facteur
+      // commun avec un autre produit du numérateur).
+      if (pending.opType !== null && pending.opType !== 'factor') return;
+      var i = pending.selectedInner.indexOf(innerIndex);
+      if (i === -1) pending.selectedInner.push(innerIndex);
+      else pending.selectedInner.splice(i, 1);
+      pending.error = null;
+      notify();
     }
 
     // Ressort d'UN niveau (clic droit n'importe où sur la page, ou clic gauche sur la
