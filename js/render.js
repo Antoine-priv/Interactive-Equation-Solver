@@ -2077,9 +2077,7 @@
   // d'aperçu à `container` (et à `rowsData` pour une ligne unique), renvoie { cols, label }
   // quand une fourche d'aperçu reste à tracer (voir drawOpts.fork), sinon null. `eqGlyph` :
   // glyphe d'affichage de la colonne (ex. "≠" d'un dénominateur), voir createRow.
-  // `nested` : aperçu dans une colonne, mêmes espacements que la vraie scission
-  // imbriquée (.produit-nul-split-nested), sinon la ligne validée ne tombe pas au même endroit.
-  function appendOpPreview(engine, container, rowsData, eqGlyph, nested) {
+  function appendOpPreview(engine, container, rowsData, eqGlyph) {
     var previewEquations = null;
     var previewLabel = null;
     // "sqrt-family" (envelopper à l'étape 1, simplifier à l'étape 2) : un aperçu à UNE
@@ -2136,7 +2134,7 @@
       // éphémère et doit juste apparaître centré là où il est, sans logique de
       // défilement dédiée) : mise en page simple et indépendante, voir style.css.
       var previewWrap = document.createElement('div');
-      previewWrap.className = 'produit-nul-preview preview-pop-in' + (nested ? ' produit-nul-preview-nested' : '');
+      previewWrap.className = 'produit-nul-preview preview-pop-in';
       container.appendChild(previewWrap);
       previewCols = previewEquations.map(function (eqPrev) {
         var col = document.createElement('div');
@@ -2228,7 +2226,11 @@
         // Même aperçu que la chaîne principale (voir appendOpPreview), pour la seule
         // colonne focalisée — ajouté AVANT le marquage "flush-bottom" ci-dessous.
         var leafPreview = opts.focused !== false
-          ? appendOpPreview(engine, container, leafRes.rowsData, opts.eqGlyph, true) : null;
+          ? appendOpPreview(engine, container, leafRes.rowsData, opts.eqGlyph) : null;
+        // Aperçu en colonnes dans une colonne : elle s'élargit dès maintenant comme après
+        // validation (.produit-nul-branch-resplit), sinon tout se décale en validant.
+        var leafCol = leafPreview && container.closest ? container.closest('.produit-nul-branch') : null;
+        if (leafCol) leafCol.classList.add('produit-nul-branch-previewing');
         // Neutralise le margin-bottom (46px, voir .eq-row) de la DERNIÈRE ligne : sans
         // ça, il s'ajoute au padding bas de .produit-nul-branch et l'espace en bas de la
         // colonne devient nettement plus grand qu'en haut. Fait en JS (pas en CSS

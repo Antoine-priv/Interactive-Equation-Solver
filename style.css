@@ -570,28 +570,21 @@ button {
    fixe de .produit-nul-branch (pensée pour UNE équation) ne suffit alors plus à héberger
    plusieurs sous-colonnes côte à côte. Même classe ".produit-nul-branch-resplit" que
    ci-dessus, pour la même raison (pas de ":has()", voir le commentaire juste au-dessus). */
-.produit-nul-branch.produit-nul-branch-resplit {
+.produit-nul-branch.produit-nul-branch-resplit,
+.produit-nul-branch.produit-nul-branch-previewing {
   max-width: none;
 }
 
 /* Scission imbriquée (profondeur ≥ 2) : mise en page simple et indépendante de
    .produit-nul-split au tout premier niveau (pas de padding de 50vw ni de calcul de
-   largeur/défilement dédié en JS, voir renderAll — l'espace disponible est déjà celui,
-   réduit, de la colonne parente ; un débordement éventuel est pris en charge par le
-   défilement horizontal de #historyScroll, comme pour n'importe quel contenu large). */
+   largeur/défilement dédié en JS, voir renderAll — un débordement éventuel est pris en
+   charge par le défilement horizontal de #historyScroll, comme pour n'importe quel
+   contenu large). Mêmes espacements et mêmes colonnes qu'au premier niveau (hérités de
+   .produit-nul-split/.produit-nul-branch) : un Produit nul a le même aspect dans une
+   colonne ou non, et les lignes validées tombent là où était l'aperçu (.produit-nul-preview). */
 .produit-nul-split-nested {
   padding-left: 0;
   padding-right: 0;
-  gap: 40px;
-  margin: 36px 0 6px;
-}
-
-/* Sous-colonnes plus étroites que celles du premier niveau : la colonne parente qui les
-   héberge est elle-même déjà resserrée. */
-.produit-nul-split-nested .produit-nul-branch {
-  min-width: 220px;
-  max-width: 420px;
-  padding: 16px 28px;
 }
 
 /* "Condition d'existence" (domaine de définition, voir renderDomainSplit/
@@ -982,18 +975,6 @@ button {
   margin: 150px 0 46px;
   opacity: 0.6;
   pointer-events: none;
-}
-
-/* Aperçu dans une colonne : mêmes espacements que .produit-nul-split-nested (la vraie
-   scission imbriquée), pour que la ligne validée apparaisse là où était l'aperçu. */
-.produit-nul-preview.produit-nul-preview-nested {
-  gap: 40px;
-  margin: 36px 0 6px;
-}
-.produit-nul-preview-nested .produit-nul-branch {
-  min-width: 220px;
-  max-width: 420px;
-  padding: 16px 28px;
 }
 
 .produit-nul-chain {
