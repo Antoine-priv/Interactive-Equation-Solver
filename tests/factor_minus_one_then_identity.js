@@ -59,12 +59,14 @@ function ok(label, cond) {
   const flat = JSON.stringify(eq.left);
   ok('result contains (x-7)²', flat.indexOf('"exponent":2') !== -1 &&
     flat.indexOf('{"coeff":1,"pow":1},{"coeff":-7,"pow":0}') !== -1);
+  ok('written -(x-7)², no parentheses inside the parentheses', flat ===
+    '[{"sign":-1,"factors":[{"terms":[{"coeff":1,"pow":1},{"coeff":-7,"pow":0}],"exponent":2}]}]');
   // --- 3. Produit nul directement sur -((x-7)²) ---
   await page.evaluate(() => { var p = window.App.History.getPending(); if (p.drilled) window.App.History.cancelOp(); });
   await page.click(left + ' [data-index="0"]');
   const enabled = await page.evaluate(() => Array.from(document.querySelectorAll('#opButtons button[data-op]'))
     .filter((b) => !b.disabled && b.offsetParent !== null).map((b) => b.getAttribute('data-op')));
-  ok('Produit nul available on -((x-7)²)', enabled.indexOf('produitnul') !== -1);
+  ok('Produit nul available on -(x-7)²', enabled.indexOf('produitnul') !== -1);
   await page.click('button[data-op="produitnul"]');
   await page.waitForTimeout(200);
   const branches = await page.evaluate(() => {

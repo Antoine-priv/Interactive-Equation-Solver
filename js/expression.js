@@ -1847,6 +1847,15 @@
     }
     function recur(node, restPath) {
       if (restPath.length === 0) {
+        // Intérieur devenu un produit (ex. "-(49+x²-14x)" factorisé en "-((x-7)²)") : le
+        // groupe se fond dans le produit, "-(x-7)²", pas de parenthèses dans les parenthèses.
+        if (!node.isDivision && !node.factorTerms && node.factor.pow === 0 &&
+            newInnerTerms.length === 1 && isProductGroup(newInnerTerms[0])) {
+          var pg = newInnerTerms[0], k = node.factor.coeff;
+          var merged = pg.factors.map(cloneFactor);
+          if (k !== 1) merged.unshift({ terms: [{ coeff: k, pow: 0 }], exponent: 1 });
+          return { sign: node.sign * pg.sign, factors: merged };
+        }
         return withOuterFields(node, newInnerTerms);
       }
       var newInner = node.innerTerms.map(function (t, i) {
