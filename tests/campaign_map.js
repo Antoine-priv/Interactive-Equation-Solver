@@ -138,6 +138,17 @@ function ok(label, cond) {
     !document.getElementById('mapOverlay').hidden && document.getElementById('mapOverlay').classList.contains('map-opening')));
 
   await page.screenshot({ path: SCRATCH + '/campaign_map_buttons.png' });
+  // Bouton de fermeture en haut à droite : même effet qu'Échap.
+  const closeBox = await page.evaluate(() => {
+    var r = document.querySelector('[data-map-close]').getBoundingClientRect();
+    return { right: window.innerWidth - r.right, top: r.top, w: r.width };
+  });
+  ok('close button sits in the top-right corner', closeBox.w > 0 && closeBox.right < 40 && closeBox.top < 40);
+  await page.click('[data-map-close]');
+  ok('the close button closes the map', await page.evaluate(() => !window.App.Map.isOpen()));
+  await page.waitForTimeout(350);
+  await page.click('#mapBtn');
+  await page.waitForTimeout(400);
   // Un nœud verrouillé n'ouvre pas de fiche : son cadenas tremble, la fiche ouverte se ferme.
   await page.evaluate(() => window.App.Map.select('t1'));
   await page.waitForTimeout(250);

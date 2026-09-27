@@ -702,6 +702,8 @@
       App.Progress.setLastScreen('free');
       if (options && options.onFree) options.onFree();
     });
+    // Même effet qu'Échap : retour à l'équation en cours.
+    overlay.querySelector('[data-map-close]').addEventListener('click', close);
     overlay.querySelector('[data-map-daily]').addEventListener('click', function () {
       var top = App.Levels.LEVELS.filter(function (l) { return l.daily; })[0];
       select(top.id);

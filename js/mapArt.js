@@ -984,7 +984,7 @@
 
   // Bateau qui fait lentement le tour de l'île du Port (animations SVG, cadencées sur
   // l'horloge du document). Il se retourne quand il change de sens horizontal.
-  var BOAT_LAP_S = 140, BOAT_OFFSET = 80;
+  var BOAT_LAP_S = 280, BOAT_OFFSET = 80;
   function buildBoatLoop(parent) {
     var base = ISLANDS[0].pts, cx = 0, cy = 0;
     base.forEach(function (p) { cx += p[0] / base.length; cy += p[1] / base.length; });
