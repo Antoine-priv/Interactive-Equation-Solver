@@ -88,6 +88,17 @@ function ok(label, cond) {
   ok('no "1(" shown in the rendered row', m1Dom.indexOf('1(') === -1);
   await page.screenshot({ path: `${SCRATCH}/mult_paren_minus_one.png` });
 
+  // Membre "1" : "x-2", pas "(x-2)" (niveau M3 de la campagne).
+  await page.evaluate(() => {
+    window.App.History.startNewEquation(window.App.Parser.parseLatexEquation('\\frac{3}{x-2}=1'));
+    window.App.History.selectOp('expr');
+    window.App.History.setExprChainText('\\times(x-2)');
+    window.App.History.confirm();
+  });
+  await page.waitForTimeout(150);
+  const oneRight = await page.evaluate(() => window.App.History.getSteps().slice(-1)[0].equation.right);
+  ok('1 × (x-2) gives the plain terms x-2', JSON.stringify(oneRight) === JSON.stringify([{ coeff: 1, pow: 1 }, { coeff: -2, pow: 0 }]));
+
   console.log('--- erreurs JS ---');
   console.log(errs.join('\n') || '(aucune)');
   if (errs.length) process.exitCode = 1;

@@ -677,11 +677,13 @@
     // Facteur de tête réduit à 1 (ex. membre "-1" multiplié par "(x-1)") : on l'omet, pour
     // afficher "-(x-1)" plutôt que "-1(x-1)". S'il ne reste qu'UN facteur d'exposant 1, un
     // ProductGroup n'est plus permis (voir expandProductFactorSubset) : FactorGroup de
-    // facteur 1, dont le "1" n'est jamais affiché (voir factorPrefixLatex).
+    // facteur 1, dont le "1" n'est jamais affiché (voir factorPrefixLatex) — ou, de signe +,
+    // directement ses termes ("1" multiplié par "(x-2)" donne "x-2", pas "(x-2)").
     if (factors.length > 1 && first.exponent === 1 && first.terms.length === 1 && !isGroup(first.terms[0]) &&
       first.terms[0].coeff === 1 && first.terms[0].pow === 0) {
       factors = factors.slice(1);
       if (factors.length === 1 && factors[0].exponent === 1) {
+        if (sign > 0) return cloneSide(factors[0].terms);
         return [{ sign: sign, factor: { coeff: 1, pow: 0 }, innerTerms: cloneSide(factors[0].terms) }];
       }
     }

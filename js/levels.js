@@ -199,7 +199,7 @@
       kind: 'domain', domain: I(-INF, false, 1.5, true), par: 3, statement: 'Trouve l\'ensemble de définition de g(x) = √(3 − 2x).',
       learn: 'Ce qui est sous la racine doit être positif',
       hints: ['On ne prend la racine que d\'un nombre positif ou nul.', 'Double-clique la racine, puis Condition d\'existence.'] },
-    { id: 'm3', zone: 'marais', x: 1320, y: 140, req: ['m2'], title: 'Dénominateur en x', latex: '\\frac{3}{x-2}=1', sol: P(5), par: 7,
+    { id: 'm3', zone: 'marais', x: 1320, y: 140, req: ['m2'], title: 'Dénominateur en x', latex: '\\frac{3}{x-2}=1', sol: P(5), par: 6,
       learn: 'Poser x ≠ 2, puis résoudre',
       hints: ['Commence par la condition d\'existence.', 'Puis multiplie les deux côtés par (x−2).'] },
     { id: 'm4', zone: 'marais', x: 1370, y: 210, req: ['m3'], title: 'Quotient', latex: '\\frac{x+1}{x-3}=2', sol: P(7), par: 7,
