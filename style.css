@@ -2676,7 +2676,6 @@ button {
 .map-card-zone { font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
 .map-card-title { font-size: 18px; font-weight: 700; }
 .map-card-eq { background: var(--accent-soft); border-radius: 12px; padding: 12px; text-align: center; font-size: 17px; display: flex; flex-direction: column; gap: 8px; overflow-x: auto; }
-.map-card-statement { color: var(--text-muted); font-size: 12.5px; }
 .map-card-meta { display: flex; gap: 12px; flex-wrap: wrap; color: var(--text-muted); font-size: 12.5px; }
 /* « Jouer » n'apparaît que sur une fiche fixée (clic sur le nœud) ou au survol de la
    fiche : elle s'allonge vers le bas pour le montrer (la marge négative annule le `gap`

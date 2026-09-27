@@ -363,7 +363,6 @@
         try { window.katex.render(lx, one, { throwOnError: false }); } catch (e) { one.textContent = lx; }
       });
     }
-    if (l.statement) div('map-card-statement', l.statement);
     if (l.daily && P.dailyDoneToday()) {
       var meta = div('map-card-meta');
       var done = document.createElement('span');
