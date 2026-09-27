@@ -149,8 +149,8 @@
     { id: 'p5', zone: 'mont', x: 1000, y: 350, req: ['p4'], title: 'Tout d\'un côté', latex: 'x^2=5x', sol: P(0, 5), par: 4,
       learn: 'Ramener à 0 avant de factoriser', trap: 'Diviser par x fait perdre la solution 0.',
       hints: ['Un produit nul demande un « = 0 ».', 'Retire 5x des deux côtés, puis factorise par x.'] },
-    { id: 'pB', zone: 'mont', x: 1060, y: 280, req: ['p5'], title: 'Épreuve de la Montagne', latex: 'x^3-4x=0', sol: P(-2, 0, 2), par: 6,
-      boss: true, badge: 'alpiniste', feat: ['identities'], learn: 'Degré 3 : factoriser deux fois',
+    { id: 'pB', zone: 'mont', x: 1060, y: 280, req: ['p5', 'g3'], title: 'Épreuve de la Montagne', latex: 'x^3-4x=0', sol: P(-2, 0, 2), par: 6,
+      boss: true, badge: 'alpiniste', learn: 'Degré 3 : factoriser deux fois',
       hints: ['Commence par le facteur commun x.', 'x(x²−4) : x²−4 est une différence de carrés.'] },
 
     // ---- La Grotte ----

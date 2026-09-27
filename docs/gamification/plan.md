@@ -112,7 +112,7 @@
 | p3 | Mettre en facteur | `x² + 3x = 0` | Factoriser par x | 3 | p2 | Découvre : Bouton « Factoriser » |
 | p4 | Facteur commun | `(x + 1)(2x − 3) + (x + 1)(x + 4) = 0` | Factoriser par une parenthèse | 5 | p3 |  |
 | p5 | Tout d'un côté | `x² = 5x` | Ramener à 0 avant de factoriser | 4 | p4 | Piège : Diviser par x fait perdre la solution 0. |
-| pB | Épreuve de la Montagne | `x³ − 4x = 0` | Degré 3 : factoriser deux fois | 5 | p5 | Épreuve · Badge « Alpiniste » |
+| pB | Épreuve de la Montagne | `x³ − 4x = 0` | Degré 3 : factoriser deux fois | 5 | p5, g3 | Épreuve · Badge « Alpiniste » |
 
 ### La Grotte — Identités remarquables
 
