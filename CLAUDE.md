@@ -64,8 +64,10 @@ Equations are `{ left: Side, right: Side }`. A `Side` is `Array<Node>`. A `Node`
   radicand still folds to a plain number, see `foldSqrt`/parser.js): alone on a side, as a
   whole numerator/denominator, or as a ProductGroup factor whose `terms` is that single
   SqrtGroup (`(x-6)\sqrt{x+2}`, see `readChainFactor`). Such a √ factor gets its own
-  "Condition d'existence" (radicand `≥ 0`, or `> 0` in a denominator — a denominator
-  containing a √ is split into one column per factor, see `existenceConditionsFor`) and
+  "Condition d'existence" (radicand `≥ 0`; a denominator always gives `≠ 0`, a √ one
+  included — `√x ≠ 0`, one column per factor when it contains a √ — while the √ of a
+  drilled denominator, double-clicked or drilled as a factor, gives its own radicand
+  `≥ 0`, see `existenceConditionsFor`) and
   its own "Tableau de signes" row (`sqrt:true`, `capturedSide` = radicand: `0` at its root,
   `+` above, `'undef'` below — hatched interval cells, see `sqrtUndefinedAt`), linear
   radicands only. "Racine carrée" is two steps with two different
