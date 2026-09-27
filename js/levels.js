@@ -250,11 +250,10 @@
       hints: ['x² − 4 est une différence de carrés.', 'Condition d\'existence, factorise, puis tableau de signes.'] },
 
     // ---- L'Observatoire ----
-    { id: 'o1', zone: 'obs', x: 1465, y: 150, req: ['mB', 'sB'], title: 'h(x) = 0',
+    { id: 'o1', zone: 'obs', x: 1465, y: 150, req: ['mB', 'sB'], title: 'Tout factoriser',
       latex: '\\frac{9x^2-4+(3-2x)(3x-2)}{x^2+2x+1-(2x-3)^2}=0', sol: P(-5), par: 12, requireDomain: true,
-      statement: 'h(x) = f(x)/g(x) avec f(x) = 9x² − 4 + (3 − 2x)(3x − 2) et g(x) = x² + 2x + 1 − (2x − 3)².',
-      learn: 'Factoriser f et g, poser le domaine, résoudre', trap: '2/3 annule le numérateur mais est interdite.',
-      hints: ['Factorise le numérateur et le dénominateur.', 'f(x) = (3x − 2)(x + 5) et g(x) = (4 − x)(3x − 2).'] },
+      learn: 'Factoriser le numérateur et le dénominateur, poser le domaine, résoudre', trap: '2/3 annule le numérateur mais est interdite.',
+      hints: ['Factorise le numérateur et le dénominateur.', 'Numérateur : (3x − 2)(x + 5). Dénominateur : (4 − x)(3x − 2).'] },
     { id: 'o2', zone: 'obs', x: 1550, y: 200, req: ['o1'], title: 'h(x) = 3', latex: '\\frac{x+5}{4-x}=3', sol: P(1.75), par: 8,
       statement: 'h(x) = (x + 5)/(4 − x), avec x ≠ 2/3.', learn: 'Résoudre avec la forme simplifiée',
       hints: ['Condition d\'existence sur 4 − x.', 'Multiplie par (4 − x) : x + 5 = 3(4 − x).'] },
