@@ -238,8 +238,10 @@ export/import from the settings. `App.Map` is the full-screen SVG map (`#mapOver
 interaction: pan/zoom, cards, unlock animation); `App.MapArt` draws it (flat style, top-down
 ground, 3/4-view decor): the Port island and the main island, regions computed on a grid
 from the levels' `x`/`y` (plus `ANCHORS`) with noisy borders, seeded decor kept off paths,
-path kinds per region (`PATH_KIND`/`EDGE_VIA` to route around), barriers on paths into a
-level still waiting on another prerequisite, clouds over closed regions. Colors are
+path kinds per region (`PATH_KIND`/`EDGE_VIA` to route around), gates on paths into a
+level still waiting on another prerequisite (placed outside the clouds of closed regions,
+`underClouds`; they swing open then vanish on unlock), clouds over closed regions whose
+sign panel stays hidden until discovered. Colors are
 `--m-*` variables on `#mapOverlay` in style.css (night palette in both dark blocks); the
 drawing rules themselves (`.m-*`, `.map-node*`, `.map-sign*`, `.map-obstacle*`…) live in
 `MAP_CSS` in mapArt.js, injected into the page AND embedded in the raster images (a

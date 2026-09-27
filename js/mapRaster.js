@@ -144,8 +144,15 @@
     });
   }
 
-  function renderLabels() {
-    setSource('labels', serialize(App.MapArt.buildLabelsSvg()), false, composeAbove);
+  // Panneaux des régions découvertes `ids` (null : redessine les derniers).
+  function setLabels(ids) {
+    ids = ids || keys.labelIds || [];
+    var key = ids.join(',');
+    if (key === keys.labels) return;
+    keys.labels = key;
+    keys.labelIds = ids;
+    setSource('labels', serialize(App.MapArt.buildLabelsSvg(ids)), false, composeAbove);
+    refreshDetail();
   }
 
   // Chemins : [{ edge, state }] (sauf celui qui se trace à l'instant, resté en SVG).
@@ -222,7 +229,7 @@
     generation++;
     styleText = null;
     detailFor = null;
-    keys = {};
+    keys = { labelIds: keys.labelIds };
     hide(shown.detail);
     hide(shown.detailTop);
   }
@@ -230,7 +237,7 @@
   App.MapRaster = {
     init: init,
     renderGround: renderGround,
-    renderLabels: renderLabels,
+    setLabels: setLabels,
     setNodes: setNodes,
     setEdges: setEdges,
     setClouds: setClouds,

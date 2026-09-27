@@ -212,8 +212,11 @@
     '.map-zone-name { font: 700 13px "Inter", sans-serif; fill: var(--text); }',
     '.map-zone-sub { font: 500 10px "Inter", sans-serif; fill: var(--text-muted); }',
     '.map-obstacle { cursor: help; }',
-    '.map-obstacle-inner { transition: transform 0.5s ease, opacity 0.5s ease; transform-box: fill-box; transform-origin: center; }',
-    '.map-obstacle.clearing .map-obstacle-inner { transform: translate(0, 10px) scale(0.6); opacity: 0; }',
+    '.m-gate-l, .m-gate-r { transform-box: fill-box; transition: transform 1.1s cubic-bezier(0.3, 0.9, 0.35, 1.08); }',
+    '.m-gate-l { transform-origin: left center; } .m-gate-r { transform-origin: right center; }',
+    '.map-obstacle.clearing .m-gate-l { transform: skewY(34deg) scaleX(0.42); }',
+    '.map-obstacle.clearing .m-gate-r { transform: skewY(-34deg) scaleX(0.42); }',
+    '.map-obstacle.clearing { animation: map-gate-away 0.6s ease 1.5s forwards; }',
     '.map-node { cursor: pointer; outline: none; }',
     '.map-node-shadow { fill: var(--m-shadow); }',
     '.map-node-body { stroke-width: 3; transition: fill 0.3s ease, stroke 0.3s ease; }',
@@ -1017,12 +1020,14 @@
     });
   }
 
-  function buildLabels(parent, part) {
-    App.Levels.ZONES.forEach(function (z) { drawLabel(parent, z, part); });
+  // Panneaux des régions `ids` seulement (une région pas encore découverte n'affiche pas
+  // son nom).
+  function buildLabels(parent, part, ids) {
+    App.Levels.ZONES.forEach(function (z) { if (ids.indexOf(z.id) !== -1) drawLabel(parent, z, part); });
   }
-  function buildLabelsSvg() {
+  function buildLabelsSvg(ids) {
     var root = detachedSvg();
-    buildLabels(root, 'box');
+    buildLabels(root, 'box', ids);
     return root;
   }
 
@@ -1051,28 +1056,36 @@
     return g;
   }
 
-  // Obstacle sur un chemin vers un niveau qui attend encore d'autres prérequis : placé
-  // près de l'arrivée, orienté en travers du chemin.
-  function drawObstacle(parent, e, title) {
-    var line = e.line, n = line.length;
-    var at = line[Math.floor(n * 0.72)];
-    var g = el('g', { class: 'map-obstacle', 'data-obstacle': e.key, transform: 'translate(' + f1(at[0]) + ' ' + f1(at[1]) + ')' }, parent);
-    var t = el('title', {}, g);
-    t.textContent = title;
-    var inner = el('g', { class: 'map-obstacle-inner' }, g);
-    // Barrière rayée (de face, comme les autres décors), avec un rocher ou un tronc selon
-    // le terrain.
-    var bar = el('g', { transform: 'translate(0 4)' }, inner);
-    if (e.kind === 'stone') {
-      el('path', { d: 'M13 6Q12 -4 19 -6Q27 -5 26 6Z', class: 'm-rock-dk' }, bar);
-      el('path', { d: 'M13 6Q12 -4 19 -6Q18 0 19 6Z', class: 'm-rock' }, bar);
-    } else if (e.kind === 'plank' || e.kind === 'trail') {
-      el('rect', { x: -26, y: 1, width: 14, height: 6, rx: 3, class: 'm-wood-dk' }, bar);
+  // Portail sur un chemin vers un niveau à plusieurs prérequis, fermé tant qu'il en attend
+  // d'autres (`title` dit lesquels). Deux battants rayés entre deux poteaux, vus de face ;
+  // à l'ouverture (classe `clearing`, voir playUnlock dans map.js), ils pivotent vers nous
+  // autour de leur poteau (aplatis et inclinés, vue de 3/4), puis le portail s'efface.
+  // Placé près de l'arrivée, mais hors des nuages des régions `fogged` : on doit voir que
+  // la route est barrée avant la zone encore cachée.
+  function drawObstacle(parent, e, title, fogged) {
+    var line = e.line, n = line.length, at = null;
+    for (var k = Math.floor(n * 0.72); k >= Math.floor(n * 0.12) && !at; k--) {
+      if (!fogged || !fogged.length || !underClouds(fogged, line[k][0], line[k][1], 30)) at = line[k];
     }
-    el('ellipse', { cx: 0, cy: 6, rx: 15, ry: 3, class: 'm-shadow' }, bar);
-    el('path', { d: 'M-12 -8v14M12 -8v14', class: 'm-post' }, bar);
-    el('rect', { x: -16, y: -9, width: 32, height: 7, rx: 2, class: 'm-barrier' }, bar);
-    el('path', { d: 'M-10 -9l-4 7M-2 -9l-4 7M6 -9l-4 7M14 -9l-4 7', class: 'm-barrier-stripe' }, bar);
+    at = at || line[Math.floor(n * 0.72)];
+    var g = el('g', { class: 'map-obstacle', 'data-obstacle': e.key,
+      transform: 'translate(' + f1(at[0]) + ' ' + f1(at[1]) + ')' }, parent);
+    if (title) el('title', {}, g).textContent = title;
+    var gate = el('g', { class: 'map-obstacle-inner', transform: 'translate(0 4)' }, g);
+    // Un rocher ou un tronc à côté, selon le terrain.
+    if (e.kind === 'stone') {
+      el('path', { d: 'M13 6Q12 -4 19 -6Q27 -5 26 6Z', class: 'm-rock-dk' }, gate);
+      el('path', { d: 'M13 6Q12 -4 19 -6Q18 0 19 6Z', class: 'm-rock' }, gate);
+    } else if (e.kind === 'plank' || e.kind === 'trail') {
+      el('rect', { x: -26, y: 1, width: 14, height: 6, rx: 3, class: 'm-wood-dk' }, gate);
+    }
+    el('ellipse', { cx: 0, cy: 6, rx: 15, ry: 3, class: 'm-shadow' }, gate);
+    [['l', -12], ['r', 0]].forEach(function (leaf) {
+      var lg = el('g', { class: 'm-gate-' + leaf[0] }, gate);
+      el('rect', { x: leaf[1], y: -9, width: 12, height: 7, rx: 1.5, class: 'm-barrier' }, lg);
+      el('path', { d: 'M' + (leaf[1] + 5) + ' -9l-3.5 7M' + (leaf[1] + 11) + ' -9l-3.5 7', class: 'm-barrier-stripe' }, lg);
+    });
+    el('path', { d: 'M-12 -11v17M12 -11v17', class: 'm-post' }, gate);
     return g;
   }
 
@@ -1100,6 +1113,19 @@
     cloudCache[zoneId] = { pts: pts, cx: cx, cy: cy };
     return cloudCache[zoneId];
   }
+  // Le point (x, y) est-il sous les nuages des régions `zoneIds` ? `margin` : marge autour
+  // (taille de ce qu'on veut y voir). Un nuage de rayon r couvre à peu près une ellipse
+  // de 1,15 r × 0,7 r centrée un peu au-dessus de sa base (voir cloudPath).
+  function underClouds(zoneIds, x, y, margin) {
+    return zoneIds.some(function (id) {
+      return cloudsFor(id).pts.some(function (p) {
+        var rx = p[2] * 1.15 + margin, ry = p[2] * 0.7 + margin;
+        var dx = (x - p[0]) / rx, dy = (y - (p[1] - p[2] * 0.25)) / ry;
+        return dx * dx + dy * dy < 1;
+      });
+    });
+  }
+
   // Tracé d'un nuage (cercles + base arrondie), en un seul chemin : il y en a des centaines.
   function cloudPath(r, v) {
     var puffs = [[-0.75, -0.05, 0.5], [-0.25, -0.38, 0.62 + v * 0.1], [0.35, -0.25, 0.55], [0.8, 0, 0.42]];
@@ -1294,6 +1320,7 @@
     buildGround: buildGround,
     buildDecor: buildDecor,
     buildLabels: buildLabels,
+    underClouds: underClouds,
     buildLive: buildLive,
     drawEdge: drawEdge,
     drawObstacle: drawObstacle,

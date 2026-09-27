@@ -155,10 +155,7 @@
     });
     layers.labels = el('g', { class: 'map-layer-labels' }, topSvg);
     App.MapArt.buildLive(layers.live, layers.sky);
-    // Panneaux : en image, sauf leur symbole (police KaTeX, inaccessible à une image).
-    App.MapArt.buildLabels(layers.labels, 'mark');
     App.MapRaster.renderGround();
-    App.MapRaster.renderLabels();
   }
 
   // Hauteur dont le drapeau d'une épreuve est descendu tant qu'elle n'est pas réussie.
@@ -215,12 +212,16 @@
     var P = App.Progress;
     var fresh = (opts && opts.unlocked) || [];
     if (!layers) buildLayers();
-    ['edges', 'obstacles', 'nodes', 'flags', 'token', 'clouds', 'pulse'].forEach(function (k) { layers[k].innerHTML = ''; });
+    ['edges', 'obstacles', 'nodes', 'flags', 'token', 'clouds', 'pulse', 'labels'].forEach(function (k) { layers[k].innerHTML = ''; });
 
     // Nuages : une région encore fermée en est couverte (image, voir mapRaster.js) ; celle
     // qui s'ouvre à l'instant garde des nuages SVG, qui s'écartent (classe `revealed`, voir
     // playUnlock).
     rasterClouds = [];
+    // Panneaux : seulement les régions découvertes, en image sauf leur symbole (police
+    // KaTeX, inaccessible à une image) ; celui d'une région qui s'ouvre à l'instant est en
+    // SVG, invisible jusqu'à ce que ses nuages s'écartent (voir playUnlock).
+    var known = [], foggedIds = [];
     App.Levels.ZONES.forEach(function (z) {
       var freshZone = App.Levels.LEVELS.some(function (l) { return l.zone === z.id && fresh.indexOf(l.id) !== -1; }) &&
         !App.Levels.LEVELS.some(function (l) { return l.zone === z.id && fresh.indexOf(l.id) === -1 && P.isAvailable(l); });
@@ -228,8 +229,16 @@
       var g = el('g', { class: 'map-zone map-zone-' + z.id + (fogged ? ' fogged' : ''), 'data-zone': z.id }, layers.clouds);
       if (freshZone) App.MapArt.drawClouds(g, z.id);
       else if (fogged) rasterClouds.push(z.id);
+      if (fogged) foggedIds.push(z.id);
+      if (!fogged) known.push(z.id);
+      else if (freshZone) {
+        App.MapArt.buildLabels(layers.labels, 'both', [z.id]);
+        layers.labels.lastChild.classList.add('map-sign-fresh');
+      }
     });
     App.MapRaster.setClouds(rasterClouds);
+    App.MapRaster.setLabels(known);
+    App.MapArt.buildLabels(layers.labels, 'mark', known);
 
     // Chemins : en image (mapRaster.js), sauf celui qui se trace à l'instant.
     rasterEdges = [];
@@ -254,14 +263,17 @@
         });
         g.setAttribute('mask', 'url(#' + id + ')');
       }
-      // Chemin entravé : le niveau d'arrivée attend encore d'autres prérequis.
-      var waiting = l.req.filter(function (r) { return !P.isSolved(r); });
-      if (l.req.length > 1 && (waiting.length || fresh.indexOf(l.id) !== -1) && !P.isSolved(l.id)) {
+      // Portail d'un niveau à plusieurs prérequis, tant qu'il en attend d'autres ; celui
+      // qui s'ouvre à l'instant reste en SVG pour s'animer, puis s'efface.
+      if (l.req.length > 1) {
+        var waiting = l.req.filter(function (r) { return !P.isSolved(r); });
         var names = waiting.map(function (r) { return App.Levels.code(App.Levels.get(r)); });
-        var title = names.length ? 'Réussis aussi ' + names.join(' et ') + ' pour passer' : 'Passage libre';
-        var ob = App.MapArt.drawObstacle(layers.obstacles, e, title);
-        if (fresh.indexOf(l.id) !== -1) ob.classList.add('will-clear');
-        else App.MapArt.drawObstacle(rasterNodes, e, title);
+        if (fresh.indexOf(l.id) !== -1) App.MapArt.drawObstacle(layers.obstacles, e, '', foggedIds).classList.add('will-clear');
+        else if (waiting.length) {
+          var title = 'Réussis aussi ' + names.join(' et ') + ' pour passer';
+          App.MapArt.drawObstacle(layers.obstacles, e, title, foggedIds);
+          App.MapArt.drawObstacle(rasterNodes, e, title, foggedIds);
+        }
       }
     });
     App.MapRaster.setEdges(rasterEdges);
@@ -345,6 +357,8 @@
         if (zone && zoneOpen(zone)) {
           z.classList.remove('fogged');
           z.classList.add('revealed');
+          var sign = world.querySelector('.map-sign-fresh[data-sign="' + zone.id + '"]');
+          if (sign) sign.classList.add('shown');
           showBanner('Nouvelle région', zone.name + ' · ' + zone.sub);
         }
       });
@@ -695,7 +709,7 @@
       App.MapRaster.invalidate();
       if (!layers) return;
       App.MapRaster.renderGround();
-      App.MapRaster.renderLabels();
+      App.MapRaster.setLabels(null);
       App.MapRaster.setEdges(rasterEdges);
       App.MapRaster.setNodes(null);
       App.MapRaster.setClouds(rasterClouds);

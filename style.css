@@ -2662,6 +2662,12 @@ button {
 /* Les règles de dessin de la carte (.m-*, niveaux, chemins, panneaux, obstacles) sont dans
    mapArt.js (MAP_CSS), qui les injecte dans la page et dans les images de mapRaster.js.
    Ici : animations et état des éléments restés vivants. */
+@keyframes map-gate-away { to { opacity: 0; } }
+/* Panneau d'une région qui vient d'être découverte : apparaît quand ses nuages s'écartent. */
+.map-sign-fresh { opacity: 0; transition: opacity 0.8s ease 0.4s; }
+.map-sign-fresh.shown { opacity: 1; }
+/* Bascule clair/sombre : reste accessible par-dessus la carte (à gauche de sa croix). */
+body.map-open #themeToggleBtn { z-index: 61; }
 @keyframes map-spin { to { transform: rotate(360deg); } }
 .map-boat-bob { animation: map-bob 7s ease-in-out infinite; }
 @keyframes map-bob { 50% { transform: translate(0, -1.5px); } }
