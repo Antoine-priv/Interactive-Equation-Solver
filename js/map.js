@@ -417,7 +417,8 @@
     });
   }
 
-  // opts : { focus: id, from: id réussi, unlocked: [ids qui viennent de s'ouvrir] }
+  // opts : { focus: id, from: id réussi, unlocked: [ids qui viennent de s'ouvrir],
+  //         noCard: pas de fiche ouverte, instant: pas d'animation d'ouverture }
   function open(opts) {
     opts = opts || {};
     if (closing) { clearTimeout(closeTimer); closing = false; overlay.classList.remove('map-closing'); }
@@ -457,6 +458,9 @@
         else select(focus.id);
       };
       playUnlock(opts);
+    } else if (opts.noCard) {
+      // Niveau refait (rien de débloqué) : la carte se centre dessus, sans ouvrir sa fiche.
+      select(null);
     } else renderCard();
   }
 

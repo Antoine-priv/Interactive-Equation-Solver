@@ -264,6 +264,12 @@ function ok(label, cond) {
   ok('replaying a solved level: no Suivant, no Rejouer', await page.evaluate(() => window.App.Campaign.current().won &&
     !document.getElementById('levelWin').hidden && document.querySelector('[data-win-next]').hidden &&
     !document.querySelector('[data-win-replay]')));
+  await page.click('#mapBtn');
+  await page.waitForTimeout(400);
+  ok('map after a replay: centred on it, no level card open', await page.evaluate(() => window.App.Map.isOpen() &&
+    document.querySelector('.map-card').hidden && !document.querySelector('.map-node.selected')));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(350);
 
   // --- Un "Annuler" enlève la 2e étoile ; "Mode libre" quitte la campagne ---
   await page.evaluate(() => window.App.Campaign.startLevel('t3'));

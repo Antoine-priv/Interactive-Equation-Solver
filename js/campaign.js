@@ -381,6 +381,7 @@
       opts.from = pendingUnlock.from;
       opts.unlocked = pendingUnlock.unlocked;
       if (!opts.focus) opts.focus = pendingUnlock.unlocked.length ? pendingUnlock.unlocked[0] : pendingUnlock.from;
+      if (!pendingUnlock.unlocked.length) opts.noCard = true;
       pendingUnlock = null;
     }
     // Niveau en cours pas encore réussi : la carte se centre dessus ; sinon sur le
