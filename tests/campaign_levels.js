@@ -134,6 +134,27 @@ function ok(label, cond) {
   ok('M5: with the existence condition, the level is won', c && c.won);
   ok('M5: badge "Chasseur d\'interdits" earned', await H(page, () =>
     JSON.parse(localStorage.getItem('equations-progress')).badges.indexOf('chasseur-interdits') !== -1));
+  ok('M5: domain determined, not capped', !c.noDomain && await H(page, () =>
+    document.querySelector('[data-win-criteria]').textContent.indexOf('Ensemble de définition déterminé') !== -1));
+
+  // --- M3 : la bonne solution sans condition d'existence ne vaut qu'une étoile ---
+  await H(page, () => window.App.Campaign.startLevel('m3'));
+  await H(page, () => {
+    var Hs = window.App.History;
+    Hs.selectOp('expr'); Hs.setExprChainText('\\times(x-2)'); Hs.confirm();
+    Hs.selectOp('expr'); Hs.setExprChainText('+2'); Hs.confirm();
+    var eq = Hs.lastEquation();
+    if (eq.left.length > 1) { Hs.toggleTermSelection('left', 0); Hs.toggleTermSelection('left', 1); Hs.confirmSimplifySelection(); }
+    eq = Hs.lastEquation();
+    if (eq.right.length > 1) { Hs.toggleTermSelection('right', 1); Hs.toggleTermSelection('right', 2); Hs.confirmSimplifySelection(); }
+  });
+  await page.waitForTimeout(200);
+  c = await cur(page);
+  console.log('  M3 state:', JSON.stringify(await H(page, () => window.App.History.lastEquation())));
+  ok('M3: S = {5} without the domain still wins', c && c.won);
+  ok('M3: ... but is capped at one star', c && c.noDomain && await H(page, () =>
+    document.querySelectorAll('[data-win-star].on').length === 1 &&
+    document.querySelector('[data-win-criteria]').textContent.indexOf('limité à ★') !== -1));
 
   // --- M1 : niveau "Df seul" ---
   await H(page, () => window.App.Campaign.startLevel('m1'));

@@ -143,6 +143,8 @@
 
 *Notion :* Df d'une fonction, valeurs interdites, √ d'une expression, simplification piégée. *S’ouvre après :* Forêt + Montagne. *Récompense :* Badge « Chasseur d'interdits », fiche mémo.
 
+De m3 à mB, une solution trouvée sans condition d'existence posée et résolue est limitée à ★ (`domainStar`).
+
 | Id | Problème | Énoncé | Apprend | ★★★ en | Prérequis | Notes |
 |---|---|---|---|---|---|---|
 | m1 | Df d'un quotient | `f(x) = 1/(1 + x)` | Df = ℝ \ {−1} | 2 | f3, pB | Objectif : Df · Découvre : Colonne « Condition d'existence » · Source : Exercice 22 |

@@ -63,6 +63,14 @@
     return n;
   }
 
+  // Une condition d'existence posée ET résolue quelque part dans l'arbre (voir `domainStar`).
+  function hasSolvedDomain(eng) {
+    var dc = eng.getDomainConditions ? eng.getDomainConditions() : null;
+    if (dc && dc.length && App.Render.domainRanges(dc)) return true;
+    var br = eng.getBranches ? eng.getBranches() : null;
+    return !!br && br.some(hasSolvedDomain);
+  }
+
   function stepCount() {
     return (run ? run.priorSteps : 0) + countEngine(App.History);
   }
@@ -261,6 +269,7 @@
     }
     run.verdictKey = key;
     if (verdict !== 'win') { renderBar(); return; }
+    if (run.level.domainStar && !hasSolvedDomain(App.History)) run.noDomain = true;
     var parts = run.level.daily ? [1] : App.Levels.partsOf(run.level);
     if (run.part + 1 < parts.length) {
       run.priorSteps = stepCount();
@@ -279,7 +288,7 @@
     var clean = run.hints === 0 && run.undos === 0;
     var efficient = !run.level.par || steps <= run.level.par;
     var stars = 1 + (clean ? 1 : 0) + (efficient ? 1 : 0);
-    if (run.hints > 0) stars = 1;
+    if (run.hints > 0 || run.noDomain) stars = 1;
     if (!App.Levels.starred(run.level)) stars = 3; // tutoriel : pas d'étoiles, réussite pleine
     var result = null;
     if (run.level.daily) {
@@ -335,6 +344,7 @@
     var starred = App.Levels.starred(l);
     winEl.querySelector('.win-stars').hidden = !starred;
     if (starred) row(clean, run.hints ? 'Indice utilisé : le niveau est limité à ★' : (clean ? 'Sans indice ni « Annuler »' : '« Annuler » utilisé'));
+    if (l.domainStar) row(!run.noDomain, run.noDomain ? 'Ensemble de définition non déterminé : le niveau est limité à ★' : 'Ensemble de définition déterminé');
     if (starred && l.par) row(efficient, steps + ' étape' + (steps > 1 ? 's' : '') + (efficient ? ', dans la limite de ' : ', il en faut ') + l.par + (efficient ? '' : ' au plus pour ★★★'));
     if (l.daily) {
       var n = App.Progress.dailyStreak();
@@ -562,7 +572,7 @@
     isFeatureLocked: isFeatureLocked,
     stepCount: stepCount,
     rangesEqual: rangesEqual,
-    current: function () { return run ? { id: run.level.id, part: run.part, undos: run.undos, hints: run.hints, won: run.won, message: run.message, enabled: run.enabled || null } : null; },
+    current: function () { return run ? { id: run.level.id, part: run.part, undos: run.undos, hints: run.hints, won: run.won, noDomain: !!run.noDomain, message: run.message, enabled: run.enabled || null } : null; },
     showHint: showHint,
     dailyEquation: dailyEquation
   };

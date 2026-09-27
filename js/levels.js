@@ -9,6 +9,8 @@
      `domain` à la place de `sol` pour un niveau "Df seul" (kind 'domain') ;
    - `parts` : plusieurs équations à résoudre l'une après l'autre dans le même niveau ;
    - `requireDomain` : la solution n'est acceptée qu'une fois la condition d'existence posée ;
+   - `domainStar` : sans condition d'existence posée et résolue, la réussite est limitée à ★
+     (le Marais) ;
    - `par` : nombre d'étapes (hors "Simplifier") de la solution de référence, pour ★★★
      (voir tests/campaign_reference_*.js) ; aucun dans le Port (tutoriel), sans étoiles,
      voir App.Levels.starred ;
@@ -199,30 +201,30 @@
       kind: 'domain', domain: I(-INF, false, 1.5, true), par: 3, statement: 'Trouve l\'ensemble de définition de g(x) = √(3 − 2x).',
       learn: 'Ce qui est sous la racine doit être positif',
       hints: ['On ne prend la racine que d\'un nombre positif ou nul.', 'Double-clique la racine, puis Condition d\'existence.'] },
-    { id: 'm3', zone: 'marais', x: 1320, y: 140, req: ['m2'], title: 'Dénominateur en x', latex: '\\frac{3}{x-2}=1', sol: P(5), par: 6,
+    { id: 'm3', zone: 'marais', x: 1320, y: 140, req: ['m2'], domainStar: true, title: 'Dénominateur en x', latex: '\\frac{3}{x-2}=1', sol: P(5), par: 6,
       learn: 'Poser x ≠ 2, puis résoudre',
       hints: ['Commence par la condition d\'existence.', 'Puis multiplie les deux côtés par (x−2).'] },
-    { id: 'm4', zone: 'marais', x: 1370, y: 210, req: ['m3'], title: 'Quotient', latex: '\\frac{x+1}{x-3}=2', sol: P(7), par: 7,
+    { id: 'm4', zone: 'marais', x: 1370, y: 210, req: ['m3'], domainStar: true, title: 'Quotient', latex: '\\frac{x+1}{x-3}=2', sol: P(7), par: 7,
       learn: 'Multiplier par un dénominateur en x',
       hints: ['Condition d\'existence d\'abord.', 'Multiplie par (x−3) : x+1 = 2(x−3).'] },
-    { id: 'm5', zone: 'marais', x: 1295, y: 220, req: ['m4'], title: 'Le faux ami', latex: '\\frac{(x+3)(x+1)}{x+3}=0', sol: P(-1), par: 3,
+    { id: 'm5', zone: 'marais', x: 1295, y: 220, req: ['m4'], domainStar: true, title: 'Le faux ami', latex: '\\frac{(x+3)(x+1)}{x+3}=0', sol: P(-1), par: 3,
       requireDomain: true, badge: 'chasseur-interdits', learn: '−3 annule le numérateur mais est interdite',
       trap: 'Garder −3 comme solution.',
       hints: ['Une valeur interdite ne peut pas être solution.', 'Pose la condition d\'existence du dénominateur avant de conclure.'] },
-    { id: 'm6', zone: 'marais', x: 1210, y: 235, req: ['m5'], title: 'Le faux ami caché', latex: '\\frac{x^2-9}{x+3}=0', sol: P(3), par: 4,
+    { id: 'm6', zone: 'marais', x: 1210, y: 235, req: ['m5'], domainStar: true, title: 'Le faux ami caché', latex: '\\frac{x^2-9}{x+3}=0', sol: P(3), par: 4,
       requireDomain: true, learn: 'Le même piège, après factorisation',
       hints: ['Le numérateur est une différence de carrés.', 'Condition d\'existence, puis factorise x² − 9.'] },
-    { id: 'm7', zone: 'marais', x: 1170, y: 310, req: ['m6'], title: 'Racine d\'expression', latex: '\\sqrt{x+2}=3', sol: P(7), par: 2,
+    { id: 'm7', zone: 'marais', x: 1170, y: 310, req: ['m6'], domainStar: true, title: 'Racine d\'expression', latex: '\\sqrt{x+2}=3', sol: P(7), par: 4,
       feat: ['square'], learn: 'Élever au carré les deux côtés',
-      hints: ['Le contraire d\'une racine carrée, c\'est le carré.', 'Touche (‥)² du pavé, puis résous x+2 = 9.'] },
-    { id: 'm8', zone: 'marais', x: 1260, y: 330, req: ['m7'], title: 'Les jumeaux', par: 3,
+      hints: ['Condition d\'existence d\'abord, puis : le contraire d\'une racine carrée, c\'est le carré.', 'x+2 ≥ 0, puis touche (‥)² du pavé et résous x+2 = 9.'] },
+    { id: 'm8', zone: 'marais', x: 1260, y: 330, req: ['m7'], domainStar: true, title: 'Les jumeaux', par: 4,
       parts: [
         { latex: '\\sqrt{x}=0', sol: P(0) },
         { latex: '\\frac{\\sqrt{x}\\sqrt{x}}{\\sqrt{x}}=0', sol: E, requireDomain: true }
       ],
       learn: 'Même forme après simplification, domaines différents', trap: 'La première donne S = {0}, la seconde S = ∅.',
-      hints: ['Compare les ensembles de définition.', 'Pour la 2e, la condition d\'existence donne x > 0.'] },
-    { id: 'mB', zone: 'marais', x: 1350, y: 300, req: ['m8'], title: 'Épreuve du Marais', latex: '(x-6)\\sqrt{x-8}=0', sol: P(8), par: 6,
+      hints: ['Compare les ensembles de définition.', 'Condition d\'existence dans les deux : x ≥ 0 pour la 1re, x > 0 pour la 2e.'] },
+    { id: 'mB', zone: 'marais', x: 1350, y: 300, req: ['m8'], domainStar: true, title: 'Épreuve du Marais', latex: '(x-6)\\sqrt{x-8}=0', sol: P(8), par: 6,
       boss: true, requireDomain: true, learn: 'Produit nul et domaine', trap: 'x = 6 est hors du domaine.',
       hints: ['La racine impose une condition.', 'Condition d\'existence sur la racine, puis Produit nul.'] },
 

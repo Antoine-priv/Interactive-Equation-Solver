@@ -216,9 +216,9 @@ const S = {
     R.drillDen('left', 0); R.existence(); R.inDomain(0, R.linear);
     R.drill('left', 0); R.innerIdentity([0, 1], 3, 'x', '3'); R.exit(); R.simp('left', [0]); R.linear();
   },
-  m7: () => { R.square(); R.linear(); },
+  m7: () => { R.drill('left', 0); R.existence(); R.inDomain(0, R.linear); R.square(); R.linear(); },
   m8: [
-    () => { R.square(); },
+    () => { R.drill('left', 0); R.existence(); R.square(); },
     () => { R.drillDen('left', 0); R.existence(); R.simp('left', [0]); R.square(); }
   ],
   mB: () => {
@@ -296,12 +296,12 @@ const BLOCKED = {};
     }
     const res = await page.evaluate(() => {
       var c = window.App.Campaign.current();
-      return { won: c && c.won, steps: window.App.Campaign.stepCount(), message: c && c.message,
+      return { won: c && c.won, noDomain: c && c.noDomain, steps: window.App.Campaign.stepCount(), message: c && c.message,
         appErrors: window.R.errors, final: window.App.Render.finalSolutionRanges(),
         eq: window.App.History.lastEquation() };
     });
     const label = lv.id + ' solved in ' + res.steps + ' step(s), par ' + lv.par;
-    ok(label, res.won && !err);
+    ok(label, res.won && !err && !res.noDomain);
     if (!res.won || err) {
       console.log('   script error:', err, '| app errors:', JSON.stringify(res.appErrors), '| message:', res.message);
       console.log('   last equation:', JSON.stringify(res.eq));
