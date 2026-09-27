@@ -517,6 +517,10 @@
         if (op.symbol === '×' || op.symbol === '÷') {
           // formatNumberLatex renvoie une valeur absolue : le signe du multiplicateur/
           // diviseur (±) se rajoute ici séparément.
+          if (op.frac) {
+            return OP_SYMBOL_LATEX[op.symbol] + (op.rawValue < 0 ? '-' : '') +
+              '\\frac{' + Math.abs(op.frac[0]) + '}{' + op.frac[1] + '}';
+          }
           return OP_SYMBOL_LATEX[op.symbol] + (op.rawValue < 0 ? '-' : '') + Expr.formatNumberLatex(op.rawValue);
         }
         return Expr.nodeLatex(op.term, false);

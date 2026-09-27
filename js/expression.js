@@ -442,6 +442,11 @@
       var fracNode = side[0];
       return fracNode.sign < 0 ? fracNode.innerTerms.map(function (t) { return scaleNode(t, -1); }) : cloneSide(fracNode.innerTerms);
     }
+    // Membre = une fraction à entiers (ex. "5x/6") multipliée par un nombre rationnel (ex.
+    // "×6/5", ou "×4") : on multiplie numérateur et dénominateur en simplifiant en croix,
+    // comme à la main ("5x/6 × 6/5" -> "x", "x/6 × 4" -> "2x/3"), sans décimaux.
+    var fracProduct = side.length === 1 ? multiplyFractionNode(side[0], multiplier) : null;
+    if (fracProduct) return fracProduct;
     if (side.length === 1) {
       return [scaleNode(side[0], multiplier)];
     }
@@ -452,11 +457,33 @@
     }];
   }
 
+  function multiplyFractionNode(node, multiplier) {
+    if (!isFactorGroup(node) || !node.isDivision || node.factorTerms || node.factor.pow !== 0) return null;
+    var d = node.factor.coeff;
+    function isInt(v) { return Math.abs(v - Math.round(v)) < 1e-9; }
+    if (!isInt(d) || d <= 0 || !node.innerTerms.every(function (t) { return !isGroup(t) && isInt(t.coeff); })) return null;
+    var r = toRational(multiplier);
+    if (!r || r[0] === 0) return null;
+    var p = Math.abs(r[0]), q = r[1];
+    var g1 = gcdInt(p, d);
+    p /= g1; d = Math.round(d / g1);
+    var content = node.innerTerms.reduce(function (acc, t) { return gcdInt(acc, Math.round(t.coeff)); }, 0);
+    var g2 = gcdInt(content, q);
+    q /= g2;
+    var num = node.innerTerms.map(function (t) { return { coeff: Math.round(t.coeff) / g2 * p, pow: t.pow }; });
+    var sign = (node.sign < 0) !== (r[0] < 0) ? -1 : 1;
+    d *= q;
+    if (d === 1) return sign < 0 ? num.map(function (t) { return scaleNode(t, -1); }) : num;
+    return [{ sign: sign, factor: { coeff: d, pow: 0 }, innerTerms: num, isDivision: true }];
+  }
+
   // Division "affichée" : même principe que wrapSideInFactor mais sous forme de fraction
   // (ex. "\frac{9x-6}{2}") quand le membre a plusieurs termes, plutôt que de distribuer
   // la division terme à terme. Un seul terme se divise directement (ex. "8x÷2" -> "4x"),
   // sans fraction inutile.
   function wrapSideInFraction(side, divisor) {
+    var fracQuotient = side.length === 1 ? multiplyFractionNode(side[0], 1 / divisor) : null;
+    if (fracQuotient) return fracQuotient;
     if (side.length === 1) {
       return [scaleNode(side[0], 1 / divisor)];
     }

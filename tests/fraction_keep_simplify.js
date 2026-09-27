@@ -55,6 +55,20 @@ function ok(label, cond) {
   ok('×6 then Simplifier gives 5x = 30', JSON.stringify(eq.left) === JSON.stringify([{ coeff: 5, pow: 1 }]) &&
     JSON.stringify(eq.right) === JSON.stringify([{ coeff: 30, pow: 0 }]));
 
+  // ×6/5 sur 5x/6 : simplification en croix, x = 6 en une étape ; ÷ une fraction aussi.
+  eq = await page.evaluate(() => {
+    var h = window.App.History, P = window.App.Parser;
+    h.startNewEquation(P.parseLatexEquation('\\frac{5x}{6}=5', { keepFractions: true }));
+    h.selectOp('expr'); h.setExprChainText('\\times\\frac{6}{5}'); h.confirm();
+    var a = h.lastEquation();
+    h.startNewEquation(P.parseLatexEquation('\\frac{x}{6}=1', { keepFractions: true }));
+    h.selectOp('expr'); h.setExprChainText('\\div\\frac{3}{4}'); h.confirm();
+    return [a, h.lastEquation()];
+  });
+  ok('5x/6 ×6/5 gives x = 6', JSON.stringify(eq[0].left) === JSON.stringify([{ coeff: 1, pow: 1 }]) &&
+    JSON.stringify(eq[0].right) === JSON.stringify([{ coeff: 6, pow: 0 }]));
+  ok('x/6 ÷3/4 gives 2x/9', JSON.stringify(eq[1].left) === JSON.stringify([{ sign: 1, factor: { coeff: 9, pow: 0 }, innerTerms: [{ coeff: 2, pow: 1 }], isDivision: true }]));
+
   // Termes simples et fractions mêlés : x/2 + x -> 3x/2, 1/2 + 1/2 -> 1.
   const r = await page.evaluate(() => {
     var E = window.App.Expr, P = window.App.Parser;

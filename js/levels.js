@@ -115,7 +115,7 @@
     { id: 'f2', zone: 'foret', x: 530, y: 140, req: ['f1'], title: 'Numérateur', latex: '\\frac{2x+1}{5}=3', sol: P(7), par: 3,
       learn: 'Fraction d\'une expression',
       hints: ['Le 5 divise tout le numérateur.', 'Multiplie par 5, puis résous 2x+1 = 15.'] },
-    { id: 'f3', zone: 'foret', x: 630, y: 175, req: ['f2'], title: 'Deux fractions', latex: '\\frac{x}{2}+\\frac{x}{3}=5', sol: P(6), par: 3,
+    { id: 'f3', zone: 'foret', x: 630, y: 175, req: ['f2'], title: 'Deux fractions', latex: '\\frac{x}{2}+\\frac{x}{3}=5', sol: P(6), par: 1,
       boss: true, learn: 'Dénominateur commun',
       hints: ['2 et 3 divisent tous les deux 6.', 'Multiplie les deux côtés par 6.'] },
 

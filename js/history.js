@@ -851,6 +851,17 @@
     // en une entrée de séquence — exposant "^N" quelconque accepté (Term.pow n'est plus
     // plafonné, voir CLAUDE.md).
     function classifyMulDivOperand(symbol, raw) {
+      // Fraction de nombres (ex. "×\frac{6}{5}") : un facteur scalaire comme un nombre nu,
+      // gardé en p/q pour l'étiquette et pour multiplier une fraction sans décimaux (voir
+      // wrapSideInFactor).
+      var mFrac = /^(-)?\\frac\{(-)?([0-9]+)\}\{([0-9]+)\}$/.exec(raw);
+      if (mFrac) {
+        var fp = parseInt(mFrac[3], 10), fq = parseInt(mFrac[4], 10);
+        if (fq === 0 || (symbol === '÷' && fp === 0)) throw new Error('Division par zéro impossible.');
+        if (!mFrac[1] !== !mFrac[2]) fp = -fp;
+        var fVal = fp / fq;
+        return { symbol: symbol, factor: symbol === '÷' ? fq / fp : fVal, rawValue: fVal, frac: [fp, fq] };
+      }
       if (symbol === '÷') {
         var sD = raw;
         var negD = false;
